@@ -154,7 +154,7 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
               Custom Image URL (Optional)
             </label>
             <input
-              type="url"
+              type="text"
               value={coverUrl}
               onChange={(e) => setCoverUrl(e.target.value)}
               placeholder="https://images.unsplash.com/..."

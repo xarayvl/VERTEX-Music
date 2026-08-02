@@ -72,6 +72,7 @@ export interface TrackRecord {
   releaseId?: string;
   copyright?: string;
   releaseYear?: number;
+  trackNumber?: number;
 }
 
 export interface UserStateRecord {

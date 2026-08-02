@@ -404,7 +404,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
               </label>
               <div className="flex gap-2">
                 <input
-                  type="url"
+                  type="text"
                   value={coverUrl}
                   onChange={(e) => setCoverUrl(e.target.value)}
                   placeholder="https://images.unsplash.com/..."

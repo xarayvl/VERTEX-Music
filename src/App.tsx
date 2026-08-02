@@ -459,62 +459,91 @@ export default function App() {
     }
   }, [userProfile?.id]);
 
-  // Fetch application data (uploaded tracks, saved state, chat history) from Express server
-  useEffect(() => {
-    const fetchServerData = async () => {
-      try {
-        const token = localStorage.getItem('vertex_session_token');
-        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await fetch(`/api/data`, { headers });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.token) {
-            localStorage.setItem('vertex_session_token', data.token);
-          }
-          if (data.tracks && Array.isArray(data.tracks) && data.tracks.length > 0) {
-            const likedIds: string[] = data.likedTrackIds || [];
-            setTracks(
-              data.tracks.map((t: Track) => ({
-                ...t,
-                isLiked: likedIds.includes(t.id),
-              }))
-            );
-          }
-          if (data.playlists && Array.isArray(data.playlists)) {
-            setPlaylists(data.playlists);
-          }
-          if (data.chatHistory && Array.isArray(data.chatHistory) && data.chatHistory.length > 0) {
-            setChatMessages(data.chatHistory);
-          } else if (userProfile?.id) {
-            try {
-              const saved = localStorage.getItem(`vertex_music_chat_history_${userProfile.id}`);
-              if (saved) {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.length > 0) setChatMessages(parsed);
-              } else {
-                setChatMessages([
-                  {
-                    id: `welcome-${Date.now()}`,
-                    sender: 'ai',
-                    text: `Hello ${userProfile.displayName || 'there'}! I'm **VERTEX Music AI**, your personal DJ and assistant. Ask me for recommendations, playlists, or music history!`,
-                    timestamp: new Date().toISOString(),
-                  },
-                ]);
-              }
-            } catch (e) {
-              // ignore
+  // Fetch application data (uploaded tracks, saved state, chat history) from Express server.
+  // `includeChatAndUser` is turned off for background refreshes so a periodic poll doesn't
+  // reset chat messages the person is actively looking at or clobber in-flight profile edits —
+  // background polls only need to keep the shared tracks/playlists lists (i.e. other users'
+  // uploads) up to date.
+  const fetchServerData = React.useCallback(async (includeChatAndUser: boolean = true) => {
+    try {
+      const token = localStorage.getItem('vertex_session_token');
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`/api/data`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.token) {
+          localStorage.setItem('vertex_session_token', data.token);
+        }
+        if (data.tracks && Array.isArray(data.tracks) && data.tracks.length > 0) {
+          const likedIds: string[] = data.likedTrackIds || [];
+          setTracks(
+            data.tracks.map((t: Track) => ({
+              ...t,
+              isLiked: likedIds.includes(t.id),
+            }))
+          );
+        }
+        if (data.playlists && Array.isArray(data.playlists)) {
+          setPlaylists(data.playlists);
+        }
+        if (!includeChatAndUser) return;
+        if (data.chatHistory && Array.isArray(data.chatHistory) && data.chatHistory.length > 0) {
+          setChatMessages(data.chatHistory);
+        } else if (userProfile?.id) {
+          try {
+            const saved = localStorage.getItem(`vertex_music_chat_history_${userProfile.id}`);
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              if (Array.isArray(parsed) && parsed.length > 0) setChatMessages(parsed);
+            } else {
+              setChatMessages([
+                {
+                  id: `welcome-${Date.now()}`,
+                  sender: 'ai',
+                  text: `Hello ${userProfile.displayName || 'there'}! I'm **VERTEX Music AI**, your personal DJ and assistant. Ask me for recommendations, playlists, or music history!`,
+                  timestamp: new Date().toISOString(),
+                },
+              ]);
             }
-          }
-          if (data.user) {
-            setUserProfile((prev) => (prev ? { ...prev, ...data.user } : data.user));
+          } catch (e) {
+            // ignore
           }
         }
-      } catch (err) {
-        console.error('Error syncing server data:', err);
+        if (data.user) {
+          setUserProfile((prev) => (prev ? { ...prev, ...data.user } : data.user));
+        }
       }
-    };
-    fetchServerData();
+    } catch (err) {
+      console.error('Error syncing server data:', err);
+    }
   }, [userProfile?.id]);
+
+  useEffect(() => {
+    fetchServerData(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.id]);
+
+  // Keep the shared tracks/playlists lists live: poll periodically and refetch whenever
+  // the tab regains focus, so songs another user uploads show up here without needing
+  // a full page reload or re-login.
+  useEffect(() => {
+    const POLL_INTERVAL_MS = 20000;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchServerData(false);
+      }
+    }, POLL_INTERVAL_MS);
+
+    const handleFocus = () => fetchServerData(false);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [fetchServerData]);
 
   const handleLogout = () => {
     audioEngine.pause();
@@ -1191,11 +1220,17 @@ export default function App() {
     setUserProfile(updated);
     if (updated.id) {
       try {
-        await fetch(`/api/users/${updated.id}`, {
+        const res = await fetch(`/api/users/${updated.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify(updated),
         });
+        const data = await res.json().catch(() => null);
+        // Swap in the server-persisted (R2/CDN) URLs so we're not left holding
+        // huge base64 data: URLs in state / localStorage after an image upload.
+        if (data?.success && data.user) {
+          setUserProfile((prev) => (prev ? { ...prev, ...data.user } : data.user));
+        }
       } catch (err) {
         console.error('Failed to update user profile on server:', err);
       }

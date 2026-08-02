@@ -268,7 +268,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
             </div>
 
             <input
-              type="url"
+              type="text"
               value={bannerUrl}
               onChange={(e) => setBannerUrl(e.target.value)}
               placeholder="Or paste custom Banner Image URL..."
@@ -380,7 +380,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                 />
               </div>
               <input
-                type="url"
+                type="text"
                 value={avatarUrl}
                 onChange={(e) => setAvatarUrl(e.target.value)}
                 placeholder="Paste Avatar image URL..."

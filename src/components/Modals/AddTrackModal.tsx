@@ -1,6 +1,15 @@
-import React, { useState } from 'react';
-import { X, Music, Upload, Link, Sparkles, Image, Check, FileAudio, AlertCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Music, Upload, Link, Sparkles, Image, Check, FileAudio, AlertCircle, GripVertical, ArrowUp, ArrowDown, Trash2, ListMusic } from 'lucide-react';
 import { Track } from '../../types';
+
+interface AlbumTrackItem {
+  clientId: string;
+  title: string;
+  audioUrl: string;
+  duration: number;
+  fileName: string;
+  fileSize: string;
+}
 
 interface AddTrackModalProps {
   isOpen: boolean;
@@ -28,11 +37,19 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   const [copyright, setCopyright] = useState('');
   const [releaseYear, setReleaseYear] = useState<number>(new Date().getFullYear());
   const [genre, setGenre] = useState('Synthwave');
-  const [multiAudioFiles, setMultiAudioFiles] = useState<{url: string, duration: number, cleanName: string, size: string, name: string}[]>([]);
   const [duration, setDuration] = useState(180);
   const [audioSourceType, setAudioSourceType] = useState<'upload' | 'url' | 'ai-gen'>('upload');
   const [audioUrl, setAudioUrl] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
+
+  // Multi-track tracklist state, used when releaseType !== 'Single' (Album/EP/Compilation/Live Album).
+  // Lets the user select several audio files at once and drag-reorder them
+  // to decide which track number each song gets on the release.
+  const [albumTracks, setAlbumTracks] = useState<AlbumTrackItem[]>([]);
+  const [isReadingMultiFiles, setIsReadingMultiFiles] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const [aiPrompt, setAiPrompt] = useState('Chill upbeat synthwave track with heavy bassline and warm pads');
   const [aiModel, setAiModel] = useState<'lyria-3-clip-preview' | 'lyria-3-pro-preview'>('lyria-3-clip-preview');
@@ -184,9 +201,142 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     reader.readAsDataURL(file);
   };
 
+  // Reads a single File into an AlbumTrackItem (base64 audio + detected duration + a
+  // title guessed from the filename), resolving once the FileReader finishes.
+  const readFileAsAlbumTrack = (file: File): Promise<AlbumTrackItem> => {
+    return new Promise((resolve, reject) => {
+      const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      const guessedTitle = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+
+      let detectedDuration = 180;
+      try {
+        const objectUrl = URL.createObjectURL(file);
+        const probe = new Audio(objectUrl);
+        probe.onloadedmetadata = () => {
+          if (probe.duration && !isNaN(probe.duration) && isFinite(probe.duration)) {
+            detectedDuration = Math.round(probe.duration);
+          }
+        };
+      } catch {
+        // Non-fatal: duration falls back to default.
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (!result) {
+          reject(new Error(`Could not read "${file.name}".`));
+          return;
+        }
+        resolve({
+          clientId: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          title: guessedTitle,
+          audioUrl: result,
+          duration: detectedDuration,
+          fileName: file.name,
+          fileSize: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
+        });
+      };
+      reader.onerror = () => reject(new Error(`Error reading "${file.name}".`));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleMultiFilesSelected = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList).filter(
+      (f) => f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i)
+    );
+    if (files.length === 0) {
+      setError('Please select valid audio files (MP3, WAV, OGG, M4A, AAC).');
+      return;
+    }
+    setError(null);
+    setIsReadingMultiFiles(true);
+    try {
+      const newItems = await Promise.all(files.map(readFileAsAlbumTrack));
+      setAlbumTracks((prev) => [...prev, ...newItems]);
+    } catch (err: any) {
+      setError(err?.message || 'Error reading one or more audio files.');
+    } finally {
+      setIsReadingMultiFiles(false);
+    }
+  };
+
+  const handleMultiFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleMultiFilesSelected(e.target.files);
+      e.target.value = '';
+    }
+  };
+
+  const handleMultiDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleMultiFilesSelected(e.dataTransfer.files);
+    }
+  };
+
+  const updateAlbumTrackTitle = (index: number, newTitle: string) => {
+    setAlbumTracks((prev) => prev.map((t, i) => (i === index ? { ...t, title: newTitle } : t)));
+  };
+
+  const removeAlbumTrack = (index: number) => {
+    setAlbumTracks((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const moveAlbumTrack = (index: number, direction: -1 | 1) => {
+    setAlbumTracks((prev) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = prev.slice();
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
+  };
+
+  // Native HTML5 drag & drop reordering — lets the user drag a tracklist row
+  // to whatever position ("track 1", "track 2", etc.) it should play at.
+  const handleTrackDragStart = (index: number) => {
+    dragIndexRef.current = index;
+  };
+
+  const handleTrackDragEnter = (index: number) => {
+    setDragOverIndex(index);
+    const from = dragIndexRef.current;
+    if (from === null || from === index) return;
+    setAlbumTracks((prev) => {
+      const next = prev.slice();
+      const [moved] = next.splice(from, 1);
+      next.splice(index, 0, moved);
+      return next;
+    });
+    dragIndexRef.current = index;
+  };
+
+  const handleTrackDragEnd = () => {
+    dragIndexRef.current = null;
+    setDragOverIndex(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const isMultiTrackRelease = releaseType !== 'Single';
+
+    if (isMultiTrackRelease) {
+      if (albumTracks.length === 0) {
+        setError('Please add at least one song to the tracklist.');
+        return;
+      }
+      if (isReadingMultiFiles) {
+        setError('Audio files are still loading, please wait a moment...');
+        return;
+      }
+      await handleMultiTrackSubmit();
+      return;
+    }
 
     if (!title.trim()) {
       setError('Song Title is required.');
@@ -273,6 +423,95 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     }
   };
 
+  // Uploads every track in the album tracklist, in the exact order the user
+  // arranged them, tagging each with a shared releaseId + sequential
+  // trackNumber so the release page (AlbumView) can list them in that order.
+  const handleMultiTrackSubmit = async () => {
+    setLoading(true);
+    setUploadProgress({ current: 0, total: albumTracks.length });
+
+    const presetCovers: Record<string, string> = {
+      Synthwave: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80',
+      Cyberpunk: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80',
+      Lofi: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80',
+      Ambient: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=800&q=80',
+      Acoustic: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
+    };
+
+    const finalCover = coverUrl.trim() || presetCovers[genre] || presetCovers.Synthwave;
+    const artistName = userProfileName || 'Alex Rivers';
+    const finalAlbumName = (album === '__NEW__' ? (customAlbumName.trim() || 'Untitled Release') : album).trim() || 'Untitled Release';
+    const sharedReleaseId = `rel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    const token = localStorage.getItem('vertex_session_token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const createdTracks: Track[] = [];
+
+    try {
+      // Uploaded sequentially (not Promise.all) so track order is
+      // deterministic and the server isn't hit with a burst of large
+      // base64 audio payloads at once.
+      for (let i = 0; i < albumTracks.length; i++) {
+        const item = albumTracks[i];
+        setUploadProgress({ current: i + 1, total: albumTracks.length });
+
+        const res = await fetch('/api/tracks', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            userId,
+            title: (item.title || item.fileName).trim(),
+            artist: artistName,
+            album: finalAlbumName,
+            releaseType,
+            releaseTitle: finalAlbumName,
+            releaseId: sharedReleaseId,
+            copyright: copyright.trim() || undefined,
+            releaseYear: Number(releaseYear) || new Date().getFullYear(),
+            genre,
+            duration: item.duration,
+            audioUrl: item.audioUrl,
+            coverUrl: finalCover,
+            trackNumber: i + 1,
+          }),
+        });
+
+        let data: any = null;
+        try {
+          data = await res.json();
+        } catch {
+          // Response wasn't JSON (server error page, etc.)
+        }
+
+        if (!res.ok || !data?.success) {
+          throw new Error(
+            data?.error || `"${item.title}" failed to upload (status ${res.status}).`
+          );
+        }
+
+        createdTracks.push(data.track);
+      }
+
+      createdTracks.forEach((t) => onTrackAdded(t));
+      onClose();
+    } catch (err: any) {
+      console.error('Album tracklist upload error:', err);
+      setError(
+        (err?.message || 'Server error saving tracklist.') +
+          (createdTracks.length > 0
+            ? ` ${createdTracks.length} of ${albumTracks.length} track(s) were saved before the error.`
+            : '')
+      );
+    } finally {
+      setLoading(false);
+      setUploadProgress(null);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 select-none">
       <div className="relative w-full max-w-lg bg-[#181818] border border-white/10 rounded-2xl shadow-2xl overflow-hidden text-white max-h-[90vh] flex flex-col">
@@ -306,7 +545,26 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
             </div>
           )}
 
-          {/* Audio Source Selector */}
+          {/* Release Type — chosen first so the right upload UI (single song vs. multi-track tracklist) shows below */}
+          <div>
+            <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
+              Release Type
+            </label>
+            <select
+              value={releaseType}
+              onChange={(e) => setReleaseType(e.target.value)}
+              className="w-full px-3 py-2 bg-[#282828] border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-[#D946EF]"
+            >
+              <option value="Single">Single</option>
+              <option value="EP">EP</option>
+              <option value="Album">Album</option>
+              <option value="Compilation">Compilation</option>
+              <option value="Live Album">Live Album</option>
+            </select>
+          </div>
+
+          {/* Audio Source Selector (Single release only) */}
+          {releaseType === 'Single' && (
           <div>
             <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-2">
               Audio Source
@@ -422,7 +680,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
             {audioSourceType === 'url' && (
               <input
-                type="url"
+                type="text"
                 value={audioUrl}
                 onChange={(e) => setAudioUrl(e.target.value)}
                 placeholder="https://example.com/song.mp3"
@@ -508,6 +766,130 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
               </div>
             )}
           </div>
+          )}
+
+          {/* Multi-track Tracklist Builder (Album / EP / Compilation / Live Album) */}
+          {releaseType !== 'Single' && (
+            <div>
+              <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <ListMusic className="w-3.5 h-3.5 text-[#D946EF]" />
+                <span>Tracklist ({albumTracks.length} song{albumTracks.length === 1 ? '' : 's'})</span>
+              </label>
+
+              {/* Multi-file dropzone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(true);
+                }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={handleMultiDrop}
+                className={`p-4 border-2 border-dashed rounded-xl transition-all text-center mb-3 ${
+                  isDragOver
+                    ? 'border-[#D946EF] bg-[#D946EF]/10'
+                    : 'border-white/20 bg-[#282828]/50 hover:border-white/40'
+                }`}
+              >
+                <input
+                  type="file"
+                  accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac"
+                  multiple
+                  onChange={handleMultiFileInputChange}
+                  className="hidden"
+                  id="multi-audio-file-input"
+                />
+                <label
+                  htmlFor="multi-audio-file-input"
+                  className="cursor-pointer flex flex-col items-center justify-center space-y-1.5"
+                >
+                  {isReadingMultiFiles ? (
+                    <>
+                      <div className="w-6 h-6 border-2 border-[#D946EF] border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs text-zinc-300 font-semibold">Reading audio files...</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-9 h-9 rounded-full bg-[#A855F7]/20 flex items-center justify-center text-[#D946EF]">
+                        <FileAudio className="w-4.5 h-4.5" />
+                      </div>
+                      <span className="text-xs text-zinc-200 font-bold">
+                        Drag & Drop or Click to add song files (multi-select supported)
+                      </span>
+                      <span className="text-[11px] text-zinc-400">
+                        Add as many songs as you like, then drag to reorder them below
+                      </span>
+                    </>
+                  )}
+                </label>
+              </div>
+
+              {/* Reorderable tracklist */}
+              {albumTracks.length > 0 && (
+                <div className="space-y-1.5">
+                  {albumTracks.map((item, index) => (
+                    <div
+                      key={item.clientId}
+                      draggable
+                      onDragStart={() => handleTrackDragStart(index)}
+                      onDragEnter={() => handleTrackDragEnter(index)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDragEnd={handleTrackDragEnd}
+                      className={`flex items-center gap-2 p-2 rounded-xl border transition-colors ${
+                        dragOverIndex === index
+                          ? 'border-[#D946EF] bg-[#D946EF]/10'
+                          : 'border-white/10 bg-[#232323]'
+                      }`}
+                    >
+                      <span className="cursor-grab active:cursor-grabbing text-zinc-500 hover:text-zinc-300 flex-shrink-0">
+                        <GripVertical className="w-4 h-4" />
+                      </span>
+                      <span className="w-6 text-center text-xs font-mono font-bold text-zinc-400 flex-shrink-0">
+                        {index + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={item.title}
+                        onChange={(e) => updateAlbumTrackTitle(index, e.target.value)}
+                        placeholder="Track title"
+                        className="flex-1 min-w-0 px-2.5 py-1.5 bg-[#181818] border border-white/10 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
+                      />
+                      <span className="text-[10px] font-mono text-zinc-500 flex-shrink-0 hidden sm:inline">
+                        {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, '0')}
+                      </span>
+                      <div className="flex items-center flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => moveAlbumTrack(index, -1)}
+                          disabled={index === 0}
+                          className="p-1 text-zinc-400 hover:text-white disabled:opacity-25 disabled:hover:text-zinc-400 transition-colors"
+                          title="Move up"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveAlbumTrack(index, 1)}
+                          disabled={index === albumTracks.length - 1}
+                          className="p-1 text-zinc-400 hover:text-white disabled:opacity-25 disabled:hover:text-zinc-400 transition-colors"
+                          title="Move down"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeAlbumTrack(index)}
+                          className="p-1 text-red-400/70 hover:text-red-400 transition-colors"
+                          title="Remove"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {releaseType === 'Single' && (
           <div>
@@ -526,23 +908,6 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
-                Release Type
-              </label>
-              <select
-                value={releaseType}
-                onChange={(e) => setReleaseType(e.target.value)}
-                className="w-full px-3 py-2 bg-[#282828] border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-[#D946EF]"
-              >
-                <option value="Single">Single</option>
-                <option value="EP">EP</option>
-                <option value="Album">Album</option>
-                <option value="Compilation">Compilation</option>
-                <option value="Live Album">Live Album</option>
-              </select>
-            </div>
-            
             {releaseType !== 'Single' && (
               <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
@@ -644,13 +1009,17 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
           <div className="pt-2">
             <button
               type="submit"
-              disabled={loading || isReadingFile}
+              disabled={loading || isReadingFile || isReadingMultiFiles}
               className="w-full py-3 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white font-extrabold text-sm shadow-xl transition-all active:scale-[0.99] disabled:opacity-50"
             >
-              {loading
+              {loading && uploadProgress
+                ? `Saving Track ${uploadProgress.current} of ${uploadProgress.total}...`
+                : loading
                 ? 'Saving Song to Database...'
-                : isReadingFile
-                ? 'Reading Audio File...'
+                : isReadingFile || isReadingMultiFiles
+                ? 'Reading Audio File(s)...'
+                : releaseType !== 'Single'
+                ? `Upload ${albumTracks.length || ''} Track${albumTracks.length === 1 ? '' : 's'}`.replace('  ', ' ')
                 : 'Upload & Play Song'}
             </button>
           </div>

@@ -463,9 +463,9 @@ async function startServer() {
   });
 
   // Fetch Application Data (Tracks, Playlists, User State, Chat History)
-  app.get("/api/data", (req, res) => {
+  app.get("/api/data", async (req, res) => {
     try {
-      const db = readDB();
+      const db = await readDBAsync();
       const authUserId = getUserIdFromToken(req);
 
       let currentUser = null;
@@ -539,10 +539,10 @@ async function startServer() {
   });
 
   // Global Multi-Category Search API Endpoint
-  app.get("/api/search", (req, res) => {
+  app.get("/api/search", async (req, res) => {
     try {
       const query = (req.query.q as string || "").trim().toLowerCase();
-      const db = readDB();
+      const db = await readDBAsync();
 
       if (!query) {
         return res.json({
@@ -707,7 +707,7 @@ async function startServer() {
         return res.status(403).json({ error: "Forbidden: Unauthorized user session." });
       }
       const updates = req.body;
-      const db = readDB();
+      const db = await readDBAsync();
 
       const index = db.users.findIndex((u) => u.id === userId);
       if (index === -1) {
@@ -769,7 +769,7 @@ async function startServer() {
   // Add Custom Track & Store Audio File to User Directory / Cloudflare R2
   app.post("/api/tracks", async (req, res) => {
     try {
-      const { userId, title, artist, album, coverUrl, audioUrl, duration, genre, syncedLyrics, releaseType, releaseTitle, releaseId, copyright, releaseYear } = req.body;
+      const { userId, title, artist, album, coverUrl, audioUrl, duration, genre, syncedLyrics, releaseType, releaseTitle, releaseId, copyright, releaseYear, trackNumber } = req.body;
 
       if (!title || !artist) {
         return res.status(400).json({ success: false, error: "Track title and artist are required." });
@@ -782,7 +782,7 @@ async function startServer() {
         return res.status(403).json({ success: false, error: "Forbidden: Unauthorized user session." });
       }
 
-      const db = readDB();
+      const db = await readDBAsync();
       const trackId = `trk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
       let persistentAudioUrl = audioUrl || "";
@@ -826,6 +826,7 @@ async function startServer() {
         releaseId: releaseId || `rel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         copyright: copyright ? String(copyright).trim() : undefined,
         releaseYear: releaseYear ? Number(releaseYear) : new Date().getFullYear(),
+        trackNumber: trackNumber !== undefined && trackNumber !== null ? Number(trackNumber) : undefined,
         coverUrl: persistentCoverUrl,
         audioUrl: persistentAudioUrl,
         duration: Number(duration) || 180,
@@ -851,8 +852,8 @@ async function startServer() {
   app.put("/api/tracks/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const { userId, title, artist, album, genre, coverUrl, audioUrl, duration, releaseType, releaseTitle, copyright, releaseYear } = req.body;
-      const db = readDB();
+      const { userId, title, artist, album, genre, coverUrl, audioUrl, duration, releaseType, releaseTitle, copyright, releaseYear, trackNumber } = req.body;
+      const db = await readDBAsync();
 
       const trackIndex = db.tracks.findIndex((t) => t.id === id);
       if (trackIndex === -1) {
@@ -918,6 +919,7 @@ async function startServer() {
         duration: duration !== undefined && Number(duration) > 0 ? Number(duration) : existingTrack.duration,
         copyright: copyright !== undefined ? (copyright ? String(copyright).trim() : undefined) : existingTrack.copyright,
         releaseYear: releaseYear !== undefined ? Number(releaseYear) : existingTrack.releaseYear,
+        trackNumber: trackNumber !== undefined && trackNumber !== null ? Number(trackNumber) : existingTrack.trackNumber,
         userId: existingTrack.userId || userId,
       };
 
@@ -932,10 +934,10 @@ async function startServer() {
   });
 
   // Delete Track
-  app.delete("/api/tracks/:id", (req, res) => {
+  app.delete("/api/tracks/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const db = readDB();
+      const db = await readDBAsync();
 
       const trackToDelete = db.tracks.find((t) => t.id === id);
       if (!trackToDelete) {
@@ -978,7 +980,7 @@ async function startServer() {
   // Wipe All Uploaded Tracks & Clear Uploaded Files
   const handleWipeTracks = async (req: express.Request, res: express.Response) => {
     try {
-      const db = readDB();
+      const db = await readDBAsync();
       const count = db.tracks.length;
 
       // 1. Clear track list
@@ -1096,7 +1098,7 @@ async function startServer() {
         }
       }
 
-      const db = readDB();
+      const db = await readDBAsync();
       const newPlaylist: PlaylistRecord = {
         id: `pl_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         userId: userId || "",
@@ -1123,7 +1125,7 @@ async function startServer() {
     try {
       const { id } = req.params;
       const { title, description, coverUrl, trackIds } = req.body;
-      const db = readDB();
+      const db = await readDBAsync();
 
       const index = db.playlists.findIndex((p) => p.id === id);
       if (index === -1) {
@@ -1166,10 +1168,10 @@ async function startServer() {
   });
 
   // Delete Playlist
-  app.delete("/api/playlists/:id", (req, res) => {
+  app.delete("/api/playlists/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const db = readDB();
+      const db = await readDBAsync();
 
       const targetPlaylist = db.playlists.find((p) => p.id === id);
       if (targetPlaylist && targetPlaylist.userId && !verifyUserOwnership(req, targetPlaylist.userId)) {

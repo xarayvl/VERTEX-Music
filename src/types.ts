@@ -61,6 +61,7 @@ export interface Track {
   releaseId?: string;
   copyright?: string;
   releaseYear?: number;
+  trackNumber?: number;
 }
 
 export interface Album {
