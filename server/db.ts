@@ -1,7 +1,9 @@
 import fs from 'fs';
 import path from 'path';
+import { Redis } from '@upstash/redis';
 
 const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
+const UPSTASH_DB_KEY = 'app:spotify:db_v1';
 
 export interface UserRecord {
   id: string;
@@ -13,7 +15,7 @@ export interface UserRecord {
   bio: string;
   favoriteGenres: string[];
   createdAt: string;
-  isAdmin?: boolean; // Must be set manually in data/db.json; never settable via any API endpoint.
+  isAdmin?: boolean; // Must be set manually; never settable via public API endpoint.
   isArtist?: boolean;
   artistName?: string;
   artistBio?: string;
@@ -93,8 +95,30 @@ export interface DBData {
   chatHistories: Record<string, ChatMessageRecord[]>;
 }
 
+let cachedDB: DBData | null = null;
 let writeQueue: Array<() => void> = [];
 let isWriting = false;
+
+let redisClient: Redis | null = null;
+
+export function getUpstashClient(): Redis | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (url && token) {
+    if (!redisClient) {
+      redisClient = new Redis({
+        url: url.trim(),
+        token: token.trim(),
+      });
+    }
+    return redisClient;
+  }
+  return null;
+}
+
+export function isUpstashConfigured(): boolean {
+  return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+}
 
 function processWriteQueue() {
   if (isWriting || writeQueue.length === 0) return;
@@ -112,7 +136,46 @@ function processWriteQueue() {
   }
 }
 
-export function readDB(): DBData {
+/**
+ * Initializes DB by pulling initial dataset from Upstash Redis if available.
+ */
+export async function initUpstashDB(): Promise<DBData> {
+  const redis = getUpstashClient();
+  if (redis) {
+    try {
+      console.log('⚡ Upstash Redis detected! Syncing database from Upstash...');
+      const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
+      if (remoteData && typeof remoteData === 'object') {
+        const validated: DBData = {
+          users: Array.isArray(remoteData.users) ? remoteData.users : [],
+          playlists: Array.isArray(remoteData.playlists) ? remoteData.playlists : [],
+          tracks: Array.isArray(remoteData.tracks) ? remoteData.tracks : [],
+          userStates: remoteData.userStates && typeof remoteData.userStates === 'object' ? remoteData.userStates : {},
+          chatHistories: remoteData.chatHistories && typeof remoteData.chatHistories === 'object' ? remoteData.chatHistories : {},
+        };
+        cachedDB = validated;
+        // Also mirror to local disk as secondary fallback
+        saveToLocalDisk(validated);
+        console.log(`✅ Loaded ${validated.users.length} users, ${validated.tracks.length} tracks from Upstash Redis.`);
+        return validated;
+      } else {
+        console.log('ℹ️ Upstash Redis key empty. Seeding Upstash from local disk...');
+        const localData = readFromLocalDisk();
+        cachedDB = localData;
+        await redis.set(UPSTASH_DB_KEY, localData);
+        return localData;
+      }
+    } catch (err) {
+      console.error('⚠️ Failed to communicate with Upstash Redis, falling back to local disk:', err);
+    }
+  }
+
+  const diskData = readFromLocalDisk();
+  cachedDB = diskData;
+  return diskData;
+}
+
+function readFromLocalDisk(): DBData {
   try {
     const dir = path.dirname(DB_FILE);
     if (!fs.existsSync(dir)) {
@@ -126,7 +189,7 @@ export function readDB(): DBData {
         userStates: {},
         chatHistories: {},
       };
-      writeDB(defaultData);
+      saveToLocalDisk(defaultData);
       return defaultData;
     }
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
@@ -138,23 +201,10 @@ export function readDB(): DBData {
         userStates: {},
         chatHistories: {},
       };
-      writeDB(defaultData);
+      saveToLocalDisk(defaultData);
       return defaultData;
     }
-    let parsed: any;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      const defaultData: DBData = {
-        users: [],
-        playlists: [],
-        tracks: [],
-        userStates: {},
-        chatHistories: {},
-      };
-      writeDB(defaultData);
-      return defaultData;
-    }
+    const parsed = JSON.parse(raw);
     return {
       users: Array.isArray(parsed?.users) ? parsed.users : [],
       playlists: Array.isArray(parsed?.playlists) ? parsed.playlists : [],
@@ -168,19 +218,79 @@ export function readDB(): DBData {
   }
 }
 
-export function writeDB(data: DBData): void {
-  writeQueue.push(() => {
+function saveToLocalDisk(data: DBData): void {
+  try {
+    const dir = path.dirname(DB_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const tempFile = `${DB_FILE}.tmp.${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
+    fs.renameSync(tempFile, DB_FILE);
+  } catch (err) {
+    console.error('Error writing db.json:', err);
+  }
+}
+
+export function readDB(): DBData {
+  if (cachedDB) {
+    return cachedDB;
+  }
+  const data = readFromLocalDisk();
+  cachedDB = data;
+  return data;
+}
+
+export async function readDBAsync(): Promise<DBData> {
+  const redis = getUpstashClient();
+  if (redis) {
     try {
-      const dir = path.dirname(DB_FILE);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+      const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
+      if (remoteData && typeof remoteData === 'object') {
+        const validated: DBData = {
+          users: Array.isArray(remoteData.users) ? remoteData.users : [],
+          playlists: Array.isArray(remoteData.playlists) ? remoteData.playlists : [],
+          tracks: Array.isArray(remoteData.tracks) ? remoteData.tracks : [],
+          userStates: remoteData.userStates && typeof remoteData.userStates === 'object' ? remoteData.userStates : {},
+          chatHistories: remoteData.chatHistories && typeof remoteData.chatHistories === 'object' ? remoteData.chatHistories : {},
+        };
+        cachedDB = validated;
+        saveToLocalDisk(validated);
+        return validated;
       }
-      const tempFile = `${DB_FILE}.tmp.${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
-      fs.renameSync(tempFile, DB_FILE);
     } catch (err) {
-      console.error('Error writing db.json:', err);
+      console.error('Async Upstash read error:', err);
+    }
+  }
+  return readDB();
+}
+
+export function writeDB(data: DBData): void {
+  cachedDB = data;
+  writeQueue.push(() => {
+    saveToLocalDisk(data);
+
+    const redis = getUpstashClient();
+    if (redis) {
+      redis.set(UPSTASH_DB_KEY, data).catch((err) => {
+        console.error('Failed to sync writeDB to Upstash Redis:', err);
+      });
     }
   });
   processWriteQueue();
 }
+
+export async function writeDBAsync(data: DBData): Promise<void> {
+  cachedDB = data;
+  saveToLocalDisk(data);
+
+  const redis = getUpstashClient();
+  if (redis) {
+    try {
+      await redis.set(UPSTASH_DB_KEY, data);
+    } catch (err) {
+      console.error('Failed async writeDB to Upstash Redis:', err);
+    }
+  }
+}
+

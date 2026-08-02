@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import { readDB, writeDB, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
+import { readDB, writeDB, readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
 
 dotenv.config();
 
@@ -95,6 +95,27 @@ async function saveUploadedFile(base64Data: string, mimeType: string, folderUser
   const cleanBase64 = base64Data.replace(/[\r\n\s]/g, "");
   const buffer = Buffer.from(cleanBase64, "base64");
 
+  let cleanMime = (mimeType || '').split(';')[0].trim();
+  if (cleanMime === 'audio/mp3') cleanMime = 'audio/mpeg';
+  if (cleanMime === 'audio/m4a' || cleanMime === 'audio/x-m4a') cleanMime = 'audio/mp4';
+  if (!cleanMime || cleanMime === 'application/octet-stream' || cleanMime === 'binary/octet-stream') {
+    if (ext === 'mp3') cleanMime = 'audio/mpeg';
+    else if (ext === 'ogg') cleanMime = 'audio/ogg';
+    else if (ext === 'wav') cleanMime = 'audio/wav';
+    else if (ext === 'm4a') cleanMime = 'audio/mp4';
+    else if (ext === 'webm') cleanMime = 'audio/webm';
+    else if (ext === 'jpg' || ext === 'jpeg') cleanMime = 'image/jpeg';
+    else if (ext === 'png') cleanMime = 'image/png';
+    else cleanMime = filePrefix.includes('audio') ? 'audio/mpeg' : 'image/jpeg';
+  }
+
+  // Save local disk backup copy for resilience
+  try {
+    await saveFileToLocalDisk(base64Data, mimeType, folderUserId, filePrefix);
+  } catch (err) {
+    console.warn("Local disk backup save error:", err);
+  }
+
   const r2 = getR2Client();
   const bucketName = process.env.R2_BUCKET_NAME;
 
@@ -105,12 +126,12 @@ async function saveUploadedFile(base64Data: string, mimeType: string, folderUser
           Bucket: bucketName,
           Key: key,
           Body: buffer,
-          ContentType: mimeType || (filePrefix.includes("audio") ? "audio/mpeg" : "image/jpeg"),
+          ContentType: cleanMime,
         })
       );
 
       const publicDomain = process.env.R2_PUBLIC_DOMAIN;
-      if (publicDomain && publicDomain.trim()) {
+      if (publicDomain && publicDomain.trim() && !publicDomain.includes('.r2.dev')) {
         const cleanDomain = publicDomain.trim().replace(/\/+$/, "");
         return `${cleanDomain}/${key}`;
       } else {
@@ -121,7 +142,7 @@ async function saveUploadedFile(base64Data: string, mimeType: string, folderUser
     }
   }
 
-  return await saveFileToLocalDisk(base64Data, mimeType, folderUserId, filePrefix);
+  return `/uploads/${safeUserId}/${filename}`;
 }
 
 
@@ -129,39 +150,103 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Initialize Upstash Redis database sync (if UPSTASH_REDIS_REST_URL is present)
+  await initUpstashDB();
+
   // Ensure uploads root directory exists
   const uploadsRootDir = path.join(process.cwd(), "data", "uploads");
   if (!fs.existsSync(uploadsRootDir)) {
     fs.mkdirSync(uploadsRootDir, { recursive: true });
   }
 
-  // Serve music & cover upload files statically
-  app.use("/uploads", express.static(uploadsRootDir));
+  // Serve music & cover upload files statically with CORS & Accept-Ranges headers
+  app.use("/uploads", (req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Authorization, X-Requested-With, *");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type");
+    res.setHeader("Accept-Ranges", "bytes");
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
+    next();
+  }, express.static(uploadsRootDir));
 
   // Serve files stored in Cloudflare R2 directly or via proxy endpoint
-  app.get("/api/r2-file/*", async (req, res) => {
+  app.all("/api/r2-file/*", async (req, res) => {
+    const key = req.params[0];
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Authorization, X-Requested-With, *");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type");
+    res.setHeader("Accept-Ranges", "bytes");
+
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
+
     try {
-      const key = req.params[0];
       const r2 = getR2Client();
       const bucketName = process.env.R2_BUCKET_NAME;
 
-      if (!r2 || !bucketName || !key) {
-        return res.status(404).send("File not found or R2 storage not configured.");
+      if (!key) {
+        return res.status(404).send("File key missing.");
       }
+
+      // Check local disk first as fast fallback if R2 is not configured
+      if (!r2 || !bucketName) {
+        const localPath = path.join(process.cwd(), "data", "uploads", key);
+        if (fs.existsSync(localPath)) {
+          return res.sendFile(localPath);
+        }
+        return res.status(404).send("File not found and R2 storage not configured.");
+      }
+
+      const rangeHeader = req.headers.range;
 
       const command = new GetObjectCommand({
         Bucket: bucketName,
         Key: key,
+        Range: rangeHeader || undefined,
       });
 
       const data = await r2.send(command);
-      if (data.ContentType) {
-        res.setHeader("Content-Type", data.ContentType);
+
+      // Determine Content-Type
+      let contentType = "audio/mpeg";
+      if (data.ContentType && data.ContentType !== "binary/octet-stream" && data.ContentType !== "application/octet-stream") {
+        contentType = data.ContentType;
+      } else {
+        const lowerKey = key.toLowerCase();
+        if (lowerKey.endsWith(".mp3")) contentType = "audio/mpeg";
+        else if (lowerKey.endsWith(".wav")) contentType = "audio/wav";
+        else if (lowerKey.endsWith(".ogg")) contentType = "audio/ogg";
+        else if (lowerKey.endsWith(".m4a")) contentType = "audio/mp4";
+        else if (lowerKey.endsWith(".webm")) contentType = "audio/webm";
+        else if (lowerKey.endsWith(".png")) contentType = "image/png";
+        else if (lowerKey.endsWith(".jpg") || lowerKey.endsWith(".jpeg")) contentType = "image/jpeg";
       }
-      if (data.ContentLength) {
+
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+
+      if (data.ContentLength !== undefined) {
         res.setHeader("Content-Length", data.ContentLength);
       }
-      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+
+      if (data.ContentRange) {
+        res.setHeader("Content-Range", data.ContentRange);
+        res.status(206);
+      } else if (data.ContentLength && rangeHeader && rangeHeader.startsWith("bytes=0-")) {
+        res.setHeader("Content-Range", `bytes 0-${data.ContentLength - 1}/${data.ContentLength}`);
+        res.status(206);
+      } else {
+        res.status(200);
+      }
+
+      if (req.method === "HEAD") {
+        return res.end();
+      }
 
       const stream = data.Body as any;
       if (stream && typeof stream.pipe === "function") {
@@ -175,6 +260,13 @@ async function startServer() {
         }
       }
     } catch (err: any) {
+      // Local disk fallback on R2 fetch failure (e.g. NoSuchKey or network error)
+      if (key) {
+        const localPath = path.join(process.cwd(), "data", "uploads", key);
+        if (fs.existsSync(localPath)) {
+          return res.sendFile(localPath);
+        }
+      }
       console.error("R2 File Express Route Error:", err);
       return res.status(404).send("File not found");
     }
@@ -183,6 +275,30 @@ async function startServer() {
   // Increase payload limit for custom track audio uploads or images
   app.use(express.json({ limit: "100mb" }));
   app.use(express.urlencoded({ extended: true, limit: "100mb" }));
+
+  // System status endpoint to check Upstash & R2 integration status
+  app.get("/api/system-status", (req, res) => {
+    const upstashActive = isUpstashConfigured();
+    const r2Active = !!(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME);
+    const db = readDB();
+
+    res.json({
+      status: "ok",
+      upstashRedis: {
+        configured: upstashActive,
+        message: upstashActive ? "Connected and active" : "Not configured. Using local disk (specify UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in environment settings)."
+      },
+      cloudflareR2: {
+        configured: r2Active,
+        message: r2Active ? "Connected and active" : "Not configured. Using local disk fallback (specify R2_* variables in environment settings)."
+      },
+      databaseStats: {
+        usersCount: db.users.length,
+        tracksCount: db.tracks.length,
+        playlistsCount: db.playlists.length
+      }
+    });
+  });
 
   // ==========================================
   // AUTHENTICATION & SESSION MANAGEMENT

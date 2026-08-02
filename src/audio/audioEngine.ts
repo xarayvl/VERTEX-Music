@@ -34,8 +34,56 @@ class AudioEngine {
       }
     };
 
-    this.audio.onerror = (e) => {
-      console.warn('Audio element error:', e);
+    this.audio.onerror = () => {
+      const err = this.audio.error;
+      let codeName = 'MEDIA_ERR_UNKNOWN';
+      let errorMeaning = 'An unknown audio element error occurred.';
+
+      if (err) {
+        switch (err.code) {
+          case 1: // MEDIA_ERR_ABORTED
+            codeName = 'MEDIA_ERR_ABORTED (1)';
+            errorMeaning = 'The fetching process for the media resource was aborted by the user agent.';
+            break;
+          case 2: // MEDIA_ERR_NETWORK
+            codeName = 'MEDIA_ERR_NETWORK (2)';
+            errorMeaning = 'A network error occurred while fetching the audio stream from R2 or server.';
+            break;
+          case 3: // MEDIA_ERR_DECODE
+            codeName = 'MEDIA_ERR_DECODE (3)';
+            errorMeaning = 'An error occurred while decoding the audio resource.';
+            break;
+          case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+            codeName = 'MEDIA_ERR_SRC_NOT_SUPPORTED (4)';
+            errorMeaning = 'The audio format is unsupported, access to R2 bucket was denied (403), or CORS policy blocked loading.';
+            break;
+        }
+      }
+
+      console.error(`[AudioEngine] HTMLAudioElement Playback Error:`, {
+        code: err?.code,
+        codeName,
+        message: err?.message || errorMeaning,
+        src: this.audio.src,
+        networkState: this.audio.networkState,
+        readyState: this.audio.readyState,
+      });
+
+      // If an external R2 URL failed with CORS or 403, attempt proxy fallback
+      if (err?.code === 4 && this.audio.src.includes('.r2.dev/')) {
+        const match = this.audio.src.match(/\.r2\.dev\/(.+)$/);
+        if (match && match[1]) {
+          const proxiedUrl = `/api/r2-file/${match[1]}`;
+          console.warn(`[AudioEngine] Direct R2 URL failed. Retrying playback via proxy endpoint: ${proxiedUrl}`);
+          this.audio.removeAttribute('crossorigin');
+          this.audio.src = proxiedUrl;
+          this.currentAudioUrl = proxiedUrl;
+          this.audio.load();
+          this.audio.play().catch((playErr) => {
+            console.warn('[AudioEngine] Proxy fallback play attempt failed:', playErr);
+          });
+        }
+      }
     };
   }
 
@@ -116,18 +164,49 @@ class AudioEngine {
     if (track.audioUrl && track.audioUrl.trim().length > 0) {
       this.isRealAudioPlaying = true;
 
-      const trimmedUrl = track.audioUrl.trim();
-      if (this.currentAudioUrl !== trimmedUrl) {
+      let trimmedUrl = track.audioUrl.trim();
+      if (trimmedUrl.includes('.r2.dev/')) {
+        const match = trimmedUrl.match(/\.r2\.dev\/(.+)$/);
+        if (match && match[1]) {
+          trimmedUrl = `/api/r2-file/${match[1]}`;
+        }
+      }
+
+      const isNewTrack = this.currentAudioUrl !== trimmedUrl;
+
+      if (isNewTrack) {
+        if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+          try {
+            const urlObj = new URL(trimmedUrl);
+            if (urlObj.origin !== window.location.origin) {
+              this.audio.crossOrigin = 'anonymous';
+            } else {
+              this.audio.removeAttribute('crossorigin');
+            }
+          } catch {
+            this.audio.removeAttribute('crossorigin');
+          }
+        } else {
+          this.audio.removeAttribute('crossorigin');
+        }
+
         this.audio.src = trimmedUrl;
         this.currentAudioUrl = trimmedUrl;
         this.audio.load();
+        try {
+          this.audio.currentTime = 0;
+        } catch {
+          // ignore if metadata not ready yet
+        }
+      } else if (seekTimeSeconds > 0 && !isNaN(seekTimeSeconds) && Math.abs((this.audio.currentTime || 0) - seekTimeSeconds) > 1) {
+        try {
+          this.audio.currentTime = seekTimeSeconds;
+        } catch {
+          // ignore
+        }
       }
 
       this.audio.volume = this.currentVolume;
-
-      if (seekTimeSeconds > 0 && !isNaN(seekTimeSeconds)) {
-        this.audio.currentTime = seekTimeSeconds;
-      }
 
       const playPromise = this.audio.play();
       if (playPromise !== undefined) {

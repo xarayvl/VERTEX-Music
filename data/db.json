@@ -1,7 +1,199 @@
 {
-  "users": [],
+  "users": [
+    {
+      "id": "usr_1785640895054_bedln",
+      "username": "ooo",
+      "email": "ooo@ooo.com",
+      "password": "$2b$10$wjV2s2lHyAD40LBIaEJ7GuxxqW/VhuIcG.Wc03XTEaUMKRDyd.Dy6",
+      "displayName": "ooo",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80",
+      "bio": "Music listener on VERTEX Music.",
+      "favoriteGenres": [
+        "Electronic",
+        "Synthwave",
+        "Pop"
+      ],
+      "createdAt": "2026-08-02T03:21:35.054Z",
+      "stats": {
+        "hoursListened": 0,
+        "secondsListened": 0,
+        "tracksPlayed": 0,
+        "topGenre": "N/A",
+        "playlistsCreated": 0,
+        "followersCount": 0,
+        "followingCount": 0
+      },
+      "settings": {
+        "losslessAudio": true,
+        "autoplay": true,
+        "audioNormalization": true,
+        "offlineDownloads": true
+      }
+    },
+    {
+      "id": "usr_1785645840720_7coat",
+      "username": "ooove",
+      "email": "oooo@ooo.com",
+      "password": "$2b$10$7NbsqX84wnweQf.H86ex3eoXx/AwOAT9uLyimDyQn09PHzDagOeiG",
+      "displayName": "ooo",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80",
+      "bio": "Music listener on VERTEX Music.",
+      "favoriteGenres": [
+        "Electronic",
+        "Synthwave",
+        "Pop"
+      ],
+      "createdAt": "2026-08-02T04:44:00.720Z",
+      "stats": {
+        "hoursListened": 0,
+        "secondsListened": 0,
+        "tracksPlayed": 0,
+        "topGenre": "N/A",
+        "playlistsCreated": 0,
+        "followersCount": 0,
+        "followingCount": 0
+      },
+      "settings": {
+        "losslessAudio": true,
+        "autoplay": true,
+        "audioNormalization": true,
+        "offlineDownloads": true
+      }
+    }
+  ],
   "playlists": [],
-  "tracks": [],
-  "userStates": {},
-  "chatHistories": {}
+  "tracks": [
+    {
+      "id": "trk_1785645920854_dad7l",
+      "userId": "usr_1785645840720_7coat",
+      "title": "Bleed5gangsanthem",
+      "artist": "ooo",
+      "album": "Single",
+      "releaseType": "Single",
+      "releaseTitle": "Bleed5gangsanthem",
+      "releaseId": "rel_1785645915020_74ytp",
+      "releaseYear": 2026,
+      "coverUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
+      "audioUrl": "/api/r2-file/usr_1785645840720_7coat/audio_1785645920855_hycem.ogg",
+      "duration": 295,
+      "genre": "Synthwave",
+      "syncedLyrics": [
+        {
+          "time": 0,
+          "text": "(Playing Bleed5gangsanthem by ooo)"
+        },
+        {
+          "time": 10,
+          "text": "Feel the frequency and the beat..."
+        }
+      ],
+      "createdAt": "2026-08-02T04:45:21.402Z"
+    },
+    {
+      "id": "trk_1785644617992_b814e",
+      "userId": "usr_1785640895054_bedln",
+      "title": "WELCOME TO THE LIMBO",
+      "artist": "ooo",
+      "album": "Single",
+      "releaseType": "Single",
+      "releaseTitle": "WELCOME TO THE LIMBO",
+      "releaseId": "rel_1785644612169_80yba",
+      "releaseYear": 2026,
+      "coverUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
+      "audioUrl": "/api/r2-file/usr_1785640895054_bedln/audio_1785644617993_z47g5.ogg",
+      "duration": 297,
+      "genre": "Synthwave",
+      "syncedLyrics": [
+        {
+          "time": 0,
+          "text": "(Playing WELCOME TO THE LIMBO by ooo)"
+        },
+        {
+          "time": 10,
+          "text": "Feel the frequency and the beat..."
+        }
+      ],
+      "createdAt": "2026-08-02T04:23:38.553Z"
+    },
+    {
+      "id": "trk_1785644170911_hdtif",
+      "userId": "usr_1785640895054_bedln",
+      "title": "Serbiamalfunction",
+      "artist": "ooo",
+      "album": "Single",
+      "releaseType": "Single",
+      "releaseTitle": "Serbiamalfunction",
+      "releaseId": "rel_1785644164740_jyc84",
+      "releaseYear": 2026,
+      "coverUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
+      "audioUrl": "/api/r2-file/usr_1785640895054_bedln/audio_1785644170912_ikyno.ogg",
+      "duration": 310,
+      "genre": "Synthwave",
+      "syncedLyrics": [
+        {
+          "time": 0,
+          "text": "(Playing Serbiamalfunction by ooo)"
+        },
+        {
+          "time": 10,
+          "text": "Feel the frequency and the beat..."
+        }
+      ],
+      "createdAt": "2026-08-02T04:16:11.533Z"
+    },
+    {
+      "id": "trk_1785641065250_y84mg",
+      "userId": "usr_1785640895054_bedln",
+      "title": "Serbiamalfunction",
+      "artist": "ooo",
+      "album": "Single",
+      "releaseType": "Single",
+      "releaseTitle": "Serbiamalfunction",
+      "releaseId": "rel_1785641059143_uj9fz",
+      "releaseYear": 2026,
+      "coverUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
+      "audioUrl": "/uploads/usr_1785640895054_bedln/audio_1785641065252_ux2vs.ogg",
+      "duration": 310,
+      "genre": "Synthwave",
+      "syncedLyrics": [
+        {
+          "time": 0,
+          "text": "(Playing Serbiamalfunction by ooo)"
+        },
+        {
+          "time": 10,
+          "text": "Feel the frequency and the beat..."
+        }
+      ],
+      "createdAt": "2026-08-02T03:24:25.301Z"
+    }
+  ],
+  "userStates": {
+    "usr_1785640895054_bedln": {
+      "likedTrackIds": [],
+      "recentTrackIds": []
+    },
+    "usr_1785645840720_7coat": {
+      "likedTrackIds": [],
+      "recentTrackIds": []
+    }
+  },
+  "chatHistories": {
+    "usr_1785640895054_bedln": [
+      {
+        "id": "welcome-1785640872826",
+        "sender": "ai",
+        "text": "Hello! I'm **VERTEX Music AI**, your personal VERTEX Music DJ and music assistant. Log in to access your personal recommendations and chat session!",
+        "timestamp": "2026-08-02T03:21:12.826Z"
+      }
+    ],
+    "usr_1785645840720_7coat": [
+      {
+        "id": "welcome-1",
+        "sender": "ai",
+        "text": "Hello! I'm **VERTEX Music AI**, your personal VERTEX Music DJ and music assistant. Ask me to recommend songs, curate playlist concepts, explain genres, or analyze musical moods!",
+        "timestamp": "2026-08-02T04:45:02.532Z"
+      }
+    ]
+  }
 }
