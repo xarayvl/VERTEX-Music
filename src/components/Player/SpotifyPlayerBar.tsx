@@ -91,7 +91,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
     <footer
       data-context-type="player"
       data-track-id={currentTrack?.id || undefined}
-      className="fixed bottom-0 left-0 right-0 h-20 bg-black border-t border-white/10 z-50 px-4 flex items-center justify-between select-none"
+      className="fixed bottom-0 left-0 right-0 h-20 bg-black border-t border-white/10 z-50 px-4 hidden md:flex items-center justify-between select-none"
     >
       {/* Left: Track Information (Clickable to open Spotify-like Song Screen) */}
       <div className="flex items-center space-x-3.5 w-1/4 min-w-[200px]">

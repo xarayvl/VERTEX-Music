@@ -338,21 +338,30 @@ export const HomeView: React.FC<HomeViewProps> = ({
                       isSelected ? 'bg-white/10 text-[#D946EF]' : 'hover:bg-white/10 text-zinc-300'
                     }`}
                   >
-                    {/* # Index or Play Icon */}
-                    <div className="col-span-1 text-center font-mono font-bold text-xs text-zinc-400 flex justify-center items-center">
-                      <div className="group-hover:hidden">
+                    {/* # Index or Play Icon — same render pattern as ArtistView's track rows */}
+                    <div className="col-span-1 flex items-center justify-center">
+                      <span
+                        className={`w-6 text-center text-xs font-mono ${
+                          isSelected ? 'text-[#D946EF] font-bold' : 'text-zinc-400 group-hover:hidden'
+                        }`}
+                      >
                         {isSelected && isPlaying ? (
-                          <span className="text-[#D946EF] font-bold text-base leading-none">▶</span>
+                          <span className="flex items-center justify-center space-x-0.5">
+                            <span className="w-1 h-3 bg-[#D946EF] animate-bounce" />
+                            <span className="w-1 h-4 bg-[#D946EF] animate-bounce delay-75" />
+                            <span className="w-1 h-2 bg-[#D946EF] animate-bounce delay-150" />
+                          </span>
                         ) : (
                           idx + 1
                         )}
-                      </div>
+                      </span>
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onPlayTrack(track);
                         }}
-                        className="hidden group-hover:block text-white"
+                        className="w-6 text-center hidden group-hover:block text-white"
                       >
                         {isSelected && isPlaying ? (
                            <Pause className="w-4 h-4 fill-white" />

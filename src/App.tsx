@@ -5,6 +5,7 @@ import { audioEngine } from './audio/audioEngine';
 import { SpotifySidebar } from './components/Navigation/SpotifySidebar';
 import { SpotifyTopHeader } from './components/Navigation/SpotifyTopHeader';
 import { SpotifyPlayerBar } from './components/Player/SpotifyPlayerBar';
+import { MiniPlayer } from './components/Player/MiniPlayer';
 import { BottomTabBar } from './components/Navigation/BottomTabBar';
 
 import { HomeView } from './components/Views/HomeView';
@@ -1781,7 +1782,7 @@ export default function App() {
           />
 
           {/* Scrollable View Content */}
-          <div className="flex-1 overflow-y-auto px-6 pt-4 pb-24 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto px-3 sm:px-6 pt-4 pb-44 md:pb-24 custom-scrollbar">
             {isSongScreenOpen ? (
               <SongScreenModal
                 isOpen={isSongScreenOpen}
@@ -2019,16 +2020,33 @@ export default function App() {
         )}
       </div>
 
-      {/* Mobile Bottom Tab Dock (Shown on small screens) */}
-      <div className="md:hidden relative z-40">
-        <BottomTabBar
-          activeTab={activeTab}
-          onTabChange={handleSelectTab}
-          hasMiniPlayer={false}
-        />
-      </div>
+      {/* Mobile Now-Playing Mini Player (Shown on small screens, above the tab dock) */}
+      {!isSongScreenOpen && (
+        <div className="md:hidden">
+          <MiniPlayer
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            progress={progressFraction}
+            onTogglePlay={handleTogglePlay}
+            onNext={handleNextTrack}
+            onToggleLike={handleToggleLike}
+            onOpenSongScreen={() => setIsSongScreenOpen(true)}
+          />
+        </div>
+      )}
 
-      {/* VERTEX Music Persistent Bottom Playback Bar */}
+      {/* Mobile Bottom Tab Dock (Shown on small screens) */}
+      {!isSongScreenOpen && (
+        <div className="md:hidden relative z-40">
+          <BottomTabBar
+            activeTab={activeTab}
+            onTabChange={handleSelectTab}
+            hasMiniPlayer={!!currentTrack}
+          />
+        </div>
+      )}
+
+      {/* VERTEX Music Persistent Bottom Playback Bar (Desktop / tablet only) */}
       <SpotifyPlayerBar
         currentTrack={currentTrack}
         isPlaying={isPlaying}

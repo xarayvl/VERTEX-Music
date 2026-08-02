@@ -10,6 +10,7 @@ interface MiniPlayerProps {
   onTogglePlay: () => void;
   onNext: () => void;
   onToggleLike: (trackId: string) => void;
+  onOpenSongScreen?: () => void;
 }
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({
@@ -19,12 +20,14 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   onTogglePlay,
   onNext,
   onToggleLike,
+  onOpenSongScreen,
 }) => {
   if (!currentTrack) return null;
   return (
     <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-30 w-[92%] max-w-md transition-all duration-300">
       <div
-        className="group relative overflow-hidden backdrop-blur-2xl bg-zinc-900/85 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.7)] rounded-2xl p-2.5 flex items-center justify-between hover:bg-zinc-900/95 transition-all"
+        onClick={onOpenSongScreen}
+        className="group relative overflow-hidden backdrop-blur-2xl bg-zinc-900/85 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.7)] rounded-2xl p-2.5 flex items-center justify-between hover:bg-zinc-900/95 transition-all active:scale-[0.99] cursor-pointer"
       >
         {/* Progress bar top border */}
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-white/10">

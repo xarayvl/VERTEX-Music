@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Search, SlidersHorizontal, Bot, Crown, User, Settings, ExternalLink, LogOut, Check, ChevronDown, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, SlidersHorizontal, Bot, Crown, User, Settings, ExternalLink, LogOut, Check, ChevronDown, Sparkles, Music } from 'lucide-react';
 import { TabType, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
@@ -66,8 +66,22 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
     >
       {/* Left Navigation Buttons & Search Input */}
       <div className="flex items-center space-x-2.5 min-w-0 flex-shrink-1">
-        {/* Back / Forward Buttons */}
-        <div className="flex items-center space-x-1.5 flex-shrink-0">
+        {/* Compact brand mark — mobile only, replaces desktop back/forward + search */}
+        <div className="flex sm:hidden items-center space-x-2 min-w-0">
+          <div className="w-7 h-7 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-[0_0_12px_rgba(217,70,239,0.4)] flex-shrink-0">
+            <Music className="w-4 h-4 fill-white text-white stroke-[2.5]" />
+          </div>
+          <button
+            onClick={() => onSelectTab('search')}
+            title="Search"
+            className="p-2 -ml-1 rounded-full text-zinc-300 hover:text-white active:scale-95 transition-all"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Back / Forward Buttons — desktop / tablet only */}
+        <div className="hidden sm:flex items-center space-x-1.5 flex-shrink-0">
           <button
             onClick={onGoBack}
             disabled={!canGoBack}
@@ -86,8 +100,8 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
           </button>
         </div>
 
-        {/* Global Search Input Box */}
-        <div className="relative w-36 sm:w-48 md:w-56 flex-shrink-0">
+        {/* Global Search Input Box — desktop / tablet only, mobile uses the Search tab instead */}
+        <div className="hidden sm:block relative w-36 sm:w-48 md:w-56 flex-shrink-0">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
           <input
             type="text"
@@ -133,11 +147,11 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
           </button>
         )}
 
-        {/* AI DJ Chat Button */}
+        {/* AI DJ Chat Button — hidden on mobile, already reachable via the bottom tab bar */}
         <button
           onClick={() => onSelectTab('chat')}
           title="VERTEX Music AI DJ Chat"
-          className={`p-2 rounded-full transition-all active:scale-95 flex items-center justify-center ${
+          className={`hidden sm:flex p-2 rounded-full transition-all active:scale-95 items-center justify-center ${
             activeTab === 'chat'
               ? 'bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white shadow-lg shadow-[#A855F7]/30'
               : 'bg-white/5 hover:bg-[#A855F7]/20 text-[#D946EF] border border-[#A855F7]/30'
@@ -146,11 +160,11 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
           <Bot className="w-4 h-4" />
         </button>
 
-        {/* Audio EQ Button */}
+        {/* Audio EQ Button — hidden on mobile, still reachable from the profile menu */}
         <button
           onClick={onOpenEQ}
           title="Audio Equalizer"
-          className="p-2 rounded-full bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white transition-all active:scale-95"
+          className="hidden sm:flex p-2 rounded-full bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white transition-all active:scale-95"
         >
           <SlidersHorizontal className="w-4 h-4" />
         </button>
