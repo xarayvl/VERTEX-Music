@@ -113,6 +113,29 @@ export default function App() {
     });
   };
 
+  // Prune "Recently Played" whenever the authoritative tracks list changes
+  // (e.g. after a track delete, or an admin "wipe all tracks" action).
+  // recentlyPlayed is cached in localStorage as full Track snapshots, so
+  // without this it would keep showing tracks that no longer exist on the
+  // server / were deleted by their owner.
+  useEffect(() => {
+    if (!userProfile?.id) return;
+    setRecentlyPlayed((prev) => {
+      if (prev.length === 0) return prev;
+      const existingIds = new Set(tracks.map((t) => t.id));
+      const pruned = prev.filter((t) => existingIds.has(t.id));
+      if (pruned.length !== prev.length) {
+        try {
+          localStorage.setItem(`vertex_recently_played_${userProfile.id}`, JSON.stringify(pruned));
+        } catch {
+          // ignore
+        }
+        return pruned;
+      }
+      return prev;
+    });
+  }, [tracks, userProfile?.id]);
+
   // Sync recentlyPlayed whenever track plays
   useEffect(() => {
     if (isPlaying && currentTrack) {
@@ -1010,6 +1033,33 @@ export default function App() {
     }
   };
 
+  const handleWipeAllTracks = async () => {
+    try {
+      audioEngine.pause();
+      setIsPlaying(false);
+      setCurrentTrack(null);
+      setTracks([]);
+      setQueue([]);
+      setSelectedAlbumTrack(null);
+
+      setPlaylists((prev) => prev.map((p) => ({ ...p, trackIds: [], trackCount: 0 })));
+
+      const res = await fetch('/api/tracks/wipe', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+
+      if (res.ok) {
+        showToast('All uploaded songs wiped successfully.');
+      } else {
+        showToast('Wiped songs locally.');
+      }
+    } catch (e) {
+      console.error('Error wiping tracks:', e);
+      showToast('All uploaded songs wiped locally.');
+    }
+  };
+
   const handleToggleFollowArtist = (artistToToggle: Artist | UserProfile) => {
     const artistId = artistToToggle.id;
     const isCurrentlyFollowing = followedArtistIds.includes(artistId);
@@ -1372,6 +1422,7 @@ export default function App() {
                 onSelectArtist={handleSelectArtist}
                 onOpenNewPlaylistModal={() => setIsNewPlaylistOpen(true)}
                 onOpenAddTrackModal={() => setIsAddTrackOpen(true)}
+                onWipeAllTracks={handleWipeAllTracks}
                 onToggleLike={handleToggleLike}
               />
             )}
@@ -1417,6 +1468,7 @@ export default function App() {
                 onOpenAuthModal={() => setIsAuthModalOpen(true)}
                 onSelectArtist={handleSelectArtist}
                 onDeleteTrack={handleDeleteTrack}
+                onEditTrack={(tr) => setEditingTrack(tr)}
                 onOpenAddTrackModal={() => setIsAddTrackOpen(true)}
               />
             )}

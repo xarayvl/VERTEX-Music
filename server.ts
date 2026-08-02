@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import { readDB, writeDB, readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
+import { readDB, writeDB, readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
 
 dotenv.config();
 
@@ -152,6 +152,16 @@ async function startServer() {
 
   // Initialize Upstash Redis database sync (if UPSTASH_REDIS_REST_URL is present)
   await initUpstashDB();
+
+  // Hydrate active login sessions from Upstash Redis (if configured) so that
+  // logged-in users stay authenticated across server restarts/redeploys and
+  // across multiple server instances, instead of losing their session every
+  // time the process restarts.
+  const persistedSessions = await loadSessionsFromRedis();
+  const persistedSessionCount = Object.keys(persistedSessions).length;
+  if (persistedSessionCount > 0) {
+    console.log(`⚡ Restored ${persistedSessionCount} active session(s) from Upstash Redis.`);
+  }
 
   // Ensure uploads root directory exists
   const uploadsRootDir = path.join(process.cwd(), "data", "uploads");
@@ -303,12 +313,17 @@ async function startServer() {
   // ==========================================
   // AUTHENTICATION & SESSION MANAGEMENT
   // ==========================================
-  const activeSessions = new Map<string, string>(); // token -> userId
+  // token -> userId. Hydrated from Upstash Redis at startup (see persistedSessions
+  // above), and mirrored back to Redis on every new token issuance so sessions
+  // survive restarts and are shared across instances. Falls back to
+  // in-memory-only behavior automatically if Upstash isn't configured.
+  const activeSessions = new Map<string, string>(Object.entries(persistedSessions));
 
   function issueSessionToken(userId: string): string {
     if (!userId) return "";
     const token = `sess_${crypto.randomBytes(32).toString("hex")}`;
     activeSessions.set(token, userId);
+    persistSessionToRedis(token, userId); // fire-and-forget, doesn't block the request
     return token;
   }
 
@@ -322,6 +337,12 @@ async function startServer() {
       return activeSessions.get(token) || null;
     }
     return null;
+  }
+
+  function revokeSessionToken(token: string): void {
+    if (!token) return;
+    activeSessions.delete(token);
+    deleteSessionFromRedis(token); // fire-and-forget
   }
 
   function verifyUserOwnership(req: express.Request, targetUserId?: string): boolean {
@@ -830,7 +851,7 @@ async function startServer() {
   app.put("/api/tracks/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const { userId, title, album, genre, coverUrl, releaseType, releaseTitle, copyright, releaseYear } = req.body;
+      const { userId, title, artist, album, genre, coverUrl, audioUrl, duration, releaseType, releaseTitle, copyright, releaseYear } = req.body;
       const db = readDB();
 
       const trackIndex = db.tracks.findIndex((t) => t.id === id);
@@ -871,14 +892,30 @@ async function startServer() {
         }
       }
 
+      // Allow replacing the actual audio file too (same base64 upload path
+      // used when the track was first created), so editing a track can
+      // change literally everything the original upload form collected.
+      let persistentAudioUrl = existingTrack.audioUrl;
+      if (audioUrl !== undefined && typeof audioUrl === "string" && audioUrl.trim() && audioUrl.startsWith("data:")) {
+        const mimeMatch = audioUrl.match(/^data:([^;]+);base64,/);
+        const mimeType = mimeMatch ? mimeMatch[1] : "audio/mpeg";
+        const audioBase64 = audioUrl.includes(",") ? audioUrl.split(",")[1] : audioUrl;
+        if (audioBase64) {
+          persistentAudioUrl = await saveUploadedFile(audioBase64, mimeType, sessionUserId, "audio");
+        }
+      }
+
       const updatedTrack = {
         ...existingTrack,
         title: title !== undefined && title.trim() ? title.trim() : existingTrack.title,
+        artist: artist !== undefined && artist.trim() ? artist.trim() : existingTrack.artist,
         album: album !== undefined && album.trim() ? album.trim() : existingTrack.album,
         releaseType: releaseType !== undefined ? releaseType : existingTrack.releaseType,
         releaseTitle: releaseTitle !== undefined ? releaseTitle : existingTrack.releaseTitle,
         genre: genre !== undefined && genre.trim() ? genre.trim() : existingTrack.genre,
         coverUrl: persistentCoverUrl,
+        audioUrl: persistentAudioUrl,
+        duration: duration !== undefined && Number(duration) > 0 ? Number(duration) : existingTrack.duration,
         copyright: copyright !== undefined ? (copyright ? String(copyright).trim() : undefined) : existingTrack.copyright,
         releaseYear: releaseYear !== undefined ? Number(releaseYear) : existingTrack.releaseYear,
         userId: existingTrack.userId || userId,
@@ -935,6 +972,102 @@ async function startServer() {
     } catch (error: any) {
       console.error("Delete Track Error:", error);
       return res.status(500).json({ error: "Failed to delete track." });
+    }
+  });
+
+  // Wipe All Uploaded Tracks & Clear Uploaded Files
+  const handleWipeTracks = async (req: express.Request, res: express.Response) => {
+    try {
+      const db = readDB();
+      const count = db.tracks.length;
+
+      // 1. Clear track list
+      db.tracks = [];
+
+      // 2. Clear track IDs in playlists
+      db.playlists.forEach((p) => {
+        p.trackIds = [];
+      });
+
+      // 3. Clear track IDs in user states
+      Object.keys(db.userStates).forEach((uid) => {
+        if (db.userStates[uid]) {
+          db.userStates[uid].likedTrackIds = [];
+          db.userStates[uid].recentTrackIds = [];
+        }
+      });
+
+      // 4. Save updated DB to disk and Upstash Redis
+      await writeDBAsync(db);
+
+      // 5. Clean up local uploads directory
+      const uploadsRootDir = path.join(process.cwd(), "data", "uploads");
+      if (fs.existsSync(uploadsRootDir)) {
+        try {
+          fs.rmSync(uploadsRootDir, { recursive: true, force: true });
+          fs.mkdirSync(uploadsRootDir, { recursive: true });
+        } catch (fileErr) {
+          console.warn("Notice clearing local uploads directory:", fileErr);
+        }
+      }
+
+      return res.json({ success: true, message: "All uploaded tracks wiped successfully.", wipedCount: count });
+    } catch (error: any) {
+      console.error("Wipe Tracks Error:", error);
+      return res.status(500).json({ success: false, error: "Failed to wipe uploaded tracks." });
+    }
+  };
+
+  app.post("/api/tracks/wipe", handleWipeTracks);
+  app.delete("/api/tracks/wipe", handleWipeTracks);
+
+  // Get and Sync all IDs (User IDs, Song IDs, Playlist IDs, Artist IDs) in Upstash Redis
+  app.get("/api/upstash/ids", async (req, res) => {
+    try {
+      // SECURITY: this endpoint returns every user ID, track ID, playlist ID
+      // and artist ID in the entire system. It must never be publicly
+      // readable — restrict it to authenticated admin accounts only.
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ success: false, error: "Unauthorized: Active session required." });
+      }
+      const db = await readDBAsync();
+      const requestingUser = db.users.find((u) => u.id === sessionUserId);
+      if (!requestingUser?.isAdmin) {
+        return res.status(403).json({ success: false, error: "Forbidden: Admin access required." });
+      }
+      const redis = getUpstashClient();
+
+      const userIds = (db.users || []).map((u) => u.id).filter(Boolean);
+      const songIds = (db.tracks || []).map((t) => t.id).filter(Boolean);
+      const playlistIds = (db.playlists || []).map((p) => p.id).filter(Boolean);
+
+      const artistUserIds = (db.users || []).filter((u) => u.isArtist).map((u) => u.id);
+      const trackArtistNames = Array.from(new Set((db.tracks || []).map((t) => t.artist).filter(Boolean)));
+      const artistIds = Array.from(new Set([...artistUserIds, ...trackArtistNames]));
+
+      if (redis) {
+        await syncUpstashIndices(redis, db);
+      }
+
+      return res.json({
+        success: true,
+        upstashConfigured: isUpstashConfigured(),
+        userIds,
+        songIds,
+        trackIds: songIds,
+        playlistIds,
+        artistIds,
+        counts: {
+          users: userIds.length,
+          songs: songIds.length,
+          playlists: playlistIds.length,
+          artists: artistIds.length,
+        },
+      });
+    } catch (error: any) {
+      console.error("Upstash IDs endpoint error:", error);
+      return res.status(500).json({ success: false, error: "Failed to fetch IDs." });
     }
   });
 

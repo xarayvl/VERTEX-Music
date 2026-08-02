@@ -125,8 +125,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   // Get unified stats from global helper
   const { totalPlays: totalArtistPlays, monthlyListenersStr: monthlyListeners, artistTracks } = getArtistStats(artist, allTracks);
 
-  // Fallback tracks if none found
-  const displayTracks = artistTracks.length > 0 ? artistTracks : allTracks.slice(0, 5);
+  // Display tracks belong strictly to this artist
+  const displayTracks = artistTracks;
 
   const topTracks = showAllPopular ? displayTracks : displayTracks.slice(0, 5);
   
@@ -134,8 +134,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   const artistPickComment = artist.artistPickComment;
 
   const featuredTrack = artistPickTrackId
-    ? (displayTracks.find((t) => t.id === artistPickTrackId) || displayTracks[0])
-    : displayTracks[0];
+    ? (displayTracks.find((t) => t.id === artistPickTrackId) || (displayTracks.length > 0 ? displayTracks[0] : undefined))
+    : (displayTracks.length > 0 ? displayTracks[0] : undefined);
 
   const instagramUrl = artist.instagramUrl;
   const twitterUrl = artist.twitterUrl;
@@ -277,96 +277,104 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-2xl font-black text-white tracking-tight">Popular</h2>
 
-          <div className="bg-[#181818]/70 rounded-2xl overflow-hidden border border-white/5 divide-y divide-white/5 shadow-xl">
-            {topTracks.map((track, index) => {
-              const isCurrent = currentTrackId === track.id;
-              return (
-                <div
-                  key={track.id}
-                  data-track-id={track.id}
-                  onClick={() => onPlayTrack(track)}
-                  className={`flex items-center justify-between gap-4 px-4 py-3 hover:bg-white/10 group transition-colors cursor-pointer ${
-                    isCurrent ? 'bg-white/10 text-[#D946EF]' : ''
-                  }`}
-                >
-                  <div className="flex items-center space-x-4 min-w-0 flex-1">
-                    <span
-                      className={`w-6 text-center text-xs font-mono ${
-                        isCurrent ? 'text-[#D946EF] font-bold' : 'text-zinc-400 group-hover:hidden'
-                      }`}
-                    >
-                      {isCurrent && isPlaying ? (
-                        <span className="flex items-center justify-center space-x-0.5">
-                          <span className="w-1 h-3 bg-[#D946EF] animate-bounce" />
-                          <span className="w-1 h-4 bg-[#D946EF] animate-bounce delay-75" />
-                          <span className="w-1 h-2 bg-[#D946EF] animate-bounce delay-150" />
-                        </span>
-                      ) : (
-                        index + 1
-                      )}
-                    </span>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPlayTrack(track);
-                      }}
-                      className="w-6 text-center hidden group-hover:block text-white"
-                    >
-                      {isCurrent && isPlaying ? (
-                        <Pause className="w-4 h-4 fill-white" />
-                      ) : (
-                        <Play className="w-4 h-4 fill-white" />
-                      )}
-                    </button>
-
-                    <img
-                      src={track.coverUrl}
-                      alt={track.title}
-                      referrerPolicy="no-referrer"
-                      className="w-10 h-10 rounded shadow object-cover flex-shrink-0"
-                    />
-
-                    <div className="min-w-0">
-                      <p
-                        className={`text-xs font-extrabold truncate ${
-                          isCurrent ? 'text-[#D946EF]' : 'text-white'
+          {displayTracks.length === 0 ? (
+            <div className="p-8 rounded-2xl bg-[#181818]/70 border border-white/5 text-center text-zinc-400 space-y-2">
+              <Music className="w-10 h-10 mx-auto text-zinc-600 mb-2" />
+              <p className="text-sm font-bold text-white">No tracks uploaded yet</p>
+              <p className="text-xs text-zinc-500">This artist hasn't uploaded any music yet.</p>
+            </div>
+          ) : (
+            <div className="bg-[#181818]/70 rounded-2xl overflow-hidden border border-white/5 divide-y divide-white/5 shadow-xl">
+              {topTracks.map((track, index) => {
+                const isCurrent = currentTrackId === track.id;
+                return (
+                  <div
+                    key={track.id}
+                    data-track-id={track.id}
+                    onClick={() => onPlayTrack(track)}
+                    className={`flex items-center justify-between gap-4 px-4 py-3 hover:bg-white/10 group transition-colors cursor-pointer ${
+                      isCurrent ? 'bg-white/10 text-[#D946EF]' : ''
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4 min-w-0 flex-1">
+                      <span
+                        className={`w-6 text-center text-xs font-mono ${
+                          isCurrent ? 'text-[#D946EF] font-bold' : 'text-zinc-400 group-hover:hidden'
                         }`}
                       >
-                        {track.title}
-                      </p>
-                      <p className="text-[11px] text-zinc-400 truncate">{track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}</p>
+                        {isCurrent && isPlaying ? (
+                          <span className="flex items-center justify-center space-x-0.5">
+                            <span className="w-1 h-3 bg-[#D946EF] animate-bounce" />
+                            <span className="w-1 h-4 bg-[#D946EF] animate-bounce delay-75" />
+                            <span className="w-1 h-2 bg-[#D946EF] animate-bounce delay-150" />
+                          </span>
+                        ) : (
+                          index + 1
+                        )}
+                      </span>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPlayTrack(track);
+                        }}
+                        className="w-6 text-center hidden group-hover:block text-white"
+                      >
+                        {isCurrent && isPlaying ? (
+                          <Pause className="w-4 h-4 fill-white" />
+                        ) : (
+                          <Play className="w-4 h-4 fill-white" />
+                        )}
+                      </button>
+
+                      <img
+                        src={track.coverUrl}
+                        alt={track.title}
+                        referrerPolicy="no-referrer"
+                        className="w-10 h-10 rounded shadow object-cover flex-shrink-0"
+                      />
+
+                      <div className="min-w-0">
+                        <p
+                          className={`text-xs font-extrabold truncate ${
+                            isCurrent ? 'text-[#D946EF]' : 'text-white'
+                          }`}
+                        >
+                          {track.title}
+                        </p>
+                        <p className="text-[11px] text-zinc-400 truncate">{track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}</p>
+                      </div>
+                    </div>
+
+                    <div className="hidden sm:block text-right w-24 flex-shrink-0">
+                      <span className="text-xs font-mono text-zinc-400">
+                        {track.plays ? `${Number(track.plays).toLocaleString()}` : '0'} plays
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-end space-x-4 w-20 flex-shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleLike(track.id);
+                        }}
+                        className={`transition-colors ${
+                          track.isLiked ? 'text-[#D946EF]' : 'text-zinc-500 hover:text-white'
+                        }`}
+                      >
+                        <Heart className={`w-4 h-4 ${track.isLiked ? 'fill-[#D946EF]' : ''}`} />
+                      </button>
+
+                      <span className="text-xs font-mono text-zinc-400 text-right min-w-[36px]">
+                        {Math.floor(track.duration / 60)}:
+                        {(track.duration % 60).toString().padStart(2, '0')}
+                      </span>
                     </div>
                   </div>
-
-                  <div className="hidden sm:block text-right w-24 flex-shrink-0">
-                    <span className="text-xs font-mono text-zinc-400">
-                      {track.plays ? `${Number(track.plays).toLocaleString()}` : '0'} plays
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-end space-x-4 w-20 flex-shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleLike(track.id);
-                      }}
-                      className={`transition-colors ${
-                        track.isLiked ? 'text-[#D946EF]' : 'text-zinc-500 hover:text-white'
-                      }`}
-                    >
-                      <Heart className={`w-4 h-4 ${track.isLiked ? 'fill-[#D946EF]' : ''}`} />
-                    </button>
-
-                    <span className="text-xs font-mono text-zinc-400 text-right min-w-[36px]">
-                      {Math.floor(track.duration / 60)}:
-                      {(track.duration % 60).toString().padStart(2, '0')}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {displayTracks.length > 5 && (
             <button
@@ -423,66 +431,79 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
       <div className="space-y-4 pt-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-black text-white tracking-tight">Discography</h2>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setDiscographyFilter('popular')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                discographyFilter === 'popular'
-                  ? 'bg-white text-black'
-                  : 'bg-white/10 text-zinc-400 hover:text-white'
-              }`}
-            >
-              Popular releases
-            </button>
-            <button
-              onClick={() => setDiscographyFilter('singles')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                discographyFilter === 'singles'
-                  ? 'bg-white text-black'
-                  : 'bg-white/10 text-zinc-400 hover:text-white'
-              }`}
-            >
-              Singles & EPs
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {displayTracks.map((track) => (
-            <div
-              key={track.id}
-              onClick={() => onPlayTrack(track)}
-              className="p-3.5 rounded-xl bg-[#181818] hover:bg-[#282828] transition-all group cursor-pointer border border-white/5 space-y-3"
-            >
-              <div className="relative aspect-square rounded-lg overflow-hidden shadow-lg">
-                <img
-                  src={track.coverUrl}
-                  alt={track.title}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <button className={`absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl transition-all transform ${
-                  currentTrackId === track.id && isPlaying
-                    ? 'opacity-100 translate-y-0'
-                    : 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0'
-                }`}>
-                  {currentTrackId === track.id && isPlaying ? (
-                    <Pause className="w-5 h-5 fill-white" />
-                  ) : (
-                    <Play className="w-5 h-5 fill-white ml-0.5" />
-                  )}
-                </button>
-              </div>
-
-              <div>
-                <h3 className="text-xs font-extrabold text-white truncate">{track.title}</h3>
-                <p className="text-[11px] text-zinc-400 mt-0.5">
-                  2026 • {track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}
-                </p>
-              </div>
+          {displayTracks.length > 0 && (
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setDiscographyFilter('popular')}
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                  discographyFilter === 'popular'
+                    ? 'bg-white text-black'
+                    : 'bg-white/10 text-zinc-400 hover:text-white'
+                }`}
+              >
+                Popular releases
+              </button>
+              <button
+                onClick={() => setDiscographyFilter('singles')}
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                  discographyFilter === 'singles'
+                    ? 'bg-white text-black'
+                    : 'bg-white/10 text-zinc-400 hover:text-white'
+                }`}
+              >
+                Singles & EPs
+              </button>
             </div>
-          ))}
+          )}
         </div>
+
+        {displayTracks.length === 0 ? (
+          <div className="p-8 rounded-2xl bg-[#181818]/70 border border-white/5 text-center text-zinc-400 space-y-2">
+            <Disc className="w-10 h-10 mx-auto text-zinc-600 mb-2" />
+            <p className="text-sm font-bold text-white">No tracks uploaded yet</p>
+            <p className="text-xs text-zinc-500">This artist hasn't uploaded any music yet.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {(discographyFilter === 'singles'
+              ? displayTracks.filter((t) => t.releaseType === 'Single' || t.releaseType === 'EP' || t.album === 'Single')
+              : displayTracks
+            ).map((track) => (
+              <div
+                key={track.id}
+                onClick={() => onPlayTrack(track)}
+                className="p-3.5 rounded-xl bg-[#181818] hover:bg-[#282828] transition-all group cursor-pointer border border-white/5 space-y-3"
+              >
+                <div className="relative aspect-square rounded-lg overflow-hidden shadow-lg">
+                  <img
+                    src={track.coverUrl}
+                    alt={track.title}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <button className={`absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl transition-all transform ${
+                    currentTrackId === track.id && isPlaying
+                      ? 'opacity-100 translate-y-0'
+                      : 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0'
+                  }`}>
+                    {currentTrackId === track.id && isPlaying ? (
+                      <Pause className="w-5 h-5 fill-white" />
+                    ) : (
+                      <Play className="w-5 h-5 fill-white ml-0.5" />
+                    )}
+                  </button>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-extrabold text-white truncate">{track.title}</h3>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    2026 • {track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* SPOTIFY ABOUT SECTION */}

@@ -18,6 +18,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
   if (!isOpen) return null;
 
   const presets: AudioEQ['preset'][] = [
+    'None',
     'Acoustic',
     'Bass Booster',
     'Electronic',
@@ -50,6 +51,10 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
       bass = 2;
       mid = 3;
       treble = 4;
+    } else if (preset === 'None' || preset === 'Flat') {
+      bass = 0;
+      mid = 0;
+      treble = 0;
     }
     onUpdateEQ({ bass, mid, treble, preset });
   };
@@ -82,7 +87,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
         <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
           Sound Presets
         </p>
-        <div className="grid grid-cols-3 gap-2 mb-6">
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-6">
           {presets.map((p) => {
             const isActive = eq.preset === p;
             return (

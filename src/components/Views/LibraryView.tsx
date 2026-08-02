@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Library, Plus, Heart, Play, Grid, List, Music, Disc } from 'lucide-react';
+import { Library, Plus, Heart, Play, Grid, List, Music, Disc, Trash2 } from 'lucide-react';
 import { Track, Playlist, Artist } from '../../types';
 
 interface LibraryViewProps {
@@ -13,6 +13,7 @@ interface LibraryViewProps {
   onSelectArtist?: (artistName: string) => void;
   onOpenNewPlaylistModal: () => void;
   onOpenAddTrackModal?: () => void;
+  onWipeAllTracks?: () => void;
   onToggleLike: (trackId: string) => void;
 }
 
@@ -27,6 +28,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onSelectArtist,
   onOpenNewPlaylistModal,
   onOpenAddTrackModal,
+  onWipeAllTracks,
   onToggleLike,
 }) => {
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'liked' | 'artists'>(
@@ -43,6 +45,21 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         <h1 className="text-3xl font-extrabold text-white tracking-tight">Your Library</h1>
 
         <div className="flex items-center space-x-2">
+          {onWipeAllTracks && tracks.length > 0 && (
+            <button
+              onClick={() => {
+                if (window.confirm('Are you sure you want to wipe all uploaded songs from the app? This cannot be undone.')) {
+                  onWipeAllTracks();
+                }
+              }}
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-300 font-extrabold text-xs transition-all active:scale-95 border border-red-500/30"
+              title="Wipe all uploaded songs from the app"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <span>Wipe All Songs</span>
+            </button>
+          )}
+
           {onOpenAddTrackModal && (
             <button
               onClick={onOpenAddTrackModal}

@@ -14,8 +14,18 @@ export function getArtistStats(artist: Artist | UserProfile | null | undefined, 
   }
 
   const artistTracks = allTracks.filter((t) => {
-    if (isUserProfile && t.userId && t.userId === artist.id) return true;
-    return t.artist.toLowerCase() === artistName.toLowerCase();
+    if (isUserProfile) {
+      if (t.userId) {
+        return t.userId === artist.id;
+      }
+      return Boolean(artistName && t.artist && t.artist.toLowerCase() === artistName.toLowerCase());
+    } else {
+      if (t.userId) {
+        if (t.userId === artist.id) return true;
+        return false;
+      }
+      return Boolean(artistName && t.artist && t.artist.toLowerCase() === artistName.toLowerCase());
+    }
   });
 
   const totalArtistPlays = artistTracks.reduce(

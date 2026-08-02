@@ -136,6 +136,55 @@ function processWriteQueue() {
   }
 }
 
+export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<void> {
+  try {
+    const userIds = (data.users || []).map((u) => u.id).filter(Boolean);
+    const trackIds = (data.tracks || []).map((t) => t.id).filter(Boolean);
+    const playlistIds = (data.playlists || []).map((p) => p.id).filter(Boolean);
+
+    // Collect all artist IDs and artist names
+    const artistUserIds = (data.users || []).filter((u) => u.isArtist).map((u) => u.id);
+    const trackArtistNames = Array.from(new Set((data.tracks || []).map((t) => t.artist).filter(Boolean)));
+    const allArtistIds = Array.from(new Set([...artistUserIds, ...trackArtistNames]));
+
+    // Store sets & ID lists in Upstash Redis
+    await Promise.all([
+      redis.set(UPSTASH_DB_KEY, data),
+      redis.set('app:users:ids', userIds),
+      redis.set('app:songs:ids', trackIds),
+      redis.set('app:tracks:ids', trackIds),
+      redis.set('app:playlists:ids', playlistIds),
+      redis.set('app:artists:ids', allArtistIds),
+    ]);
+
+    // Store individual entity keys in Upstash Redis
+    const entityPromises: Promise<any>[] = [];
+
+    for (const u of data.users || []) {
+      if (u.id) {
+        entityPromises.push(redis.set(`app:user:${u.id}`, u));
+      }
+    }
+
+    for (const t of data.tracks || []) {
+      if (t.id) {
+        entityPromises.push(redis.set(`app:song:${t.id}`, t));
+        entityPromises.push(redis.set(`app:track:${t.id}`, t));
+      }
+    }
+
+    for (const p of data.playlists || []) {
+      if (p.id) {
+        entityPromises.push(redis.set(`app:playlist:${p.id}`, p));
+      }
+    }
+
+    await Promise.all(entityPromises);
+  } catch (err) {
+    console.error('Failed syncing indices to Upstash Redis:', err);
+  }
+}
+
 /**
  * Initializes DB by pulling initial dataset from Upstash Redis if available.
  */
@@ -156,13 +205,14 @@ export async function initUpstashDB(): Promise<DBData> {
         cachedDB = validated;
         // Also mirror to local disk as secondary fallback
         saveToLocalDisk(validated);
+        await syncUpstashIndices(redis, validated);
         console.log(`✅ Loaded ${validated.users.length} users, ${validated.tracks.length} tracks from Upstash Redis.`);
         return validated;
       } else {
         console.log('ℹ️ Upstash Redis key empty. Seeding Upstash from local disk...');
         const localData = readFromLocalDisk();
         cachedDB = localData;
-        await redis.set(UPSTASH_DB_KEY, localData);
+        await syncUpstashIndices(redis, localData);
         return localData;
       }
     } catch (err) {
@@ -272,7 +322,7 @@ export function writeDB(data: DBData): void {
 
     const redis = getUpstashClient();
     if (redis) {
-      redis.set(UPSTASH_DB_KEY, data).catch((err) => {
+      syncUpstashIndices(redis, data).catch((err) => {
         console.error('Failed to sync writeDB to Upstash Redis:', err);
       });
     }
@@ -287,10 +337,60 @@ export async function writeDBAsync(data: DBData): Promise<void> {
   const redis = getUpstashClient();
   if (redis) {
     try {
-      await redis.set(UPSTASH_DB_KEY, data);
+      await syncUpstashIndices(redis, data);
     } catch (err) {
       console.error('Failed async writeDB to Upstash Redis:', err);
     }
   }
+}
+
+// ==========================================
+// SESSION PERSISTENCE (Upstash-backed, in-memory fallback)
+// ==========================================
+// Sessions are kept in an in-memory Map for fast synchronous lookups on every
+// request, but are also mirrored to Upstash Redis (a single hash) so that:
+//  - sessions survive server restarts / redeploys / cold starts
+//  - sessions are shared across multiple server instances (horizontal scaling,
+//    or separate deployments pointed at the same Upstash database)
+const SESSIONS_HASH_KEY = 'app:sessions';
+
+/**
+ * Loads all persisted sessions from Upstash Redis (if configured) so the
+ * in-memory session Map can be hydrated once at server startup.
+ * Returns an empty object if Upstash isn't configured or the call fails.
+ */
+export async function loadSessionsFromRedis(): Promise<Record<string, string>> {
+  const redis = getUpstashClient();
+  if (!redis) return {};
+  try {
+    const sessions = await redis.hgetall<Record<string, string>>(SESSIONS_HASH_KEY);
+    return sessions && typeof sessions === 'object' ? sessions : {};
+  } catch (err) {
+    console.error('Failed to load sessions from Upstash Redis:', err);
+    return {};
+  }
+}
+
+/**
+ * Fire-and-forget persistence of a single session token -> userId mapping.
+ * Does not block the caller; safe to call from a synchronous code path.
+ */
+export function persistSessionToRedis(token: string, userId: string): void {
+  const redis = getUpstashClient();
+  if (!redis || !token || !userId) return;
+  redis.hset(SESSIONS_HASH_KEY, { [token]: userId }).catch((err) => {
+    console.error('Failed to persist session to Upstash Redis:', err);
+  });
+}
+
+/**
+ * Fire-and-forget removal of a session token (e.g. on logout).
+ */
+export function deleteSessionFromRedis(token: string): void {
+  const redis = getUpstashClient();
+  if (!redis || !token) return;
+  redis.hdel(SESSIONS_HASH_KEY, token).catch((err) => {
+    console.error('Failed to delete session from Upstash Redis:', err);
+  });
 }
 

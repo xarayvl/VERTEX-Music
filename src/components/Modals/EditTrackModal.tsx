@@ -32,6 +32,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   onTrackUpdated,
 }) => {
   const [title, setTitle] = useState('');
+  const [artist, setArtist] = useState('');
   const [releaseType, setReleaseType] = useState('Single');
   const [albumSelect, setAlbumSelect] = useState('__NEW__');
   const [customAlbumName, setCustomAlbumName] = useState('');
@@ -39,6 +40,11 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   const [releaseYear, setReleaseYear] = useState<number>(new Date().getFullYear());
   const [genre, setGenre] = useState('Synthwave');
   const [coverUrl, setCoverUrl] = useState('');
+  const [audioUrl, setAudioUrl] = useState(''); // only set when the user picks a NEW audio file to replace the existing one
+  const [duration, setDuration] = useState<number | null>(null);
+  const [newFileName, setNewFileName] = useState('');
+  const [newFileSize, setNewFileSize] = useState('');
+  const [isReadingFile, setIsReadingFile] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,10 +61,15 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   useEffect(() => {
     if (track) {
       setTitle(track.title || '');
+      setArtist(track.artist || '');
       setGenre(track.genre || 'Synthwave');
       setCoverUrl(track.coverUrl || '');
       setCopyright(track.copyright || '');
       setReleaseYear(track.releaseYear || (track.createdAt ? new Date(track.createdAt).getFullYear() : new Date().getFullYear()));
+      setAudioUrl('');
+      setDuration(null);
+      setNewFileName('');
+      setNewFileSize('');
       setError(null);
 
       const trackAlbum = track.album || 'Single';
@@ -77,10 +88,63 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   // Ownership check
   const isOwner = Boolean(userId && track.userId && track.userId === userId);
 
+  const handleCoverFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setCoverUrl(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAudioFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i)) {
+      setError('Please select a valid audio file (MP3, WAV, OGG, M4A, AAC).');
+      return;
+    }
+
+    setError(null);
+    setIsReadingFile(true);
+    setNewFileName(file.name);
+    setNewFileSize((file.size / (1024 * 1024)).toFixed(2) + ' MB');
+
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      const audioEl = new Audio(objectUrl);
+      audioEl.onloadedmetadata = () => {
+        if (audioEl.duration && !isNaN(audioEl.duration) && isFinite(audioEl.duration)) {
+          setDuration(Math.round(audioEl.duration));
+        }
+      };
+    } catch (err) {
+      console.warn('Metadata duration check error:', err);
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) setAudioUrl(result);
+      setIsReadingFile(false);
+    };
+    reader.onerror = () => {
+      setError('Error reading selected audio file.');
+      setIsReadingFile(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
       setError('Track title is required.');
+      return;
+    }
+    if (!artist.trim()) {
+      setError('Artist name is required.');
       return;
     }
 
@@ -103,11 +167,14 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
         body: JSON.stringify({
           userId,
           title: title.trim(),
+          artist: artist.trim(),
           album: finalAlbum,
           releaseType: isDefaultReleaseType ? (albumSelect === 'Single' ? 'SINGLE' : (albumSelect === 'EP' ? 'EP' : 'ALBUM')) : 'ALBUM',
           releaseTitle: (isDefaultReleaseType && albumSelect === 'Single') ? title.trim() : finalAlbum,
           genre,
           coverUrl: coverUrl.trim() || track.coverUrl,
+          audioUrl: audioUrl || undefined, // only sent when a new file was picked; backend keeps existing audio otherwise
+          duration: duration ?? undefined,
           copyright: copyright.trim() || undefined,
           releaseYear: Number(releaseYear) || new Date().getFullYear(),
         }),
@@ -143,7 +210,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-extrabold tracking-tight">Edit Track Metadata</h2>
-              <p className="text-xs text-zinc-400">Update title, release type, genre, and artwork</p>
+              <p className="text-xs text-zinc-400">Update everything from the original upload: title, artist, artwork, audio file, and more</p>
             </div>
           </div>
           <button
@@ -180,19 +247,60 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
               </div>
             )}
 
-            {/* Track Title */}
+            {/* Track Title & Artist */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
+                  Track Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Midnight Drive"
+                  className="w-full px-3.5 py-2.5 bg-[#282828] border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
+                  Artist Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={artist}
+                  onChange={(e) => setArtist(e.target.value)}
+                  placeholder="e.g. Alex Rivers"
+                  className="w-full px-3.5 py-2.5 bg-[#282828] border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
+                />
+              </div>
+            </div>
+
+            {/* Replace Audio File */}
             <div>
-              <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
-                Track Title *
+              <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5 flex justify-between">
+                <span>Audio File</span>
+                <span className="text-[10px] text-zinc-500 lowercase font-normal">Optional — only if you want to replace it</span>
               </label>
-              <input
-                type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Midnight Drive"
-                className="w-full px-3.5 py-2.5 bg-[#282828] border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-              />
+              <div className="flex items-center gap-2 p-2.5 bg-[#282828] border border-white/10 rounded-xl">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Music2 className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                  <span className="text-xs text-zinc-300 truncate">
+                    {newFileName ? `${newFileName} (${newFileSize})` : 'Current uploaded audio file'}
+                  </span>
+                </div>
+                <label className="cursor-pointer px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold flex items-center gap-1.5 flex-shrink-0 transition-colors">
+                  <span>{isReadingFile ? 'Reading...' : 'Replace'}</span>
+                  <input
+                    type="file"
+                    accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac"
+                    onChange={handleAudioFileUpload}
+                    disabled={isReadingFile}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             </div>
 
             {/* Album & Genre */}
@@ -302,6 +410,11 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                   placeholder="https://images.unsplash.com/..."
                   className="flex-1 px-3.5 py-2 bg-[#282828] border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
                 />
+                <label className="cursor-pointer px-3 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold flex items-center space-x-1.5 whitespace-nowrap transition-colors">
+                  <Image className="w-4 h-4 text-zinc-300" />
+                  <span>Upload</span>
+                  <input type="file" accept="image/*" onChange={handleCoverFileUpload} className="hidden" />
+                </label>
                 {PRESET_COVERS[genre] && (
                   <button
                     type="button"
@@ -339,7 +452,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || isReadingFile}
                 className="px-6 py-2.5 bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-lg transition-all flex items-center space-x-2"
               >
                 {loading ? (
@@ -347,6 +460,8 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                     <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     <span>Saving...</span>
                   </>
+                ) : isReadingFile ? (
+                  <span>Reading Audio File...</span>
                 ) : (
                   <span>Save Changes</span>
                 )}

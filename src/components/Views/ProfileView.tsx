@@ -38,6 +38,7 @@ interface ProfileViewProps {
   onOpenAuthModal?: () => void;
   onSelectArtist?: (artist: Artist | UserProfile) => void;
   onDeleteTrack?: (trackId: string) => void;
+  onEditTrack?: (track: Track) => void;
   onOpenAddTrackModal?: () => void;
 }
 
@@ -52,6 +53,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onOpenAuthModal,
   onSelectArtist,
   onDeleteTrack,
+  onEditTrack,
   onOpenAddTrackModal,
 }) => {
   // "This month" stats must reflect the CURRENT user's own listening history, not the
@@ -501,14 +503,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
 
             {(() => {
+              // IMPORTANT: ownership must ONLY ever be determined by userId.
+              // A previous version of this filter also matched tracks by
+              // comparing the track's "artist" text field against this
+              // user's displayName/artistName. That caused tracks uploaded
+              // by a completely different account to show up here (and be
+              // deletable-looking) whenever two accounts happened to share a
+              // similar display name or artist name. Do not reintroduce that
+              // text-matching fallback.
               const myUploadedTracks = (tracks || []).filter(
-                (t) =>
-                  t &&
-                  t.id &&
-                  userProfile &&
-                  (t.userId === userProfile.id ||
-                    (t.artist && userProfile.displayName && t.artist.toLowerCase() === userProfile.displayName.toLowerCase()) ||
-                    (t.artist && userProfile.artistName && t.artist.toLowerCase() === userProfile.artistName.toLowerCase()))
+                (t) => t && t.id && userProfile && t.userId === userProfile.id
               );
 
               if (myUploadedTracks.length === 0) {
@@ -569,6 +573,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         <span className="text-xs font-mono text-zinc-400 hidden sm:inline">
                           {Math.floor(track.duration / 60)}:{(track.duration % 60).toString().padStart(2, '0')}
                         </span>
+
+                        {onEditTrack && (
+                          <button
+                            onClick={() => onEditTrack(track)}
+                            className="p-1.5 text-zinc-500 hover:text-[#D946EF] transition-colors"
+                            title="Edit track"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                        )}
 
                         {onDeleteTrack && (
                           <button
