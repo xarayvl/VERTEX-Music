@@ -20,7 +20,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
   const presets: AudioEQ['preset'][] = [
     'None',
     'Acoustic',
-    'Bass Booster',
+    'Bass',
     'Electronic',
     'Pop',
     'Vocal',
@@ -31,7 +31,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
     let bass = 0,
       mid = 0,
       treble = 0;
-    if (preset === 'Bass Booster') {
+    if (preset === 'Bass') {
       bass = 6;
       mid = 2;
       treble = 1;

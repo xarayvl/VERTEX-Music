@@ -1,4 +1,4 @@
-import { getArtistStats } from "../../utils/artistUtils";
+import { getArtistStats, groupTracksByRelease } from "../../utils/artistUtils";
 import React, { useState } from 'react';
 import {
   Play,
@@ -47,6 +47,7 @@ interface ArtistViewProps {
     twitterUrl?: string;
     websiteUrl?: string;
   }) => void;
+  onShufflePlay?: (tracks: Track[]) => void;
   isFollowing?: boolean;
   onToggleFollow?: (artist: Artist | UserProfile) => void;
 }
@@ -57,11 +58,13 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   currentTrackId,
   isPlaying,
   onPlayTrack,
+  onSelectAlbum,
   onToggleLike,
   onSelectArtist,
   onGoBack,
   userProfile,
   onUpdateArtist,
+  onShufflePlay,
   isFollowing = false,
   onToggleFollow,
 }) => {
@@ -129,6 +132,11 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   const displayTracks = artistTracks;
 
   const topTracks = showAllPopular ? displayTracks : displayTracks.slice(0, 5);
+
+  // Group tracks that were uploaded together as one album/EP so the
+  // discography grid shows a single card per release instead of one
+  // card per track.
+  const releaseGroups = groupTracksByRelease(displayTracks);
   
   const artistPickTrackId = artist.artistPickTrackId;
   const artistPickComment = artist.artistPickComment;
@@ -161,16 +169,16 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
       )}
 
       {/* SPOTIFY HERO ARTIST BANNER */}
-      <div className="relative rounded-2xl overflow-hidden min-h-[320px] sm:min-h-[380px] flex flex-col justify-end p-6 sm:p-10 border border-white/10 shadow-2xl group">
+      <div className="relative rounded-2xl overflow-hidden min-h-[320px] sm:min-h-[380px] flex flex-col justify-end p-6 sm:p-10 border border-white/10 shadow-2xl group bg-zinc-900">
         {/* Background Image & Dynamic Gradient Overlay */}
-        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-[#121212] via-[#121212]/60 to-transparent z-10" />
         <div
-          className="absolute inset-0 -z-20 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
+          className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
           style={{
             backgroundImage: `url(${bannerUrl})`,
             filter: 'brightness(0.65) saturate(1.2)',
           }}
         />
+        <div className="absolute inset-0 z-10 bg-gradient-to-t from-[#121212] via-[#121212]/60 to-transparent" />
 
         {/* Hero Artist Info */}
         <div className="relative z-20 space-y-3">
@@ -244,7 +252,22 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
 
         {/* Shuffle Button */}
         <button
-          onClick={handlePlayArtist}
+          onClick={() => {
+            if (displayTracks.length === 0) return;
+            if (onShufflePlay) {
+              onShufflePlay(displayTracks);
+            } else {
+              // Fallback if no dedicated handler was wired up: pick a
+              // genuinely random track rather than always track 0, so this
+              // doesn't just re-toggle-pause whatever's already playing.
+              const pool =
+                isPlaying && currentTrackId && displayTracks.length > 1
+                  ? displayTracks.filter((t) => t.id !== currentTrackId)
+                  : displayTracks;
+              const randomTrack = pool[Math.floor(Math.random() * pool.length)];
+              onPlayTrack(randomTrack);
+            }
+          }}
           className="p-3 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
           title="Shuffle Play"
         >
@@ -466,42 +489,58 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {(discographyFilter === 'singles'
-              ? displayTracks.filter((t) => t.releaseType === 'Single' || t.releaseType === 'EP' || t.album === 'Single')
-              : displayTracks
-            ).map((track) => (
-              <div
-                key={track.id}
-                onClick={() => onPlayTrack(track)}
-                className="p-3.5 rounded-xl bg-[#181818] hover:bg-[#282828] transition-all group cursor-pointer border border-white/5 space-y-3"
-              >
-                <div className="relative aspect-square rounded-lg overflow-hidden shadow-lg">
-                  <img
-                    src={track.coverUrl}
-                    alt={track.title}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <button className={`absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl transition-all transform ${
-                    currentTrackId === track.id && isPlaying
-                      ? 'opacity-100 translate-y-0'
-                      : 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0'
-                  }`}>
-                    {currentTrackId === track.id && isPlaying ? (
-                      <Pause className="w-5 h-5 fill-white" />
-                    ) : (
-                      <Play className="w-5 h-5 fill-white ml-0.5" />
-                    )}
-                  </button>
-                </div>
+              ? releaseGroups.filter((g) => g.releaseType === 'Single' || g.releaseType === 'EP')
+              : releaseGroups
+            ).map((group) => {
+              const isThisGroupPlaying = group.tracks.some((t) => t.id === currentTrackId) && isPlaying;
+              return (
+                <div
+                  key={group.key}
+                  onClick={() => {
+                    if (group.isMultiTrack && onSelectAlbum) {
+                      onSelectAlbum(group.representative);
+                    } else {
+                      onPlayTrack(group.representative);
+                    }
+                  }}
+                  className="p-3.5 rounded-xl bg-[#181818] hover:bg-[#282828] transition-all group cursor-pointer border border-white/5 space-y-3"
+                >
+                  <div className="relative aspect-square rounded-lg overflow-hidden shadow-lg">
+                    <img
+                      src={group.coverUrl}
+                      alt={group.title}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPlayTrack(group.representative);
+                      }}
+                      className={`absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl transition-all transform ${
+                        isThisGroupPlaying
+                          ? 'opacity-100 translate-y-0'
+                          : 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0'
+                      }`}
+                    >
+                      {isThisGroupPlaying ? (
+                        <Pause className="w-5 h-5 fill-white" />
+                      ) : (
+                        <Play className="w-5 h-5 fill-white ml-0.5" />
+                      )}
+                    </button>
+                  </div>
 
-                <div>
-                  <h3 className="text-xs font-extrabold text-white truncate">{track.title}</h3>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">
-                    2026 • {track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}
-                  </p>
+                  <div>
+                    <h3 className="text-xs font-extrabold text-white truncate">{group.title}</h3>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      {group.releaseType}
+                      {group.isMultiTrack ? ` • ${group.tracks.length} songs` : ''}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

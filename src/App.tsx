@@ -576,7 +576,87 @@ export default function App() {
     setIsAuthModalOpen(true);
   };
 
+  // Fires when the server rejects a request because the session token is
+  // missing/expired/unknown (e.g. the server process restarted and lost its
+  // in-memory session table). Without this, the UI would keep showing the
+  // person as "logged in" — because that's tracked separately via the cached
+  // vertex_music_user_profile in localStorage — while every authenticated
+  // action silently 401s. This clears the stale client-side session state,
+  // tells the person what happened, and reopens the login modal so they can
+  // get a fresh token in one step.
+  const handleSessionExpired = React.useCallback(() => {
+    handleLogout();
+    showToast('Your session expired — please log in again.');
+  }, []);
+
+  // Kept in a ref so the fetch interceptor below (installed once on mount)
+  // always calls the latest version of handleSessionExpired, and a flag ref
+  // so a burst of in-flight requests that all 401 at once only triggers the
+  // logout flow once. The flag resets on the next successful login.
+  const handleSessionExpiredRef = React.useRef(handleSessionExpired);
+  const sessionExpiryHandledRef = React.useRef(false);
+  React.useEffect(() => {
+    handleSessionExpiredRef.current = handleSessionExpired;
+  }, [handleSessionExpired]);
+
+  // Global fetch interceptor: watches every request the app makes and, if
+  // the server responds 401 with a session-related error, triggers
+  // handleSessionExpired exactly once.
+  React.useEffect(() => {
+    const originalFetch = window.fetch ? window.fetch.bind(window) : null;
+    if (!originalFetch) return;
+
+    const customFetch = async (...args: Parameters<typeof fetch>) => {
+      const response = await originalFetch(...args);
+      if (response.status === 401 && !sessionExpiryHandledRef.current) {
+        const hadToken = !!localStorage.getItem('vertex_session_token');
+        if (hadToken) {
+          const clone = response.clone();
+          clone
+            .json()
+            .then((data: any) => {
+              if (data?.error && /session/i.test(String(data.error)) && !sessionExpiryHandledRef.current) {
+                sessionExpiryHandledRef.current = true;
+                handleSessionExpiredRef.current();
+              }
+            })
+            .catch(() => {
+              // Non-JSON 401 body — still treat it as an expired session
+              // since every auth-gated route in this app returns JSON.
+              if (!sessionExpiryHandledRef.current) {
+                sessionExpiryHandledRef.current = true;
+                handleSessionExpiredRef.current();
+              }
+            });
+        }
+      }
+      return response;
+    };
+
+    try {
+      Object.defineProperty(window, 'fetch', {
+        value: customFetch,
+        writable: true,
+        configurable: true,
+      });
+      return () => {
+        try {
+          Object.defineProperty(window, 'fetch', {
+            value: originalFetch,
+            writable: true,
+            configurable: true,
+          });
+        } catch {
+          // Ignore cleanup errors if property cannot be redefined
+        }
+      };
+    } catch (e) {
+      console.warn('Unable to redefine window.fetch for session expiry tracking:', e);
+    }
+  }, []);
+
   const handleLoginSuccess = (user: UserProfile, token?: string) => {
+    sessionExpiryHandledRef.current = false;
     setUserProfile(user);
     if (token) {
       localStorage.setItem('vertex_session_token', token);
@@ -595,10 +675,10 @@ export default function App() {
 
   // Equalizer State
   const [eq, setEq] = useState<AudioEQ>({
-    bass: 4,
-    mid: 1,
-    treble: 3,
-    preset: 'Electronic',
+    bass: 0,
+    mid: 0,
+    treble: 0,
+    preset: 'None',
   });
 
   // Persistent Chat History State (Scoped to current user)
@@ -784,7 +864,49 @@ export default function App() {
         return t;
       })
     );
+
+    // Persist the play count (and this listener's tracksPlayed stat) to the
+    // backend so it survives redeploys and is reflected in Upstash instead
+    // of only living in React state / localStorage.
+    fetch(`/api/tracks/${track.id}/play`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    }).catch((err) => console.error('Failed to persist track play:', err));
   };
+
+  // Periodically persist cumulative listening-time stats (seconds/hours
+  // listened) to the backend while a track is actually playing, so this
+  // data is saved to Upstash instead of only existing in local state.
+  const lastPersistedSecondsRef = useRef(0);
+  const userProfileRef = useRef(userProfile);
+  useEffect(() => {
+    userProfileRef.current = userProfile;
+  }, [userProfile]);
+
+  useEffect(() => {
+    if (!userProfile) return;
+    let syncTimer: number | null = null;
+    if (isPlaying && currentTrack) {
+      syncTimer = window.setInterval(() => {
+        const liveProfile = userProfileRef.current;
+        const stats = liveProfile?.stats;
+        if (!liveProfile || !stats) return;
+        if ((stats.secondsListened || 0) === lastPersistedSecondsRef.current) return;
+        lastPersistedSecondsRef.current = stats.secondsListened || 0;
+        fetch(`/api/users/${liveProfile.id}/listening-stats`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify({
+            secondsListened: stats.secondsListened || 0,
+            hoursListened: stats.hoursListened || 0,
+          }),
+        }).catch((err) => console.error('Failed to persist listening stats:', err));
+      }, 15000);
+    }
+    return () => {
+      if (syncTimer) clearInterval(syncTimer);
+    };
+  }, [isPlaying, currentTrack?.id, userProfile?.id]);
 
   // Actions
   const handleTogglePlay = () => {
@@ -808,11 +930,43 @@ export default function App() {
     }
   };
 
+  // Dedicated shuffle-play handler for a track list (currently used by the
+  // artist page's Shuffle button). Deliberately does NOT go through
+  // handlePlayTrack, which toggles pause when you "play" the track that's
+  // already current — that's exactly what made Shuffle silently stop
+  // playback whenever it happened to land on the currently-playing track.
+  // This always ends in isPlaying = true, picks a track different from the
+  // current one when possible, sets the queue to this track list so
+  // Next/Prev shuffle within it too, and turns shuffle mode on.
+  const handleShufflePlayTracks = (trackList: Track[]) => {
+    if (trackList.length === 0) return;
+    let pool = trackList;
+    if (currentTrack && trackList.length > 1) {
+      const withoutCurrent = trackList.filter((t) => t.id !== currentTrack.id);
+      if (withoutCurrent.length > 0) pool = withoutCurrent;
+    }
+    const randomTrack = pool[Math.floor(Math.random() * pool.length)];
+    setIsShuffle(true);
+    setQueue(trackList);
+    setCurrentTrack(randomTrack);
+    setCurrentTimeSeconds(0);
+    setIsPlaying(true);
+    recordTrackPlay(randomTrack);
+  };
+
   const handleNextTrack = () => {
     const activeList = queue.length > 0 ? queue : tracks;
     if (activeList.length === 0) return;
     if (repeatMode === 'one') {
+      if (currentTrack) {
+        // Explicitly restart playback from the beginning — the audio element
+        // is already paused/ended at this point (onended already fired), so
+        // just resetting React state doesn't make it play again on its own.
+        audioEngine.playTrack(currentTrack, 0);
+        recordTrackPlay(currentTrack);
+      }
       setCurrentTimeSeconds(0);
+      setIsPlaying(true);
       return;
     }
 
@@ -992,17 +1146,29 @@ export default function App() {
 
   const handleSelectArtist = (artist: Artist | UserProfile | string) => {
     if (typeof artist === 'string') {
+      // Check the logged-in user's own profile FIRST. It's the source of
+      // truth for their own artist page (freshly edited banner/avatar/bio
+      // live here immediately), whereas the `artists` directory can hold a
+      // stale cached copy synced from an earlier point in time. Without
+      // this order, opening your own artist page after an edit could show
+      // the old banner because the name lookup matched the stale entry.
+      if (
+        userProfile &&
+        userProfile.isArtist &&
+        (userProfile.displayName?.toLowerCase() === artist.toLowerCase() ||
+          userProfile.artistName?.toLowerCase() === artist.toLowerCase() ||
+          userProfile.username?.toLowerCase() === artist.toLowerCase())
+      ) {
+        setSelectedArtist(userProfile);
+        handleSelectTab('artist');
+        return;
+      }
+
       const foundArtist = artists.find(
         (a) => a.name.toLowerCase() === artist.toLowerCase() || a.id === artist
       );
       if (foundArtist) {
         setSelectedArtist(foundArtist);
-      } else if (
-        userProfile &&
-        (userProfile.displayName.toLowerCase() === artist.toLowerCase() ||
-          userProfile.artistName?.toLowerCase() === artist.toLowerCase())
-      ) {
-        setSelectedArtist(userProfile);
       } else {
         const fallbackArtist: Artist = {
           id: `artist-${artist.toLowerCase().replace(/\s+/g, '-')}`,
@@ -1181,14 +1347,58 @@ export default function App() {
       setUserProfile(updatedProfile);
       setSelectedArtist(updatedProfile);
 
+      // Mirror the change into the artists directory too. Several screens
+      // (search results, sidebar, home recommendations) read artist data
+      // from `artists` rather than `userProfile`, and would otherwise keep
+      // showing whatever banner/avatar was cached there the first time
+      // this artist appeared.
+      setArtists((prev) => {
+        const mirrored: Artist = {
+          id: updatedProfile.id,
+          name: updatedProfile.artistName || updatedProfile.displayName,
+          avatarUrl: updatedProfile.avatarUrl,
+          bannerUrl: updatedProfile.bannerUrl,
+          bio: updatedProfile.artistBio || updatedProfile.bio,
+          genre: updatedData.genre,
+          monthlyListeners: updatedProfile.monthlyListeners || '0',
+          verified: updatedProfile.artistVerified !== false,
+          instagramUrl: updatedProfile.instagramUrl,
+          twitterUrl: updatedProfile.twitterUrl,
+          websiteUrl: updatedProfile.websiteUrl,
+          artistPickTrackId: updatedProfile.artistPickTrackId,
+          artistPickComment: updatedProfile.artistPickComment,
+        };
+        const exists = prev.some((a) => a.id === mirrored.id);
+        return exists ? prev.map((a) => (a.id === mirrored.id ? mirrored : a)) : [mirrored, ...prev];
+      });
+
       try {
-        await fetch(`/api/users/${userProfile.id}`, {
+        const res = await fetch(`/api/users/${userProfile.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify(updatedProfile),
         });
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.success && data.user) {
+          // Swap in the server-persisted (short) URLs for any image that
+          // was uploaded as a raw base64 data: URL, so we're not holding a
+          // multi-MB string in React state / localStorage indefinitely.
+          const persisted: UserProfile = { ...updatedProfile, ...data.user };
+          setUserProfile(persisted);
+          setSelectedArtist(persisted);
+          setArtists((prev) =>
+            prev.map((a) =>
+              a.id === persisted.id
+                ? { ...a, avatarUrl: persisted.avatarUrl, bannerUrl: persisted.bannerUrl }
+                : a
+            )
+          );
+        } else if (!res.ok) {
+          showToast('Could not save artist profile changes — please try again.');
+        }
       } catch (err) {
         console.error('Failed to sync artist profile update with server:', err);
+        showToast('Could not save artist profile changes — please try again.');
       }
     } else {
       const updatedArtist: Artist = {
@@ -1515,6 +1725,7 @@ export default function App() {
                 currentTrackId={currentTrack?.id}
                 isPlaying={isPlaying}
                 onPlayTrack={handlePlayTrack}
+                onShufflePlay={handleShufflePlayTracks}
                 onToggleLike={handleToggleLike}
                 onSelectArtist={handleSelectArtist}
                 onSelectAlbum={handleSelectAlbum}

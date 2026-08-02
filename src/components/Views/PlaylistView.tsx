@@ -258,12 +258,27 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                   }`}
                 >
                   {/* # Index or Play Icon */}
-                  <div className="col-span-1 text-center font-mono font-bold text-xs text-zinc-400 group-hover:text-white">
-                    {isSelected && isPlaying ? (
-                      <span className="text-[#D946EF] font-bold">▶</span>
-                    ) : (
-                      idx + 1
-                    )}
+                  <div className="col-span-1 text-center font-mono font-bold text-xs text-zinc-400 flex justify-center items-center">
+                    <div className="group-hover:hidden">
+                      {isSelected && isPlaying ? (
+                        <span className="text-[#D946EF] font-bold">▶</span>
+                      ) : (
+                        idx + 1
+                      )}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPlayTrack(track);
+                      }}
+                      className="hidden group-hover:block text-white"
+                    >
+                      {isSelected && isPlaying ? (
+                        <Pause className="w-4 h-4 fill-white" />
+                      ) : (
+                        <Play className="w-4 h-4 fill-white" />
+                      )}
+                    </button>
                   </div>
 
                   {/* Title & Cover */}

@@ -76,7 +76,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
     : (artist as Artist).genre || 'Synthwave / Electronic';
 
   // Get unified stats from global helper
-  const { totalPlays: totalCalculatedPlays, monthlyListenersStr: initialListeners } = getArtistStats(artist, artistTracks);
+  const { totalPlays: totalCalculatedPlays } = getArtistStats(artist, artistTracks);
   const calculatedListenersStr = `${totalCalculatedPlays.toLocaleString()} monthly listeners`;
 
   const bannerFileInputRef = useRef<HTMLInputElement>(null);
@@ -87,8 +87,6 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
   const [artistBio, setArtistBio] = useState(initialBio);
   const [genre, setGenre] = useState(initialGenre);
   const [artistVerified, setArtistVerified] = useState(initialVerified);
-  const [monthlyListeners, setMonthlyListeners] = useState(initialListeners);
-  const [useCalculatedListeners, setUseCalculatedListeners] = useState(false);
 
   const [instagramUrl, setInstagramUrl] = useState(artist.instagramUrl || '');
   const [twitterUrl, setTwitterUrl] = useState(artist.twitterUrl || '');
@@ -106,7 +104,6 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
       setArtistBio(initialBio);
       setGenre(initialGenre);
       setArtistVerified(initialVerified);
-      setMonthlyListeners(initialListeners);
       setInstagramUrl(artist.instagramUrl || '');
       setTwitterUrl(artist.twitterUrl || '');
       setWebsiteUrl(artist.websiteUrl || '');
@@ -157,7 +154,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalListeners = useCalculatedListeners ? calculatedListenersStr : monthlyListeners;
+    const finalListeners = calculatedListenersStr;
     onSave({
       artistName: initialName, // Default account username, read-only
       artistBio: artistBio.trim(),
@@ -417,42 +414,16 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
             />
           </div>
 
-          {/* Monthly Listeners Stats */}
+          {/* Monthly Listeners Stats (read-only, always calculated from real plays) */}
           <div className="p-4 rounded-xl bg-[#222222] border border-white/10 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Radio className="w-4 h-4 text-[#D946EF]" />
-                <span className="text-xs font-bold text-white">Monthly Listeners Stats</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setUseCalculatedListeners(!useCalculatedListeners)}
-                className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase transition-all ${
-                  useCalculatedListeners
-                    ? 'bg-[#D946EF] text-white font-bold'
-                    : 'bg-white/10 text-zinc-400 hover:text-white'
-                }`}
-              >
-                {useCalculatedListeners ? 'Auto-Calculate from Plays' : 'Custom Display'}
-              </button>
+            <div className="flex items-center space-x-2">
+              <Radio className="w-4 h-4 text-[#D946EF]" />
+              <span className="text-xs font-bold text-white">Monthly Listeners Stats</span>
             </div>
-
-            {useCalculatedListeners ? (
-              <div className="p-3 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between text-xs">
-                <span className="text-zinc-400">Calculated from total track streams:</span>
-                <span className="font-mono font-bold text-[#D946EF]">{calculatedListenersStr}</span>
-              </div>
-            ) : (
-              <div>
-                <input
-                  type="text"
-                  value={monthlyListeners}
-                  onChange={(e) => setMonthlyListeners(e.target.value)}
-                  placeholder="e.g. 48,500 monthly listeners"
-                  className="w-full bg-[#181818] border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-mono placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-                />
-              </div>
-            )}
+            <div className="p-3 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between text-xs">
+              <span className="text-zinc-400">Calculated from total track streams:</span>
+              <span className="font-mono font-bold text-[#D946EF]">{calculatedListenersStr}</span>
+            </div>
           </div>
 
           {/* Verified Badge Toggle */}

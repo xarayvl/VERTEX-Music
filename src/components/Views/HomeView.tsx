@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, Pause, Heart, Clock } from 'lucide-react';
 import { Track, Playlist, Album, TabType } from '../../types';
+import { groupTracksByRelease } from '../../utils/artistUtils';
 
 interface HomeViewProps {
   tracks: Track[];
@@ -60,6 +61,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
   });
 
   const likedTracks = tracks.filter((t) => t.isLiked);
+
+  // Group tracks belonging to the same album/EP release into a single
+  // card so an 11-track album doesn't flood the home feed as 11 entries.
+  const recentReleaseGroups = groupTracksByRelease(filteredTracks).slice(0, 5);
 
   // Quick 6 items for the 2x3 grid
   const quickItems = [
@@ -213,12 +218,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {filteredTracks.slice(0, 5).map((track) => {
-            const isThisTrackPlaying = currentTrackId === track.id && isPlaying;
+          {recentReleaseGroups.map((group) => {
+            const track = group.representative;
+            const isThisTrackPlaying = group.tracks.some((t) => t.id === currentTrackId) && isPlaying;
 
             return (
               <div
-                key={track.id}
+                key={group.key}
                 data-track-id={track.id}
                 data-context-type="track"
                 onClick={() => {
@@ -228,8 +234,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
               >
                 <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 shadow-md">
                   <img
-                    src={track.coverUrl}
-                    alt={track.title}
+                    src={group.coverUrl}
+                    alt={group.title}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
@@ -264,7 +270,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                       isThisTrackPlaying ? 'text-[#D946EF]' : 'text-white'
                     }`}
                   >
-                    {track.title}
+                    {group.title}
                   </h3>
                   <p
                     onClick={(e) => {
@@ -274,6 +280,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     className="text-xs text-zinc-400 truncate mt-1 hover:underline hover:text-[#D946EF]"
                   >
                     {track.artist}
+                    {group.isMultiTrack ? ` • ${group.releaseType}` : ''}
                   </p>
                 </div>
               </div>

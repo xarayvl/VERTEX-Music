@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Heart,
   SlidersHorizontal,
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Track } from '../../types';
 import { AudioVisualizer } from '../Player/AudioVisualizer';
+import { extractCoverPalette, CoverPalette } from '../../utils/coverColors';
 
 interface SongScreenModalProps {
   isOpen: boolean;
@@ -43,19 +44,51 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'visualizer' | 'lyrics'>('visualizer');
 
+  // Live palette pulled from the actual cover art pixels, so the background
+  // atmosphere and EQ bars always match this specific track's artwork —
+  // rather than the accentColor/secondaryColor track fields, which are
+  // never populated by the upload flow and so are always undefined for
+  // real user-uploaded music.
+  const [palette, setPalette] = useState<CoverPalette>({
+    accent: currentTrack?.accentColor || '#A855F7',
+    secondary: currentTrack?.secondaryColor || '#D946EF',
+    ambient: '#2a1a3d',
+  });
+
+  useEffect(() => {
+    if (!currentTrack) return;
+    let cancelled = false;
+    extractCoverPalette(currentTrack.coverUrl).then((result) => {
+      if (!cancelled) setPalette(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Re-run whenever the track (and therefore its cover) changes.
+  }, [currentTrack?.coverUrl]);
+
   if (!isOpen || !currentTrack) return null;
 
   return (
     <div className="w-full h-full min-h-[500px] flex flex-col justify-between bg-[#0b0b12] text-white p-6 sm:p-8 rounded-2xl border border-white/10 select-none overflow-y-auto relative shadow-2xl animate-in fade-in duration-200">
-      {/* Dynamic Background Atmosphere */}
+      {/* Dynamic Background Atmosphere — fills the entire screen and
+          crossfades to the new cover's palette whenever the track changes */}
       <div
-        className="absolute inset-0 -z-10 opacity-30 blur-3xl transition-all duration-1000 pointer-events-none"
-        style={{
-          background: `radial-gradient(circle at 50% 30%, ${
-            currentTrack.accentColor || '#A855F7'
-          } 0%, ${currentTrack.secondaryColor || '#D946EF'} 50%, #000000 100%)`,
-        }}
-      />
+        key={currentTrack.coverUrl}
+        className="absolute inset-0 -z-10 overflow-hidden pointer-events-none animate-in fade-in duration-1000"
+      >
+        <div
+          className="absolute inset-0 opacity-40 blur-3xl scale-125 transition-[background] duration-1000"
+          style={{
+            background: `radial-gradient(circle at 50% 20%, ${palette.accent} 0%, ${palette.secondary} 45%, ${palette.ambient} 75%, #000000 100%)`,
+          }}
+        />
+        {/* Base wash so the gradient still fully covers the corners at wide/short viewport ratios */}
+        <div
+          className="absolute inset-0 opacity-90 transition-[background] duration-1000"
+          style={{ background: `linear-gradient(180deg, ${palette.ambient}55 0%, #0b0b12 85%)` }}
+        />
+      </div>
 
       {/* Top Navigation Bar */}
       <div className="flex items-center justify-between w-full max-w-5xl mx-auto z-20">
@@ -94,11 +127,9 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
           <div className="relative group w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96">
             {/* Soft Glow */}
             <div
-              className="absolute -inset-4 rounded-3xl opacity-50 blur-2xl transition-opacity duration-500 group-hover:opacity-80"
+              className="absolute -inset-4 rounded-3xl opacity-50 blur-2xl transition-all duration-700 group-hover:opacity-80"
               style={{
-                background: `linear-gradient(135deg, ${currentTrack.accentColor || '#A855F7'}, ${
-                  currentTrack.secondaryColor || '#D946EF'
-                })`,
+                background: `linear-gradient(135deg, ${palette.accent}, ${palette.secondary})`,
               }}
             />
 
@@ -188,7 +219,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
             <div className="py-4">
               {activeTab === 'visualizer' ? (
                 <div className="h-32 flex items-center justify-center">
-                  <AudioVisualizer isPlaying={isPlaying} />
+                  <AudioVisualizer isPlaying={isPlaying} accentColor={palette.accent} secondaryColor={palette.secondary} />
                 </div>
               ) : (
                 <div className="max-h-36 overflow-y-auto space-y-2.5 pr-2 scrollbar-thin">

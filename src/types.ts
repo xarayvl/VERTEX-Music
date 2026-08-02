@@ -114,7 +114,7 @@ export interface AudioEQ {
   bass: number; // -10 to 10
   mid: number;
   treble: number;
-  preset: 'None' | 'Acoustic' | 'Bass Booster' | 'Electronic' | 'Pop' | 'Vocal' | 'Flat';
+  preset: 'None' | 'Acoustic' | 'Bass' | 'Electronic' | 'Pop' | 'Vocal' | 'Flat';
 }
 
 export interface DesignToken {

@@ -28,10 +28,38 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     if (!ctx) return;
 
     let animId: number;
+    // CSS-pixel dimensions the canvas is actually displayed at — drawing
+    // math below stays in this space so bar gaps/radii look identical
+    // regardless of devicePixelRatio.
+    let width = 0;
+    let h = height;
+
+    // Keep the canvas's internal pixel buffer matched to its actual
+    // displayed size (times devicePixelRatio) instead of a hardcoded
+    // fixed-resolution buffer stretched via CSS — otherwise the bars
+    // render blurry or squashed whenever the container is a different
+    // width than that hardcoded value (e.g. the Now Playing screen at
+    // different viewport widths).
+    const syncCanvasSize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      width = Math.max(1, rect.width);
+      h = height;
+      const targetWidth = Math.max(1, Math.round(width * dpr));
+      const targetHeight = Math.max(1, Math.round(h * dpr));
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+      }
+      // Reset then scale so all drawing coordinates below are in CSS pixels.
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    syncCanvasSize();
+    const resizeObserver = new ResizeObserver(syncCanvasSize);
+    resizeObserver.observe(canvas);
 
     const render = () => {
-      const width = canvas.width;
-      const h = canvas.height;
       ctx.clearRect(0, 0, width, h);
 
       const freqData = isPlaying
@@ -122,15 +150,15 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
 
     return () => {
       cancelAnimationFrame(animId);
+      resizeObserver.disconnect();
     };
-  }, [isPlaying, accentColor, secondaryColor, barCount, variant]);
+  }, [isPlaying, accentColor, secondaryColor, barCount, variant, height]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={variant === 'minimal' ? 24 : 320}
-      height={height}
       className="w-full max-w-full pointer-events-none"
+      style={{ height, width: variant === 'minimal' ? 24 : '100%' }}
     />
   );
 };

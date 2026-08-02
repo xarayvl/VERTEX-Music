@@ -67,9 +67,20 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
     );
   }
 
+  // Resolve the artist to display. We only ever treat `userProfile` as the
+  // artist when they are genuinely marked as an artist (isArtist) AND their
+  // name matches this track's artist — otherwise a random listener whose
+  // display name happens to match would incorrectly be shown as "the
+  // artist". But when it IS them, prefer their own live profile over the
+  // `artists` directory: that directory can hold a stale cached copy (e.g.
+  // synced before their most recent banner/avatar edit), so checking it
+  // first could show outdated artwork here even though the edit already
+  // saved successfully.
   let displayObj: Artist | UserProfile | null = null;
+
   if (
     userProfile &&
+    userProfile.isArtist &&
     (userProfile.displayName?.toLowerCase() === currentTrack.artist.toLowerCase() ||
       userProfile.artistName?.toLowerCase() === currentTrack.artist.toLowerCase() ||
       userProfile.username?.toLowerCase() === currentTrack.artist.toLowerCase())
@@ -78,17 +89,23 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
   } else {
     displayObj = artists.find((a) => a.name.toLowerCase() === currentTrack.artist.toLowerCase()) || null;
   }
-  
+
   const stats = getArtistStats(displayObj, allTracks);
   const artistListeners = stats.monthlyListenersStr;
   const finalDisplayName = displayObj ? stats.artistName : currentTrack.artist;
 
+  const isUserProfileDisplay = !!displayObj && 'email' in displayObj;
   const artistAvatar = displayObj?.avatarUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80';
   const artistBanner = displayObj?.bannerUrl || currentTrack.coverUrl;
-  
-  let artistBio = null;
-  if (displayObj && 'bio' in displayObj) artistBio = displayObj.bio;
-  else if (displayObj && 'artistBio' in displayObj) artistBio = displayObj.artistBio;
+
+  // Prefer the artist-specific bio over a generic listener bio when the
+  // resolved profile is a UserProfile (which always has both fields).
+  let artistBio: string | null | undefined = null;
+  if (displayObj && isUserProfileDisplay) {
+    artistBio = (displayObj as UserProfile).artistBio || (displayObj as UserProfile).bio;
+  } else if (displayObj && 'bio' in displayObj) {
+    artistBio = displayObj.bio;
+  }
 
   const isVerified = displayObj ? ('verified' in displayObj ? displayObj.verified : displayObj.artistVerified) : false;
 

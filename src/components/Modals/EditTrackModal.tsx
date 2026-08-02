@@ -180,9 +180,19 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
         }),
       });
 
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(
+          `Server returned an unexpected response (status ${res.status}). This usually means the request payload was too large or the server hit an error before it could respond with JSON. Try again, and if it keeps happening, try replacing the audio file (it may still be stored as inline data instead of a proper upload).`
+        );
+      }
 
       if (!res.ok || !data.success) {
+        if (res.status === 401) {
+          throw new Error('Your session expired. Please log in again, then retry saving.');
+        }
         if (res.status === 403) {
           throw new Error('403 Forbidden: You do not have permission to edit this track.');
         }
