@@ -123,10 +123,14 @@ export const SearchView: React.FC<SearchViewProps> = ({
         username: userProfile.username,
         displayName: userProfile.displayName,
         avatarUrl: userProfile.avatarUrl,
+        bannerUrl: userProfile.bannerUrl,
         bio: userProfile.bio,
         genre: userProfile.favoriteGenres?.[0] || 'Electronic',
         monthlyListeners: userProfile.monthlyListeners || '0 monthly listeners',
         verified: userProfile.isArtist || userProfile.artistVerified || false,
+        instagramUrl: userProfile.instagramUrl,
+        twitterUrl: userProfile.twitterUrl,
+        websiteUrl: userProfile.websiteUrl,
         isUser: true,
       });
     }

@@ -22,6 +22,11 @@ export interface UserRecord {
   artistVerified?: boolean;
   bannerUrl?: string;
   monthlyListeners?: string;
+  instagramUrl?: string;
+  twitterUrl?: string;
+  websiteUrl?: string;
+  artistPickTrackId?: string;
+  artistPickComment?: string;
   stats?: {
     hoursListened: number;
     secondsListened?: number;

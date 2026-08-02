@@ -11,6 +11,33 @@ import { readDB, writeDB, readDBAsync, writeDBAsync, initUpstashDB, isUpstashCon
 
 dotenv.config();
 
+// Shared shape-builder for turning a stored user record into the public
+// "artist card" shape the client renders in Search / Sidebar / ArtistView.
+// IMPORTANT: keep this in sync with the `Artist`/`UserProfile` fields that
+// ArtistView.tsx actually reads (bannerUrl, social links, artist pick) —
+// leaving one out here silently makes it look like the value doesn't exist
+// for every OTHER user viewing this profile, even though it's saved fine.
+function toPublicArtistCard(u: UserRecord) {
+  return {
+    id: u.id,
+    name: u.artistName || u.displayName || u.username,
+    username: u.username,
+    displayName: u.displayName,
+    avatarUrl: u.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80",
+    bannerUrl: u.bannerUrl || u.avatarUrl,
+    bio: u.bio || u.artistBio || "Music listener & creator on VERTEX Music.",
+    genre: u.favoriteGenres?.[0] || "Electronic",
+    monthlyListeners: u.monthlyListeners || "0 monthly listeners",
+    verified: u.isArtist || u.artistVerified || false,
+    instagramUrl: u.instagramUrl,
+    twitterUrl: u.twitterUrl,
+    websiteUrl: u.websiteUrl,
+    artistPickTrackId: u.artistPickTrackId,
+    artistPickComment: u.artistPickComment,
+    isUser: true,
+  };
+}
+
 function sanitizeUserId(userId: string): string {
   if (!userId || typeof userId !== "string") return "public";
   const sanitized = userId.replace(/[^a-zA-Z0-9_-]/g, "");
@@ -548,18 +575,7 @@ async function startServer() {
         return res.json({
           query: "",
           tracks: db.tracks.slice(0, 10),
-          artists: db.users.map((u) => ({
-            id: u.id,
-            name: u.artistName || u.displayName || u.username,
-            username: u.username,
-            displayName: u.displayName,
-            avatarUrl: u.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80",
-            bio: u.bio || u.artistBio || "Music listener & creator on VERTEX Music.",
-            genre: u.favoriteGenres?.[0] || "Electronic",
-            monthlyListeners: u.monthlyListeners || "12,400 monthly listeners",
-            verified: u.isArtist || u.artistVerified || false,
-            isUser: true,
-          })),
+          artists: db.users.map((u) => toPublicArtistCard(u)),
           playlists: db.playlists.slice(0, 10),
           topResult: null,
         });
@@ -584,18 +600,7 @@ async function startServer() {
             (u.email && u.email.toLowerCase().includes(query)) ||
             (u.bio && u.bio.toLowerCase().includes(query))
         )
-        .map((u) => ({
-          id: u.id,
-          name: u.artistName || u.displayName || u.username,
-          username: u.username,
-          displayName: u.displayName,
-          avatarUrl: u.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80",
-          bio: u.bio || u.artistBio || "Music listener & creator on VERTEX Music.",
-          genre: u.favoriteGenres?.[0] || "Electronic",
-          monthlyListeners: u.monthlyListeners || "24,800 monthly listeners",
-          verified: u.isArtist || u.artistVerified || false,
-          isUser: true,
-        }));
+        .map((u) => toPublicArtistCard(u));
 
       // Extract unique artists from uploaded tracks
       const trackArtistNames = Array.from(new Set(db.tracks.map((t) => t.artist)));
@@ -606,18 +611,7 @@ async function startServer() {
           const userMatch = db.users.find(u => u.displayName?.toLowerCase() === name.toLowerCase() || u.artistName?.toLowerCase() === name.toLowerCase());
           
           if (userMatch) {
-            return {
-              id: userMatch.id,
-              name: userMatch.artistName || userMatch.displayName || userMatch.username,
-              username: userMatch.username,
-              displayName: userMatch.displayName,
-              avatarUrl: userMatch.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80",
-              bio: userMatch.bio || userMatch.artistBio || "Music listener & creator on VERTEX Music.",
-              genre: userMatch.favoriteGenres?.[0] || "Electronic",
-              monthlyListeners: userMatch.monthlyListeners || "0 monthly listeners",
-              verified: userMatch.isArtist || userMatch.artistVerified || false,
-              isUser: true,
-            };
+            return toPublicArtistCard(userMatch);
           }
 
           const sampleTrack = db.tracks.find((t) => t.artist === name);
@@ -699,6 +693,80 @@ async function startServer() {
     }
   });
 
+  // Get a single user's PUBLIC artist-card profile by id. This is what lets
+  // the client resolve someone else's real banner/bio/stats/social links —
+  // e.g. for the sidebar's "Following" list after switching accounts, or
+  // opening an artist page whose data isn't cached in this browser session.
+  // Without this route the client had no way to look up another account
+  // except the search endpoint (which requires a matching text query).
+  app.get("/api/users/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const db = await readDBAsync();
+      const found = db.users.find((u) => u.id === userId);
+      if (!found) {
+        return res.status(404).json({ error: "User not found." });
+      }
+      return res.json({ success: true, user: toPublicArtistCard(found) });
+    } catch (error: any) {
+      console.error("Fetch User Error:", error);
+      return res.status(500).json({ error: "Failed to fetch user profile." });
+    }
+  });
+
+  // Follow / Unfollow an artist (real registered user). This updates the
+  // TARGET's followersCount server-side. Deliberately does NOT require
+  // verifyUserOwnership(targetUserId) — following someone else is exactly
+  // the case where the requester does NOT own the target account. It only
+  // requires the requester to be authenticated, so we know who's acting.
+  // Without this route, a user's "Followers" count could never move: the
+  // client only ever incremented the follower's own "Following" count,
+  // never the followed artist's "Followers" count, so every profile stayed
+  // stuck at 0 followers no matter how many people followed it.
+  app.post("/api/users/:userId/follow", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { action } = req.body as { action?: "follow" | "unfollow" };
+
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      }
+      if (action !== "follow" && action !== "unfollow") {
+        return res.status(400).json({ error: "action must be 'follow' or 'unfollow'." });
+      }
+
+      const db = await readDBAsync();
+      const index = db.users.findIndex((u) => u.id === userId);
+      if (index === -1) {
+        // Not a registered user (e.g. a mock/track-derived artist) — nothing
+        // to update server-side, but this isn't an error for the client.
+        return res.json({ success: true, followersCount: null });
+      }
+
+      const currentCount = db.users[index].stats?.followersCount || 0;
+      const nextCount = Math.max(0, currentCount + (action === "follow" ? 1 : -1));
+
+      db.users[index] = {
+        ...db.users[index],
+        stats: {
+          hoursListened: 0,
+          tracksPlayed: 0,
+          topGenre: "N/A",
+          playlistsCreated: 0,
+          ...db.users[index].stats,
+          followersCount: nextCount,
+        },
+      };
+      writeDB(db);
+
+      return res.json({ success: true, followersCount: nextCount });
+    } catch (error: any) {
+      console.error("Follow/Unfollow Error:", error);
+      return res.status(500).json({ error: "Failed to update follow state." });
+    }
+  });
+
   // Update User Profile
   app.put("/api/users/:userId", async (req, res) => {
     try {
@@ -744,6 +812,11 @@ async function startServer() {
         artistBio: updates.artistBio ?? db.users[index].artistBio ?? updates.bio ?? db.users[index].bio,
         artistVerified: updates.artistVerified ?? db.users[index].artistVerified ?? true,
         monthlyListeners: updates.monthlyListeners ?? db.users[index].monthlyListeners ?? "1,248 monthly listeners",
+        instagramUrl: updates.instagramUrl ?? db.users[index].instagramUrl,
+        twitterUrl: updates.twitterUrl ?? db.users[index].twitterUrl,
+        websiteUrl: updates.websiteUrl ?? db.users[index].websiteUrl,
+        artistPickTrackId: updates.artistPickTrackId ?? db.users[index].artistPickTrackId,
+        artistPickComment: updates.artistPickComment ?? db.users[index].artistPickComment,
         stats: updates.stats ?? db.users[index].stats ?? {
           hoursListened: 0,
           secondsListened: 0,

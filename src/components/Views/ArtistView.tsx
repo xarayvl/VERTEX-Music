@@ -117,13 +117,13 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
     ? (artist as UserProfile).artistVerified !== false
     : (artist as Artist).verified !== false;
 
-  const isOwner = Boolean(
-    userProfile &&
-      artist &&
-      (artist.id === userProfile.id ||
-        ('email' in artist && (artist as UserProfile).id === userProfile.id) ||
-        ('displayName' in userProfile && artistName.toLowerCase() === userProfile.displayName.toLowerCase()))
-  );
+  // NOTE: ownership must be decided by id only. An earlier version also
+  // matched by comparing artistName to the logged-in user's displayName,
+  // which meant that if your own display name happened to match some OTHER
+  // artist's name (a different registered user, or just a track's artist
+  // string), you'd see Edit controls on THEIR page — even though it isn't
+  // your account.
+  const isOwner = Boolean(userProfile && artist && artist.id === userProfile.id);
 
   // Get unified stats from global helper
   const { totalPlays: totalArtistPlays, monthlyListenersStr: monthlyListeners, artistTracks } = getArtistStats(artist, allTracks);

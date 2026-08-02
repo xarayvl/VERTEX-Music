@@ -459,6 +459,60 @@ export default function App() {
     }
   }, [userProfile?.id]);
 
+  // Hydrate any followed artist that isn't already in the local `artists`
+  // cache. `followedArtistIds` is restored from localStorage per-account,
+  // but the matching artist objects (banner, bio, stats) only ever lived in
+  // this same browser's in-memory `artists` state — so after logging out
+  // and into a different account, a followed *real user* artist has an id
+  // with nothing to resolve it to, and silently disappears from the
+  // sidebar/library "Artists" list. Fetch the missing ones by id so they
+  // show up with their real data again.
+  useEffect(() => {
+    if (!followedArtistIds.length) return;
+    const missingIds = followedArtistIds.filter((id) => !artists.some((a) => a.id === id));
+    if (!missingIds.length) return;
+
+    let cancelled = false;
+    Promise.all(
+      missingIds.map((id) =>
+        fetch(`/api/users/${id}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => (data?.success ? data.user : null))
+          .catch(() => null)
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      const fetchedArtists: Artist[] = results
+        .filter(Boolean)
+        .map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          avatarUrl: u.avatarUrl,
+          bannerUrl: u.bannerUrl,
+          bio: u.bio,
+          genre: u.genre,
+          monthlyListeners: u.monthlyListeners,
+          verified: u.verified,
+          instagramUrl: u.instagramUrl,
+          twitterUrl: u.twitterUrl,
+          websiteUrl: u.websiteUrl,
+          artistPickTrackId: u.artistPickTrackId,
+          artistPickComment: u.artistPickComment,
+        }));
+      if (fetchedArtists.length) {
+        setArtists((prev) => {
+          const existingIds = new Set(prev.map((a) => a.id));
+          const toAdd = fetchedArtists.filter((a) => !existingIds.has(a.id));
+          return toAdd.length ? [...prev, ...toAdd] : prev;
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [followedArtistIds, artists]);
+
   // Fetch application data (uploaded tracks, saved state, chat history) from Express server.
   // `includeChatAndUser` is turned off for background refreshes so a periodic poll doesn't
   // reset chat messages the person is actively looking at or clobber in-flight profile edits —
@@ -1144,6 +1198,47 @@ export default function App() {
     }
   };
 
+  // Looks up a real artist by name on the server and merges the result into
+  // the local `artists` cache. Shared by handleSelectArtist (opening an
+  // artist page) and the "now playing" hydration effect below — both hit
+  // the exact same root problem: an artist who is a real registered user on
+  // a DIFFERENT account never makes it into this browser's local `artists`
+  // state on its own, so anything that reads from that cache (ArtistView,
+  // NowPlayingSidebar, the sidebar's Artists list) falls back to generic
+  // placeholder art instead of their real banner/avatar/bio.
+  const resolveArtistByNameFromServer = React.useCallback((name: string, onResolved?: (a: Artist) => void) => {
+    fetch(`/api/search?q=${encodeURIComponent(name)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data?.artists?.length) return;
+        const exact =
+          data.artists.find((a: any) => a.name?.toLowerCase() === name.toLowerCase()) ||
+          data.artists[0];
+        if (!exact) return;
+        const realArtist: Artist = {
+          id: exact.id,
+          name: exact.name,
+          avatarUrl: exact.avatarUrl,
+          bannerUrl: exact.bannerUrl,
+          bio: exact.bio,
+          genre: exact.genre,
+          monthlyListeners: exact.monthlyListeners,
+          verified: exact.verified,
+          instagramUrl: exact.instagramUrl,
+          twitterUrl: exact.twitterUrl,
+          websiteUrl: exact.websiteUrl,
+          artistPickTrackId: exact.artistPickTrackId,
+          artistPickComment: exact.artistPickComment,
+        };
+        setArtists((prev) => {
+          const exists = prev.some((a) => a.id === realArtist.id);
+          return exists ? prev.map((a) => (a.id === realArtist.id ? realArtist : a)) : [realArtist, ...prev];
+        });
+        onResolved?.(realArtist);
+      })
+      .catch((e) => console.error('Error resolving artist profile from server:', e));
+  }, []);
+
   const handleSelectArtist = (artist: Artist | UserProfile | string) => {
     if (typeof artist === 'string') {
       // Check the logged-in user's own profile FIRST. It's the source of
@@ -1169,19 +1264,39 @@ export default function App() {
       );
       if (foundArtist) {
         setSelectedArtist(foundArtist);
-      } else {
-        const fallbackArtist: Artist = {
-          id: `artist-${artist.toLowerCase().replace(/\s+/g, '-')}`,
-          name: artist,
-          avatarUrl:
-            'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
-          bio: `${artist} is a featured artist on VERTEX Music.`,
-          genre: 'Electronic',
-          monthlyListeners: '0 monthly listeners',
-          verified: true,
-        };
-        setSelectedArtist(fallbackArtist);
+        handleSelectTab('artist');
+        return;
       }
+
+      // Not cached locally — this is exactly the "other account" case: the
+      // real artist (a registered user on another session) was never synced
+      // into this browser's local `artists` array. Ask the server for the
+      // real profile (banner, bio, stats, socials) instead of immediately
+      // making up a placeholder. Show a lightweight version right away so
+      // the tab switches instantly, then upgrade it once the real data
+      // arrives.
+      const placeholderId = `artist-${artist.toLowerCase().replace(/\s+/g, '-')}`;
+      const placeholderArtist: Artist = {
+        id: placeholderId,
+        name: artist,
+        avatarUrl:
+          'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
+        bio: `${artist} is a featured artist on VERTEX Music.`,
+        genre: 'Electronic',
+        monthlyListeners: '0 monthly listeners',
+        verified: true,
+      };
+      setSelectedArtist(placeholderArtist);
+      handleSelectTab('artist');
+
+      resolveArtistByNameFromServer(artist, (realArtist) => {
+        // Only replace the on-screen artist if the user hasn't already
+        // navigated elsewhere while this request was in flight.
+        setSelectedArtist((current) =>
+          current && (current.id === placeholderId || current.id === realArtist.id) ? realArtist : current
+        );
+      });
+      return;
     } else {
       setSelectedArtist(artist);
     }
@@ -1192,6 +1307,26 @@ export default function App() {
     setSelectedAlbumTrack(track);
     handleSelectTab('album');
   };
+
+  // Same root cause as the ArtistView/sidebar issue, different screen: the
+  // "Now Playing" sidebar also reads the artist's banner/avatar from the
+  // local `artists` cache. If the currently playing track is by a real
+  // artist whose data was never synced into this session (e.g. you're on a
+  // different account than the one that uploaded/owns it), it silently
+  // falls back to generic placeholder art. Resolve it from the server the
+  // same way an artist-page visit does.
+  useEffect(() => {
+    if (!currentTrack?.artist) return;
+    const name = currentTrack.artist;
+    const alreadyKnown =
+      artists.some((a) => a.name.toLowerCase() === name.toLowerCase()) ||
+      (userProfile?.isArtist &&
+        (userProfile.displayName?.toLowerCase() === name.toLowerCase() ||
+          userProfile.artistName?.toLowerCase() === name.toLowerCase() ||
+          userProfile.username?.toLowerCase() === name.toLowerCase()));
+    if (alreadyKnown) return;
+    resolveArtistByNameFromServer(name);
+  }, [currentTrack?.artist, artists, userProfile, resolveArtistByNameFromServer]);
 
   const handleDeleteTrack = async (trackId: string) => {
     // Keep a snapshot so we can roll back the optimistic update if the server rejects the delete.
@@ -1283,6 +1418,18 @@ export default function App() {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(updatedProfile)
       }).catch(console.error);
+
+      // Also bump the TARGET artist's followersCount server-side. This is
+      // what makes the follow visible on *their* profile — previously only
+      // our own followingCount ever changed, so every artist's follower
+      // count stayed frozen at 0 no matter who followed them.
+      if (artistId !== userProfile.id) {
+        fetch(`/api/users/${artistId}/follow`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify({ action: isCurrentlyFollowing ? 'unfollow' : 'follow' }),
+        }).catch((e) => console.error('Error updating target followers count:', e));
+      }
     }
 
     setArtists((prev) => {
