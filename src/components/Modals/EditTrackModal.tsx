@@ -281,7 +281,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                   required
                   value={artist}
                   onChange={(e) => setArtist(e.target.value)}
-                  placeholder="e.g. Alex Rivers"
+                  placeholder="Artist name"
                   className="w-full px-3.5 py-2.5 bg-[#282828] border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
                 />
               </div>

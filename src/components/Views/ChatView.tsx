@@ -77,9 +77,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
         text: m.text,
       }));
 
+      const token = localStorage.getItem('vertex_session_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           message: textToSend.trim(),
           history: historyPayload,

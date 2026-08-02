@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TabType, Track, Playlist, Artist, AudioEQ, ChatMessage, UserProfile } from './types';
-import { TRACKS, PLAYLISTS, ARTISTS } from './data/mockData';
 import { audioEngine } from './audio/audioEngine';
 
 import { SpotifySidebar } from './components/Navigation/SpotifySidebar';
@@ -30,6 +29,38 @@ import { SongScreenModal } from './components/Modals/SongScreenModal';
 import { ContextMenu, ContextMenuTarget } from './components/ContextMenu';
 import { Toast } from './components/Toast';
 import { NowPlayingSidebar } from './components/Player/NowPlayingSidebar';
+import { DEFAULT_AVATAR_URL } from './utils/profilePlaceholders';
+
+const normalizePublicArtist = (raw: any): Artist => ({
+  id: String(raw?.id || ''),
+  name: String(raw?.name || raw?.artistName || raw?.displayName || raw?.username || 'Unknown artist'),
+  username: raw?.username ? String(raw.username) : undefined,
+  displayName: raw?.displayName ? String(raw.displayName) : undefined,
+  avatarUrl: String(raw?.avatarUrl || DEFAULT_AVATAR_URL),
+  bannerUrl: raw?.bannerUrl ? String(raw.bannerUrl) : '',
+  bio: raw?.artistBio ? String(raw.artistBio) : raw?.bio ? String(raw.bio) : '',
+  genre: raw?.genre ? String(raw.genre) : Array.isArray(raw?.favoriteGenres) ? String(raw.favoriteGenres[0] || '') : '',
+  monthlyListeners: String(raw?.monthlyListeners || '0 monthly listeners'),
+  verified: raw?.verified === true || raw?.artistVerified === true,
+  isUser: raw?.isUser === true || typeof raw?.email === 'string',
+  isSynthetic: raw?.isSynthetic === true,
+  stats: raw?.stats
+    ? {
+        hoursListened: Number(raw.stats.hoursListened) || 0,
+        secondsListened: Number(raw.stats.secondsListened) || 0,
+        tracksPlayed: Number(raw.stats.tracksPlayed) || 0,
+        topGenre: String(raw.stats.topGenre || 'N/A'),
+        playlistsCreated: Number(raw.stats.playlistsCreated) || 0,
+        followersCount: Number(raw.stats.followersCount) || 0,
+        followingCount: Number(raw.stats.followingCount) || 0,
+      }
+    : undefined,
+  instagramUrl: raw?.instagramUrl || undefined,
+  twitterUrl: raw?.twitterUrl || undefined,
+  websiteUrl: raw?.websiteUrl || undefined,
+  artistPickTrackId: raw?.artistPickTrackId || undefined,
+  artistPickComment: raw?.artistPickComment || undefined,
+});
 
 export default function App() {
   // Navigation State with History Stack
@@ -55,21 +86,21 @@ export default function App() {
   });
 
   // Media Data State
-  const [tracks, setTracks] = useState<Track[]>(TRACKS);
-  const [playlists, setPlaylists] = useState<Playlist[]>(PLAYLISTS);
-  const [artists, setArtists] = useState<Artist[]>(ARTISTS);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [artists, setArtists] = useState<Artist[]>([]);
 
   // Followed Artists State (User-Scoped)
   const [followedArtistIds, setFollowedArtistIds] = useState<string[]>([]);
 
   // Playback State
-  const [currentTrack, setCurrentTrack] = useState<Track | null>(TRACKS[0] || null);
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTimeSeconds, setCurrentTimeSeconds] = useState<number>(0);
   const [volume, setVolume] = useState<number>(0.7);
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
-  const [queue, setQueue] = useState<Track[]>(TRACKS);
+  const [queue, setQueue] = useState<Track[]>([]);
 
   // Device & Audio Engine State
   const [activeDeviceName, setActiveDeviceName] = useState<string>('Web Player (This Browser)');
@@ -86,6 +117,9 @@ export default function App() {
   const [isSongScreenOpen, setIsSongScreenOpen] = useState<boolean>(false);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [selectedArtist, setSelectedArtist] = useState<Artist | UserProfile | null>(null);
+  const [isArtistLoading, setIsArtistLoading] = useState(false);
+  const [artistLoadError, setArtistLoadError] = useState<string | null>(null);
+  const artistRequestIdRef = useRef(0);
   const [selectedAlbumTrack, setSelectedAlbumTrack] = useState<Track | null>(null);
 
   // 'Recently Played' tracking state (User-Scoped)
@@ -433,8 +467,14 @@ export default function App() {
     if (!userProfile?.id) {
       setFollowedArtistIds([]);
       setRecentlyPlayed([]);
+      setSelectedArtist(null);
+      setIsArtistLoading(false);
+      setArtistLoadError(null);
       return;
     }
+    setSelectedArtist(null);
+    setIsArtistLoading(false);
+    setArtistLoadError(null);
     try {
       const savedFollowed = localStorage.getItem(`vertex_followed_artists_${userProfile.id}`);
       if (savedFollowed) {
@@ -482,23 +522,7 @@ export default function App() {
       )
     ).then((results) => {
       if (cancelled) return;
-      const fetchedArtists: Artist[] = results
-        .filter(Boolean)
-        .map((u: any) => ({
-          id: u.id,
-          name: u.name,
-          avatarUrl: u.avatarUrl,
-          bannerUrl: u.bannerUrl,
-          bio: u.bio,
-          genre: u.genre,
-          monthlyListeners: u.monthlyListeners,
-          verified: u.verified,
-          instagramUrl: u.instagramUrl,
-          twitterUrl: u.twitterUrl,
-          websiteUrl: u.websiteUrl,
-          artistPickTrackId: u.artistPickTrackId,
-          artistPickComment: u.artistPickComment,
-        }));
+      const fetchedArtists: Artist[] = results.filter(Boolean).map(normalizePublicArtist);
       if (fetchedArtists.length) {
         setArtists((prev) => {
           const existingIds = new Set(prev.map((a) => a.id));
@@ -539,6 +563,9 @@ export default function App() {
         }
         if (data.playlists && Array.isArray(data.playlists)) {
           setPlaylists(data.playlists);
+        }
+        if (Array.isArray(data.artists)) {
+          setArtists(data.artists.map(normalizePublicArtist));
         }
         if (!includeChatAndUser) return;
         if (data.chatHistory && Array.isArray(data.chatHistory) && data.chatHistory.length > 0) {
@@ -1198,109 +1225,166 @@ export default function App() {
     }
   };
 
-  // Looks up a real artist by name on the server and merges the result into
-  // the local `artists` cache. Shared by handleSelectArtist (opening an
-  // artist page) and the "now playing" hydration effect below — both hit
-  // the exact same root problem: an artist who is a real registered user on
-  // a DIFFERENT account never makes it into this browser's local `artists`
-  // state on its own, so anything that reads from that cache (ArtistView,
-  // NowPlayingSidebar, the sidebar's Artists list) falls back to generic
-  // placeholder art instead of their real banner/avatar/bio.
-  const resolveArtistByNameFromServer = React.useCallback((name: string, onResolved?: (a: Artist) => void) => {
-    fetch(`/api/search?q=${encodeURIComponent(name)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!data?.artists?.length) return;
-        const exact =
-          data.artists.find((a: any) => a.name?.toLowerCase() === name.toLowerCase()) ||
-          data.artists[0];
-        if (!exact) return;
-        const realArtist: Artist = {
-          id: exact.id,
-          name: exact.name,
-          avatarUrl: exact.avatarUrl,
-          bannerUrl: exact.bannerUrl,
-          bio: exact.bio,
-          genre: exact.genre,
-          monthlyListeners: exact.monthlyListeners,
-          verified: exact.verified,
-          instagramUrl: exact.instagramUrl,
-          twitterUrl: exact.twitterUrl,
-          websiteUrl: exact.websiteUrl,
-          artistPickTrackId: exact.artistPickTrackId,
-          artistPickComment: exact.artistPickComment,
-        };
-        setArtists((prev) => {
-          const exists = prev.some((a) => a.id === realArtist.id);
-          return exists ? prev.map((a) => (a.id === realArtist.id ? realArtist : a)) : [realArtist, ...prev];
-        });
-        onResolved?.(realArtist);
-      })
-      .catch((e) => console.error('Error resolving artist profile from server:', e));
+  const upsertArtist = React.useCallback((artist: Artist) => {
+    setArtists((prev) => {
+      const exists = prev.some((item) => item.id === artist.id);
+      return exists
+        ? prev.map((item) => (item.id === artist.id ? { ...item, ...artist } : item))
+        : [artist, ...prev];
+    });
   }, []);
 
-  const handleSelectArtist = (artist: Artist | UserProfile | string) => {
-    if (typeof artist === 'string') {
-      // Check the logged-in user's own profile FIRST. It's the source of
-      // truth for their own artist page (freshly edited banner/avatar/bio
-      // live here immediately), whereas the `artists` directory can hold a
-      // stale cached copy synced from an earlier point in time. Without
-      // this order, opening your own artist page after an edit could show
-      // the old banner because the name lookup matched the stale entry.
-      if (
-        userProfile &&
-        userProfile.isArtist &&
-        (userProfile.displayName?.toLowerCase() === artist.toLowerCase() ||
-          userProfile.artistName?.toLowerCase() === artist.toLowerCase() ||
-          userProfile.username?.toLowerCase() === artist.toLowerCase())
-      ) {
-        setSelectedArtist(userProfile);
-        handleSelectTab('artist');
-        return;
+  const resolveArtistByIdFromServer = React.useCallback(
+    async (id: string): Promise<Artist | null> => {
+      if (!id || id === 'public' || id.startsWith('artist-')) return null;
+      try {
+        const res = await fetch(`/api/users/${encodeURIComponent(id)}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data?.success || !data.user) return null;
+        const artist = normalizePublicArtist(data.user);
+        upsertArtist(artist);
+        return artist;
+      } catch (error) {
+        console.error('Error resolving artist profile by id:', error);
+        return null;
       }
+    },
+    [upsertArtist]
+  );
 
-      const foundArtist = artists.find(
-        (a) => a.name.toLowerCase() === artist.toLowerCase() || a.id === artist
-      );
-      if (foundArtist) {
-        setSelectedArtist(foundArtist);
-        handleSelectTab('artist');
-        return;
+  const resolveArtistByNameFromServer = React.useCallback(
+    async (name: string): Promise<Artist | null> => {
+      const cleanName = name.trim();
+      if (!cleanName) return null;
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(cleanName)}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!Array.isArray(data?.artists) || data.artists.length === 0) return null;
+        const normalizedName = cleanName.toLocaleLowerCase();
+        const exact =
+          data.artists.find(
+            (candidate: any) =>
+              candidate?.name?.toLocaleLowerCase() === normalizedName ||
+              candidate?.username?.toLocaleLowerCase() === normalizedName ||
+              candidate?.displayName?.toLocaleLowerCase() === normalizedName
+          ) || data.artists[0];
+        if (!exact) return null;
+        const artist = normalizePublicArtist(exact);
+        upsertArtist(artist);
+        return artist;
+      } catch (error) {
+        console.error('Error resolving artist profile by name:', error);
+        return null;
       }
+    },
+    [upsertArtist]
+  );
 
-      // Not cached locally — this is exactly the "other account" case: the
-      // real artist (a registered user on another session) was never synced
-      // into this browser's local `artists` array. Ask the server for the
-      // real profile (banner, bio, stats, socials) instead of immediately
-      // making up a placeholder. Show a lightweight version right away so
-      // the tab switches instantly, then upgrade it once the real data
-      // arrives.
-      const placeholderId = `artist-${artist.toLowerCase().replace(/\s+/g, '-')}`;
-      const placeholderArtist: Artist = {
-        id: placeholderId,
-        name: artist,
-        avatarUrl:
-          'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
-        bio: `${artist} is a featured artist on VERTEX Music.`,
-        genre: 'Electronic',
-        monthlyListeners: '0 monthly listeners',
-        verified: true,
-      };
-      setSelectedArtist(placeholderArtist);
+  const handleSelectArtist = async (input: Artist | UserProfile | string) => {
+    const requestId = ++artistRequestIdRef.current;
+    setArtistLoadError(null);
+
+    const requestedName =
+      typeof input === 'string'
+        ? input.trim()
+        : 'email' in input
+          ? input.artistName || input.displayName || input.username
+          : input.name;
+
+    const sameNameBelongsToAnotherAccount = Boolean(
+      typeof input === 'string' &&
+        tracks.some(
+          (track) =>
+            track.artist.toLocaleLowerCase() === input.toLocaleLowerCase() &&
+            track.userId &&
+            track.userId !== 'public' &&
+            track.userId !== userProfile?.id
+        )
+    );
+    const isOwnProfile = Boolean(
+      userProfile &&
+        (typeof input !== 'string'
+          ? input.id === userProfile.id
+          : !sameNameBelongsToAnotherAccount &&
+            requestedName &&
+            [userProfile.artistName, userProfile.displayName, userProfile.username]
+              .filter(Boolean)
+              .some((name) => name!.toLocaleLowerCase() === requestedName.toLocaleLowerCase()))
+    );
+
+    if (isOwnProfile && userProfile) {
+      setSelectedArtist(userProfile);
+      setIsArtistLoading(false);
       handleSelectTab('artist');
-
-      resolveArtistByNameFromServer(artist, (realArtist) => {
-        // Only replace the on-screen artist if the user hasn't already
-        // navigated elsewhere while this request was in flight.
-        setSelectedArtist((current) =>
-          current && (current.id === placeholderId || current.id === realArtist.id) ? realArtist : current
-        );
-      });
       return;
-    } else {
-      setSelectedArtist(artist);
     }
+
     handleSelectTab('artist');
+
+    const objectCandidate = typeof input === 'string' ? null : input;
+    const cachedCandidate =
+      typeof input === 'string'
+        ? artists.find(
+            (artist) =>
+              artist.id === input ||
+              artist.name.toLocaleLowerCase() === input.toLocaleLowerCase() ||
+              artist.username?.toLocaleLowerCase() === input.toLocaleLowerCase()
+          ) || null
+        : null;
+    const candidate = objectCandidate || cachedCandidate;
+
+    if (candidate) {
+      const normalizedCandidate = 'email' in candidate ? candidate : normalizePublicArtist(candidate);
+      setSelectedArtist(normalizedCandidate);
+    } else {
+      setSelectedArtist(null);
+    }
+    setIsArtistLoading(true);
+
+    let resolved: Artist | null = null;
+
+    const candidateId = candidate?.id;
+    if (candidateId && candidateId !== 'public') {
+      resolved = await resolveArtistByIdFromServer(candidateId);
+    }
+
+    if (!resolved && typeof input === 'string') {
+      const matchingTrack = tracks.find(
+        (track) =>
+          track.artist.toLocaleLowerCase() === input.toLocaleLowerCase() &&
+          track.userId &&
+          track.userId !== 'public'
+      );
+      if (matchingTrack?.userId) {
+        resolved = await resolveArtistByIdFromServer(matchingTrack.userId);
+      }
+    }
+
+    if (!resolved && requestedName) {
+      resolved = await resolveArtistByNameFromServer(requestedName);
+    }
+
+    if (requestId !== artistRequestIdRef.current) return;
+
+    if (resolved) {
+      setSelectedArtist(resolved);
+      setArtistLoadError(
+        resolved.isSynthetic ? 'This catalog artist is not linked to a registered user profile.' : null
+      );
+    } else if (candidate) {
+      const normalizedCandidate = 'email' in candidate ? candidate : normalizePublicArtist(candidate);
+      setSelectedArtist(normalizedCandidate);
+      if (!('email' in normalizedCandidate) && normalizedCandidate.isSynthetic) {
+        setArtistLoadError('This catalog artist is not linked to a registered user profile.');
+      }
+    } else {
+      setSelectedArtist(null);
+      setArtistLoadError(`No registered artist profile was found for “${requestedName || 'this artist'}”.`);
+    }
+
+    setIsArtistLoading(false);
   };
 
   const handleSelectAlbum = (track: Track) => {
@@ -1325,8 +1409,19 @@ export default function App() {
           userProfile.artistName?.toLowerCase() === name.toLowerCase() ||
           userProfile.username?.toLowerCase() === name.toLowerCase()));
     if (alreadyKnown) return;
-    resolveArtistByNameFromServer(name);
-  }, [currentTrack?.artist, artists, userProfile, resolveArtistByNameFromServer]);
+    if (currentTrack.userId && currentTrack.userId !== 'public') {
+      resolveArtistByIdFromServer(currentTrack.userId);
+    } else {
+      resolveArtistByNameFromServer(name);
+    }
+  }, [
+    currentTrack?.artist,
+    currentTrack?.userId,
+    artists,
+    userProfile,
+    resolveArtistByIdFromServer,
+    resolveArtistByNameFromServer,
+  ]);
 
   const handleDeleteTrack = async (trackId: string) => {
     // Keep a snapshot so we can roll back the optimistic update if the server rejects the delete.
@@ -1391,68 +1486,74 @@ export default function App() {
   };
 
   const handleToggleFollowArtist = (artistToToggle: Artist | UserProfile) => {
-    const artistId = artistToToggle.id;
+    const normalizedTarget = normalizePublicArtist(artistToToggle);
+    if (normalizedTarget.isSynthetic || normalizedTarget.isUser !== true) {
+      showToast('This catalog artist is not linked to a followable user profile.');
+      return;
+    }
+    if (!userProfile || normalizedTarget.id === userProfile.id) return;
+
+    const artistId = normalizedTarget.id;
     const isCurrentlyFollowing = followedArtistIds.includes(artistId);
+    const delta = isCurrentlyFollowing ? -1 : 1;
 
     setFollowedArtistIds((prev) => {
       const next = isCurrentlyFollowing ? prev.filter((id) => id !== artistId) : [artistId, ...prev];
-      if (userProfile?.id) {
-        try {
-          localStorage.setItem(`vertex_followed_artists_${userProfile.id}`, JSON.stringify(next));
-        } catch {}
-      }
+      try {
+        localStorage.setItem(`vertex_followed_artists_${userProfile.id}`, JSON.stringify(next));
+      } catch {}
       return next;
     });
 
-    if (userProfile) {
-      const updatedProfile = {
-        ...userProfile,
-        stats: {
-          ...userProfile.stats,
-          followingCount: Math.max(0, (userProfile.stats?.followingCount || 0) + (isCurrentlyFollowing ? -1 : 1))
-        }
-      };
-      setUserProfile(updatedProfile);
-      fetch(`/api/users/${userProfile.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(updatedProfile)
-      }).catch(console.error);
+    const updatedProfile: UserProfile = {
+      ...userProfile,
+      stats: {
+        ...userProfile.stats,
+        followingCount: Math.max(0, (userProfile.stats?.followingCount || 0) + delta),
+      },
+    };
+    setUserProfile(updatedProfile);
+    fetch(`/api/users/${userProfile.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(updatedProfile),
+    }).catch((error) => console.error('Error updating following count:', error));
 
-      // Also bump the TARGET artist's followersCount server-side. This is
-      // what makes the follow visible on *their* profile — previously only
-      // our own followingCount ever changed, so every artist's follower
-      // count stayed frozen at 0 no matter who followed them.
-      if (artistId !== userProfile.id) {
-        fetch(`/api/users/${artistId}/follow`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-          body: JSON.stringify({ action: isCurrentlyFollowing ? 'unfollow' : 'follow' }),
-        }).catch((e) => console.error('Error updating target followers count:', e));
-      }
-    }
+    const optimisticTarget: Artist = {
+      ...normalizedTarget,
+      stats: {
+        hoursListened: normalizedTarget.stats?.hoursListened || 0,
+        secondsListened: normalizedTarget.stats?.secondsListened || 0,
+        tracksPlayed: normalizedTarget.stats?.tracksPlayed || 0,
+        topGenre: normalizedTarget.stats?.topGenre || 'N/A',
+        playlistsCreated: normalizedTarget.stats?.playlistsCreated || 0,
+        followingCount: normalizedTarget.stats?.followingCount || 0,
+        followersCount: Math.max(0, (normalizedTarget.stats?.followersCount || 0) + delta),
+      },
+    };
+    upsertArtist(optimisticTarget);
+    setSelectedArtist((current) =>
+      current && current.id === artistId ? { ...current, stats: optimisticTarget.stats! } : current
+    );
 
-    setArtists((prev) => {
-      const exists = prev.some((a) => a.id === artistId);
-      if (exists) return prev;
-      
-      const name = 'email' in artistToToggle 
-        ? ((artistToToggle as UserProfile).artistName || (artistToToggle as UserProfile).displayName || artistToToggle.username)
-        : (artistToToggle as Artist).name;
-      
-      const newArtist: Artist = 'email' in artistToToggle ? {
-        id: artistId,
-        name,
-        avatarUrl: (artistToToggle as UserProfile).avatarUrl,
-        bannerUrl: (artistToToggle as UserProfile).bannerUrl,
-        bio: (artistToToggle as UserProfile).artistBio || (artistToToggle as UserProfile).bio,
-        genre: 'Various',
-        monthlyListeners: (artistToToggle as UserProfile).monthlyListeners || '0',
-        verified: (artistToToggle as UserProfile).artistVerified !== false,
-      } : (artistToToggle as Artist);
-      
-      return [newArtist, ...prev];
-    });
+    fetch(`/api/users/${artistId}/follow`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ action: isCurrentlyFollowing ? 'unfollow' : 'follow' }),
+    })
+      .then(async (res) => ({ ok: res.ok, data: await res.json().catch(() => null) }))
+      .then(({ ok, data }) => {
+        if (!ok || typeof data?.followersCount !== 'number') return;
+        const confirmed: Artist = {
+          ...optimisticTarget,
+          stats: { ...optimisticTarget.stats!, followersCount: data.followersCount },
+        };
+        upsertArtist(confirmed);
+        setSelectedArtist((current) =>
+          current && current.id === artistId ? { ...current, stats: confirmed.stats! } : current
+        );
+      })
+      .catch((error) => console.error('Error updating target followers count:', error));
   };
 
   const handleUpdateArtist = async (updatedData: {
@@ -1469,112 +1570,64 @@ export default function App() {
     artistPickTrackId?: string;
     artistPickComment?: string;
   }) => {
-    const currentArtistObj = selectedArtist || userProfile;
-    if (!currentArtistObj) return;
-
-    const isUserProfile = 'email' in currentArtistObj || currentArtistObj.id === userProfile?.id;
-
-    if (isUserProfile && userProfile) {
-      const updatedProfile: UserProfile = {
-        ...userProfile,
-        bio: updatedData.artistBio,
-        artistBio: updatedData.artistBio,
-        avatarUrl: updatedData.avatarUrl,
-        bannerUrl: updatedData.bannerUrl,
-        favoriteGenres: userProfile.favoriteGenres ? [updatedData.genre, ...userProfile.favoriteGenres.filter((g) => g !== updatedData.genre)] : [updatedData.genre],
-        artistVerified: updatedData.artistVerified,
-        monthlyListeners: updatedData.monthlyListeners,
-        instagramUrl: updatedData.instagramUrl,
-        twitterUrl: updatedData.twitterUrl,
-        websiteUrl: updatedData.websiteUrl,
-        artistPickTrackId: updatedData.artistPickTrackId,
-        artistPickComment: updatedData.artistPickComment,
-      };
-
-      setUserProfile(updatedProfile);
-      setSelectedArtist(updatedProfile);
-
-      // Mirror the change into the artists directory too. Several screens
-      // (search results, sidebar, home recommendations) read artist data
-      // from `artists` rather than `userProfile`, and would otherwise keep
-      // showing whatever banner/avatar was cached there the first time
-      // this artist appeared.
-      setArtists((prev) => {
-        const mirrored: Artist = {
-          id: updatedProfile.id,
-          name: updatedProfile.artistName || updatedProfile.displayName,
-          avatarUrl: updatedProfile.avatarUrl,
-          bannerUrl: updatedProfile.bannerUrl,
-          bio: updatedProfile.artistBio || updatedProfile.bio,
-          genre: updatedData.genre,
-          monthlyListeners: updatedProfile.monthlyListeners || '0',
-          verified: updatedProfile.artistVerified !== false,
-          instagramUrl: updatedProfile.instagramUrl,
-          twitterUrl: updatedProfile.twitterUrl,
-          websiteUrl: updatedProfile.websiteUrl,
-          artistPickTrackId: updatedProfile.artistPickTrackId,
-          artistPickComment: updatedProfile.artistPickComment,
-        };
-        const exists = prev.some((a) => a.id === mirrored.id);
-        return exists ? prev.map((a) => (a.id === mirrored.id ? mirrored : a)) : [mirrored, ...prev];
-      });
-
-      try {
-        const res = await fetch(`/api/users/${userProfile.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-          body: JSON.stringify(updatedProfile),
-        });
-        const data = await res.json().catch(() => null);
-        if (res.ok && data?.success && data.user) {
-          // Swap in the server-persisted (short) URLs for any image that
-          // was uploaded as a raw base64 data: URL, so we're not holding a
-          // multi-MB string in React state / localStorage indefinitely.
-          const persisted: UserProfile = { ...updatedProfile, ...data.user };
-          setUserProfile(persisted);
-          setSelectedArtist(persisted);
-          setArtists((prev) =>
-            prev.map((a) =>
-              a.id === persisted.id
-                ? { ...a, avatarUrl: persisted.avatarUrl, bannerUrl: persisted.bannerUrl }
-                : a
-            )
-          );
-        } else if (!res.ok) {
-          showToast('Could not save artist profile changes — please try again.');
-        }
-      } catch (err) {
-        console.error('Failed to sync artist profile update with server:', err);
-        showToast('Could not save artist profile changes — please try again.');
-      }
-    } else {
-      const updatedArtist: Artist = {
-        id: currentArtistObj.id,
-        name: (currentArtistObj as Artist).name || updatedData.artistName,
-        avatarUrl: updatedData.avatarUrl,
-        bannerUrl: updatedData.bannerUrl,
-        bio: updatedData.artistBio,
-        genre: updatedData.genre,
-        verified: updatedData.artistVerified,
-        monthlyListeners: updatedData.monthlyListeners,
-        instagramUrl: updatedData.instagramUrl,
-        twitterUrl: updatedData.twitterUrl,
-        websiteUrl: updatedData.websiteUrl,
-        artistPickTrackId: updatedData.artistPickTrackId,
-        artistPickComment: updatedData.artistPickComment,
-      };
-
-      setSelectedArtist(updatedArtist);
-      setArtists((prev) =>
-        prev.map((a) => (a.id === updatedArtist.id ? updatedArtist : a))
-      );
+    if (!userProfile || selectedArtist?.id !== userProfile.id) {
+      showToast('Only the profile owner can edit this artist profile.');
+      return;
     }
 
-    showToast(`Artist profile saved successfully!`);
+    const genre = updatedData.genre.trim();
+    const updatedProfile: UserProfile = {
+      ...userProfile,
+      isArtist: true,
+      artistName: updatedData.artistName.trim() || userProfile.artistName || userProfile.displayName,
+      bio: updatedData.artistBio,
+      artistBio: updatedData.artistBio,
+      avatarUrl: updatedData.avatarUrl,
+      bannerUrl: updatedData.bannerUrl,
+      favoriteGenres: genre
+        ? [genre, ...(userProfile.favoriteGenres || []).filter((item) => item !== genre)]
+        : userProfile.favoriteGenres || [],
+      artistVerified: updatedData.artistVerified === true,
+      monthlyListeners: updatedData.monthlyListeners || '0 monthly listeners',
+      instagramUrl: updatedData.instagramUrl,
+      twitterUrl: updatedData.twitterUrl,
+      websiteUrl: updatedData.websiteUrl,
+      artistPickTrackId: updatedData.artistPickTrackId,
+      artistPickComment: updatedData.artistPickComment,
+    };
+
+    setUserProfile(updatedProfile);
+    setSelectedArtist(updatedProfile);
+    upsertArtist(normalizePublicArtist(updatedProfile));
+
+    try {
+      const res = await fetch(`/api/users/${userProfile.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify(updatedProfile),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success || !data.user) {
+        showToast(data?.error || 'Could not save artist profile changes — please try again.');
+        return;
+      }
+
+      const persisted: UserProfile = { ...updatedProfile, ...data.user };
+      setUserProfile(persisted);
+      setSelectedArtist(persisted);
+      upsertArtist(normalizePublicArtist(persisted));
+      showToast('Artist profile saved successfully!');
+    } catch (error) {
+      console.error('Failed to sync artist profile update with server:', error);
+      showToast('Could not save artist profile changes — please try again.');
+    }
   };
 
   const handleUpdateUserProfile = async (updated: UserProfile) => {
     setUserProfile(updated);
+    if (updated.isArtist) {
+      upsertArtist(normalizePublicArtist(updated));
+    }
     if (updated.id) {
       try {
         const res = await fetch(`/api/users/${updated.id}`, {
@@ -1586,7 +1639,9 @@ export default function App() {
         // Swap in the server-persisted (R2/CDN) URLs so we're not left holding
         // huge base64 data: URLs in state / localStorage after an image upload.
         if (data?.success && data.user) {
-          setUserProfile((prev) => (prev ? { ...prev, ...data.user } : data.user));
+          const persisted = { ...updated, ...data.user } as UserProfile;
+          setUserProfile(persisted);
+          if (persisted.isArtist) upsertArtist(normalizePublicArtist(persisted));
         }
       } catch (err) {
         console.error('Failed to update user profile on server:', err);
@@ -1851,7 +1906,7 @@ export default function App() {
             {activeTab === 'profile' && (
               <ProfileView
                 userProfile={userProfile}
-                onUpdateProfile={(updated) => setUserProfile(updated)}
+                onUpdateProfile={handleUpdateUserProfile}
                 tracks={tracks}
                 playlists={playlists}
                 recentlyPlayed={recentlyPlayed}
@@ -1867,7 +1922,7 @@ export default function App() {
 
             {activeTab === 'artist' && (
               <ArtistView
-                artist={selectedArtist || userProfile}
+                artist={selectedArtist}
                 allTracks={tracks}
                 currentTrackId={currentTrack?.id}
                 isPlaying={isPlaying}
@@ -1880,8 +1935,10 @@ export default function App() {
                 onGoBack={handleGoBack}
                 userProfile={userProfile}
                 onUpdateArtist={handleUpdateArtist}
-                isFollowing={followedArtistIds.includes((selectedArtist || userProfile)?.id || '')}
+                isFollowing={followedArtistIds.includes(selectedArtist?.id || '')}
                 onToggleFollow={handleToggleFollowArtist}
+                isLoading={isArtistLoading}
+                loadError={artistLoadError}
               />
             )}
 

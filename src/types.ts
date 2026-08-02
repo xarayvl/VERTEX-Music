@@ -1,5 +1,15 @@
 export type TabType = 'home' | 'browse' | 'search' | 'library' | 'chat' | 'playlist' | 'profile' | 'artist' | 'album';
 
+export interface UserStats {
+  hoursListened: number;
+  secondsListened?: number;
+  tracksPlayed: number;
+  topGenre: string;
+  playlistsCreated: number;
+  followersCount?: number;
+  followingCount?: number;
+}
+
 export interface UserProfile {
   id: string;
   displayName: string;
@@ -21,15 +31,7 @@ export interface UserProfile {
   websiteUrl?: string;
   artistPickTrackId?: string;
   artistPickComment?: string;
-  stats: {
-    hoursListened: number;
-    secondsListened?: number;
-    tracksPlayed: number;
-    topGenre: string;
-    playlistsCreated: number;
-    followersCount?: number;
-    followingCount?: number;
-  };
+  stats: UserStats;
   settings?: {
     losslessAudio: boolean;
     autoplay: boolean;
@@ -89,12 +91,17 @@ export interface Playlist {
 export interface Artist {
   id: string;
   name: string;
+  username?: string;
+  displayName?: string;
   avatarUrl: string;
   bannerUrl?: string;
   bio?: string;
   monthlyListeners: string;
   verified: boolean;
   genre: string;
+  isUser?: boolean;
+  isSynthetic?: boolean;
+  stats?: UserStats;
   instagramUrl?: string;
   twitterUrl?: string;
   websiteUrl?: string;

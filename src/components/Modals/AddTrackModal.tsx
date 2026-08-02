@@ -25,7 +25,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   isOpen,
   onClose,
   userId,
-  userProfileName = 'Alex Rivers',
+  userProfileName,
   existingAlbums,
   tracks,
   onTrackAdded,
@@ -97,9 +97,13 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     setError(null);
     setIsGeneratingAiMusic(true);
     try {
+      const token = localStorage.getItem('vertex_session_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch('/api/generate-music', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           prompt: aiPrompt.trim(),
           model: aiModel,
@@ -323,6 +327,15 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     e.preventDefault();
     setError(null);
 
+    if (!userId) {
+      setError('You must be signed in before uploading music.');
+      return;
+    }
+    if (!userProfileName?.trim()) {
+      setError('Your artist name is missing. Add an artist name to your profile before uploading music.');
+      return;
+    }
+
     const isMultiTrackRelease = releaseType !== 'Single';
 
     if (isMultiTrackRelease) {
@@ -370,7 +383,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
     const finalCover = coverUrl.trim() || presetCovers[genre] || presetCovers.Synthwave;
     const finalAudioUrl = audioUrl.trim();
-    const artistName = audioSourceType === 'ai-gen' ? 'VERTEX AI DJ (Lyria)' : (userProfileName || 'Alex Rivers');
+    const artistName = userProfileName.trim();
     const finalAlbumName = album === '__NEW__' ? (customAlbumName.trim() || 'Single') : album;
 
     try {
@@ -439,7 +452,13 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     };
 
     const finalCover = coverUrl.trim() || presetCovers[genre] || presetCovers.Synthwave;
-    const artistName = userProfileName || 'Alex Rivers';
+    const artistName = userProfileName?.trim();
+    if (!userId || !artistName) {
+      setError('Your signed-in artist profile is required before uploading an album.');
+      setLoading(false);
+      setUploadProgress(null);
+      return;
+    }
     const finalAlbumName = (album === '__NEW__' ? (customAlbumName.trim() || 'Untitled Release') : album).trim() || 'Untitled Release';
     const sharedReleaseId = `rel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 

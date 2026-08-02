@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Search, SlidersHorizontal, Bot, Crown, User, Settings, ExternalLink, LogOut, Check, ChevronDown, Sparkles } from 'lucide-react';
 import { TabType, UserProfile } from '../../types';
+import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
 interface SpotifyTopHeaderProps {
   activeTab: TabType;
@@ -165,8 +166,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
               <div className="w-7 h-7 rounded-full overflow-hidden border border-[#D946EF]/60 relative flex-shrink-0">
                 <img
                   src={
-                    userProfile.avatarUrl ||
-                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'
+                    userProfile.avatarUrl || DEFAULT_AVATAR_URL
                   }
                   alt={userProfile.displayName || 'User Avatar'}
                   referrerPolicy="no-referrer"

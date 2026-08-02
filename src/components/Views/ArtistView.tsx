@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Artist, UserProfile, Track, Playlist } from '../../types';
 import { EditArtistModal } from '../Modals/EditArtistModal';
+import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
 interface ArtistViewProps {
   artist: Artist | UserProfile | null;
@@ -50,6 +51,8 @@ interface ArtistViewProps {
   onShufflePlay?: (tracks: Track[]) => void;
   isFollowing?: boolean;
   onToggleFollow?: (artist: Artist | UserProfile) => void;
+  isLoading?: boolean;
+  loadError?: string | null;
 }
 
 export const ArtistView: React.FC<ArtistViewProps> = ({
@@ -67,17 +70,38 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   onShufflePlay,
   isFollowing = false,
   onToggleFollow,
+  isLoading = false,
+  loadError = null,
 }) => {
   const [discographyFilter, setDiscographyFilter] = useState<'popular' | 'albums' | 'singles'>('popular');
   const [showAllPopular, setShowAllPopular] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
+  if (isLoading) {
+    return (
+      <div className="space-y-8 pb-24 animate-pulse" aria-label="Loading artist profile">
+        <div className="h-[380px] rounded-2xl bg-gradient-to-br from-zinc-800 via-zinc-900 to-black border border-white/10 p-10 flex flex-col justify-end gap-4">
+          <div className="h-4 w-32 rounded bg-white/10" />
+          <div className="h-16 w-2/3 rounded-xl bg-white/10" />
+          <div className="h-4 w-56 rounded bg-white/10" />
+        </div>
+        <div className="h-16 w-64 rounded-full bg-white/10" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 h-72 rounded-2xl bg-white/5 border border-white/5" />
+          <div className="h-72 rounded-2xl bg-white/5 border border-white/5" />
+        </div>
+      </div>
+    );
+  }
+
   if (!artist) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-8 text-zinc-400">
         <User className="w-12 h-12 mb-3 text-zinc-600" />
-        <p className="text-base font-bold text-white">No Artist Selected</p>
-        <p className="text-xs text-zinc-500 mt-1">Select an artist from Search, Home, or Profile to view their Spotify page.</p>
+        <p className="text-base font-bold text-white">Artist profile unavailable</p>
+        <p className="text-xs text-zinc-500 mt-1">
+          {loadError || 'Select an artist from Search, Home, or Profile to view their page.'}
+        </p>
         {onGoBack && (
           <button
             onClick={onGoBack}
@@ -98,24 +122,31 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
     artistName = (artist as Artist).name;
   } else {
     const p = artist as UserProfile;
-    artistName = p.artistName || p.displayName || p.username || (p.email ? p.email.split('@')[0] : 'Unknown Artist');
+    artistName = p.artistName || p.displayName || p.username || (p.email ? p.email.split('@')[0] : 'Artist');
   }
 
   const avatarUrl = isUserProfile
-    ? (artist as UserProfile).avatarUrl
-    : (artist as Artist).avatarUrl;
+    ? ((artist as UserProfile).avatarUrl || DEFAULT_AVATAR_URL)
+    : ((artist as Artist).avatarUrl || DEFAULT_AVATAR_URL);
 
   const bannerUrl = isUserProfile
-    ? ((artist as UserProfile).bannerUrl || avatarUrl)
-    : ((artist as Artist).bannerUrl || avatarUrl);
+    ? ((artist as UserProfile).bannerUrl || '')
+    : ((artist as Artist).bannerUrl || '');
 
   const bio = isUserProfile
-    ? (artist as UserProfile).artistBio || (artist as UserProfile).bio || `${artistName} is an active creator and artist on VERTEX Music.`
-    : (artist as Artist).bio || `${artistName} is a verified artist producing high-fidelity music for VERTEX Music streaming listeners worldwide.`;
+    ? (artist as UserProfile).artistBio || (artist as UserProfile).bio || 'No artist biography has been added yet.'
+    : (artist as Artist).bio || ((artist as Artist).isSynthetic
+      ? 'This catalog artist is not linked to a registered user profile.'
+      : 'No artist biography has been added yet.');
 
   const isVerified = isUserProfile
-    ? (artist as UserProfile).artistVerified !== false
-    : (artist as Artist).verified !== false;
+    ? (artist as UserProfile).artistVerified === true
+    : (artist as Artist).verified === true;
+
+  const profileStats = artist.stats;
+  const followersCount = profileStats?.followersCount || 0;
+  const followingCount = profileStats?.followingCount || 0;
+  const isSyntheticArtist = !isUserProfile && (artist as Artist).isSynthetic === true;
 
   // NOTE: ownership must be decided by id only. An earlier version also
   // matched by comparing artistName to the logged-in user's displayName,
@@ -157,6 +188,11 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
 
   return (
     <div className="space-y-8 pb-24 select-none animate-in fade-in duration-300">
+      {loadError && (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
+          {loadError}
+        </div>
+      )}
       {/* Back Button Header */}
       {onGoBack && (
         <button
@@ -169,14 +205,14 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
       )}
 
       {/* SPOTIFY HERO ARTIST BANNER */}
-      <div className="relative rounded-2xl overflow-hidden min-h-[320px] sm:min-h-[380px] flex flex-col justify-end p-6 sm:p-10 border border-white/10 shadow-2xl group bg-zinc-900">
+      <div className="relative rounded-2xl overflow-hidden min-h-[320px] sm:min-h-[380px] flex flex-col justify-end p-6 sm:p-10 border border-white/10 shadow-2xl group bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827]">
         {/* Background Image & Dynamic Gradient Overlay */}
         <div
           className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-          style={{
+          style={bannerUrl ? {
             backgroundImage: `url(${bannerUrl})`,
             filter: 'brightness(0.65) saturate(1.2)',
-          }}
+          } : undefined}
         />
         <div className="absolute inset-0 z-10 bg-gradient-to-t from-[#121212] via-[#121212]/60 to-transparent" />
 
@@ -198,8 +234,12 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
           </h1>
 
           {/* Monthly Listeners Counter */}
-          <p className="text-xs sm:text-sm font-semibold text-zinc-200 drop-shadow flex items-center gap-2">
+          <p className="text-xs sm:text-sm font-semibold text-zinc-200 drop-shadow flex flex-wrap items-center gap-2">
             <span>{monthlyListeners}</span>
+            <span className="text-zinc-400">•</span>
+            <span>{followersCount.toLocaleString()} followers</span>
+            <span className="text-zinc-400">•</span>
+            <span>{followingCount.toLocaleString()} following</span>
             {isUserProfile && (
               <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white text-[10px] font-mono uppercase font-bold">
                 User & Artist Profile
@@ -225,18 +265,20 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         </button>
 
         {/* Follow / Following Button */}
-        <button
-          onClick={() => {
-            if (onToggleFollow && artist) onToggleFollow(artist);
-          }}
-          className={`px-6 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider transition-all hover:scale-105 active:scale-95 ${
-            isFollowing
-              ? 'bg-transparent border border-white/40 text-white hover:border-white'
-              : 'bg-transparent border border-[#D946EF] text-[#D946EF] hover:bg-[#D946EF]/10'
-          }`}
-        >
-          {isFollowing ? 'Following' : 'Follow'}
-        </button>
+        {!isOwner && !isSyntheticArtist && (
+          <button
+            onClick={() => {
+              if (onToggleFollow && artist) onToggleFollow(artist);
+            }}
+            className={`px-6 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider transition-all hover:scale-105 active:scale-95 ${
+              isFollowing
+                ? 'bg-transparent border border-white/40 text-white hover:border-white'
+                : 'bg-transparent border border-[#D946EF] text-[#D946EF] hover:bg-[#D946EF]/10'
+            }`}
+          >
+            {isFollowing ? 'Following' : 'Follow'}
+          </button>
+        )}
 
         {/* Edit Artist Profile Button (Owner Only) */}
         {isOwner && (
@@ -570,9 +612,16 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
-              <span className="px-3 py-1 rounded-full bg-white/10 text-white text-xs font-bold border border-white/10">
-                Verified Artist
-              </span>
+              {isVerified && (
+                <span className="px-3 py-1 rounded-full bg-white/10 text-white text-xs font-bold border border-white/10">
+                  Verified Artist
+                </span>
+              )}
+              {isSyntheticArtist && (
+                <span className="px-3 py-1 rounded-full bg-amber-400/10 text-amber-200 text-xs font-bold border border-amber-400/20">
+                  Unclaimed Catalog Artist
+                </span>
+              )}
               <span className="px-3 py-1 rounded-full bg-[#D946EF]/20 text-[#D946EF] text-xs font-bold border border-[#D946EF]/30">
                 Studio FLAC Audio
               </span>

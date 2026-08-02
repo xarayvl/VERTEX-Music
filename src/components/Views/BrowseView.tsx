@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Disc, Play, Heart, Wand2 } from 'lucide-react';
 import { Track, Playlist, Artist } from '../../types';
-import { BROWSE_CATEGORIES } from '../../data/mockData';
+import { BROWSE_CATEGORIES } from '../../data/browseCategories';
 
 interface BrowseViewProps {
   tracks: Track[];

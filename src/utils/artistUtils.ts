@@ -71,22 +71,15 @@ export function getArtistStats(artist: Artist | UserProfile | null | undefined, 
     artistName = (artist as Artist).name;
   } else {
     const p = artist as UserProfile;
-    artistName = p.artistName || p.displayName || p.username || (p.email ? p.email.split('@')[0] : 'Unknown Artist');
+    artistName = p.artistName || p.displayName || p.username || (p.email ? p.email.split('@')[0] : 'Artist');
   }
 
   const artistTracks = allTracks.filter((t) => {
-    if (isUserProfile) {
-      if (t.userId) {
-        return t.userId === artist.id;
-      }
-      return Boolean(artistName && t.artist && t.artist.toLowerCase() === artistName.toLowerCase());
-    } else {
-      if (t.userId) {
-        if (t.userId === artist.id) return true;
-        return false;
-      }
-      return Boolean(artistName && t.artist && t.artist.toLowerCase() === artistName.toLowerCase());
+    const isRegisteredUserArtist = isUserProfile || (!isUserProfile && (artist as Artist).isUser === true);
+    if (isRegisteredUserArtist && t.userId && t.userId !== 'public') {
+      return t.userId === artist.id;
     }
+    return Boolean(artistName && t.artist && t.artist.toLowerCase() === artistName.toLowerCase());
   });
 
   const totalArtistPlays = artistTracks.reduce(
@@ -100,7 +93,12 @@ export function getArtistStats(artist: Artist | UserProfile | null | undefined, 
     ? (artist as UserProfile).monthlyListeners
     : (artist as Artist).monthlyListeners;
 
-  const monthlyListenersStr = rawMonthlyListeners || (totalArtistPlays > 0 ? calculatedListenersStr : '0 monthly listeners');
+  const rawListenerCount = Number.parseInt(String(rawMonthlyListeners || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const monthlyListenersStr = rawListenerCount > 0
+    ? String(rawMonthlyListeners)
+    : totalArtistPlays > 0
+      ? calculatedListenersStr
+      : '0 monthly listeners';
 
   return {
     totalPlays: totalArtistPlays,

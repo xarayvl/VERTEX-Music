@@ -3,6 +3,7 @@ import { X, Heart, Plus, ShieldCheck, ExternalLink, FolderPlus, Music, Check } f
 import { Track, Artist, Playlist, UserProfile } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { getArtistStats } from '../../utils/artistUtils';
+import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
 interface NowPlayingSidebarProps {
   currentTrack: Track | null;
@@ -14,7 +15,7 @@ interface NowPlayingSidebarProps {
   queue?: Track[];
   onClose: () => void;
   onToggleLike: (trackId: string) => void;
-  onSelectArtist: (artistName: string) => void;
+  onSelectArtist: (artist: Artist | UserProfile | string) => void;
   onAddToPlaylist: (playlistId: string, trackId: string) => void;
   onOpenNewPlaylistModal: () => void;
   showToast?: (msg: string) => void;
@@ -81,13 +82,17 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
   if (
     userProfile &&
     userProfile.isArtist &&
-    (userProfile.displayName?.toLowerCase() === currentTrack.artist.toLowerCase() ||
+    ((currentTrack.userId && currentTrack.userId === userProfile.id) ||
+      userProfile.displayName?.toLowerCase() === currentTrack.artist.toLowerCase() ||
       userProfile.artistName?.toLowerCase() === currentTrack.artist.toLowerCase() ||
       userProfile.username?.toLowerCase() === currentTrack.artist.toLowerCase())
   ) {
     displayObj = userProfile;
   } else {
-    displayObj = artists.find((a) => a.name.toLowerCase() === currentTrack.artist.toLowerCase()) || null;
+    displayObj =
+      artists.find((a) => currentTrack.userId && currentTrack.userId !== 'public' && a.id === currentTrack.userId) ||
+      artists.find((a) => a.name.toLowerCase() === currentTrack.artist.toLowerCase()) ||
+      null;
   }
 
   const stats = getArtistStats(displayObj, allTracks);
@@ -95,7 +100,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
   const finalDisplayName = displayObj ? stats.artistName : currentTrack.artist;
 
   const isUserProfileDisplay = !!displayObj && 'email' in displayObj;
-  const artistAvatar = displayObj?.avatarUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80';
+  const artistAvatar = displayObj?.avatarUrl || DEFAULT_AVATAR_URL;
   const artistBanner = displayObj?.bannerUrl || currentTrack.coverUrl;
 
   // Prefer the artist-specific bio over a generic listener bio when the
@@ -169,10 +174,10 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
           {/* Track Title and Artist Details */}
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-extrabold text-white truncate leading-tight tracking-tight hover:text-[#D946EF] cursor-pointer" onClick={() => onSelectArtist(finalDisplayName)}>
+              <h2 className="text-lg font-extrabold text-white truncate leading-tight tracking-tight hover:text-[#D946EF] cursor-pointer" onClick={() => onSelectArtist(displayObj || finalDisplayName)}>
                 {currentTrack.title}
               </h2>
-              <p className="text-sm text-zinc-400 truncate mt-1 hover:text-[#D946EF] hover:underline cursor-pointer" onClick={() => onSelectArtist(finalDisplayName)}>
+              <p className="text-sm text-zinc-400 truncate mt-1 hover:text-[#D946EF] hover:underline cursor-pointer" onClick={() => onSelectArtist(displayObj || finalDisplayName)}>
                 {finalDisplayName}
               </p>
             </div>

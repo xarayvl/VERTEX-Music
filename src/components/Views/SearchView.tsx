@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, Play, Heart, ShieldCheck, User as UserIcon, Disc, ArrowRight } from 'lucide-react';
 import { Track, Playlist, Artist, UserProfile } from '../../types';
+import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
 interface SearchViewProps {
   tracks: Track[];
@@ -65,7 +66,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
     'Aetheria',
     'Cyberpunk 2077',
     'Tokyo Lofi',
-    'Alex Rivers',
+    'Electronic',
     'Chiptune',
   ];
 
@@ -124,10 +125,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
         displayName: userProfile.displayName,
         avatarUrl: userProfile.avatarUrl,
         bannerUrl: userProfile.bannerUrl,
-        bio: userProfile.bio,
-        genre: userProfile.favoriteGenres?.[0] || 'Electronic',
+        bio: userProfile.artistBio || userProfile.bio,
+        genre: userProfile.favoriteGenres?.[0] || '',
         monthlyListeners: userProfile.monthlyListeners || '0 monthly listeners',
-        verified: userProfile.isArtist || userProfile.artistVerified || false,
+        verified: userProfile.artistVerified === true,
+        stats: userProfile.stats,
         instagramUrl: userProfile.instagramUrl,
         twitterUrl: userProfile.twitterUrl,
         websiteUrl: userProfile.websiteUrl,
@@ -142,7 +144,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
         a.name.toLowerCase().includes(qLower) ||
         (a.genre && a.genre.toLowerCase().includes(qLower))
     )
-    .map((a) => ({ ...a, isUser: false }));
+    .map((a) => ({ ...a, isUser: a.isUser ?? false }));
 
   const matchedArtists: SearchArtistItem[] = apiResults?.artists
     ? Array.from(
@@ -532,7 +534,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                           className="w-20 h-20 rounded-full object-cover shadow-lg border-2 border-white/10 group-hover:scale-105 group-hover:border-[#D946EF] transition-all"
                           onError={(e) => {
                             (e.target as HTMLImageElement).src =
-                              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80';
+                              DEFAULT_AVATAR_URL;
                           }}
                         />
                         {art.verified && (
@@ -551,7 +553,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                       </p>
 
                       <span className="mt-2 px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-white/5 text-zinc-300 group-hover:bg-[#D946EF]/20 group-hover:text-[#D946EF] transition-colors">
-                        {art.isUser ? 'User Profile' : 'Verified Artist'}
+                        {art.isUser ? 'User Profile' : art.verified ? 'Verified Artist' : 'Catalog Artist'}
                       </span>
                     </div>
                   ))}

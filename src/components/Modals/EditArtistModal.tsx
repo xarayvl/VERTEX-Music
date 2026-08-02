@@ -18,6 +18,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { Artist, UserProfile, Track } from '../../types';
+import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
 interface EditArtistModalProps {
   isOpen: boolean;
@@ -56,24 +57,24 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
     : (artist as Artist).name;
 
   const initialAvatar = isUserProfile
-    ? (artist as UserProfile).avatarUrl
-    : (artist as Artist).avatarUrl;
+    ? ((artist as UserProfile).avatarUrl || DEFAULT_AVATAR_URL)
+    : ((artist as Artist).avatarUrl || DEFAULT_AVATAR_URL);
 
-  const initialBanner = (isUserProfile && (artist as UserProfile).bannerUrl)
-    ? (artist as UserProfile).bannerUrl!
-    : (artist as Artist).bannerUrl || initialAvatar || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80';
+  const initialBanner = isUserProfile
+    ? ((artist as UserProfile).bannerUrl || '')
+    : ((artist as Artist).bannerUrl || '');
 
   const initialBio = isUserProfile
     ? (artist as UserProfile).artistBio || (artist as UserProfile).bio || ''
     : (artist as Artist).bio || '';
 
   const initialVerified = isUserProfile
-    ? (artist as UserProfile).artistVerified !== false
-    : (artist as Artist).verified !== false;
+    ? (artist as UserProfile).artistVerified === true
+    : (artist as Artist).verified === true;
 
   const initialGenre = isUserProfile
-    ? (artist as UserProfile).favoriteGenres?.[0] || 'Synthwave / Electronic'
-    : (artist as Artist).genre || 'Synthwave / Electronic';
+    ? (artist as UserProfile).favoriteGenres?.[0] || ''
+    : (artist as Artist).genre || '';
 
   // Get unified stats from global helper
   const { totalPlays: totalCalculatedPlays } = getArtistStats(artist, artistTracks);
@@ -93,7 +94,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
   const [websiteUrl, setWebsiteUrl] = useState(artist.websiteUrl || '');
 
   const [artistPickTrackId, setArtistPickTrackId] = useState(artist.artistPickTrackId || (artistTracks[0]?.id || ''));
-  const [artistPickComment, setArtistPickComment] = useState(artist.artistPickComment || 'Check out my featured release!');
+  const [artistPickComment, setArtistPickComment] = useState(artist.artistPickComment || '');
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -108,7 +109,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
       setTwitterUrl(artist.twitterUrl || '');
       setWebsiteUrl(artist.websiteUrl || '');
       setArtistPickTrackId(artist.artistPickTrackId || (artistTracks[0]?.id || ''));
-      setArtistPickComment(artist.artistPickComment || 'Check out my featured release!');
+      setArtistPickComment(artist.artistPickComment || '');
     }
   }, [artist]);
 
@@ -159,8 +160,8 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
       artistName: initialName, // Default account username, read-only
       artistBio: artistBio.trim(),
       avatarUrl: avatarUrl.trim() || initialAvatar,
-      bannerUrl: bannerUrl.trim() || initialBanner,
-      genre: genre.trim() || 'Electronic',
+      bannerUrl: bannerUrl.trim(),
+      genre: genre.trim(),
       artistVerified,
       monthlyListeners: finalListeners,
       instagramUrl: instagramUrl.trim(),
@@ -247,8 +248,8 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
 
             {/* Live Banner Preview */}
             <div
-              className="relative h-36 rounded-xl bg-cover bg-center overflow-hidden border border-white/10 flex items-end p-3 group shadow-inner"
-              style={{ backgroundImage: `url(${bannerUrl})` }}
+              className="relative h-36 rounded-xl bg-cover bg-center overflow-hidden border border-white/10 flex items-end p-3 group shadow-inner bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827]"
+              style={bannerUrl ? { backgroundImage: `url(${bannerUrl})` } : undefined}
             >
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
               <div className="relative z-10 flex items-center space-x-3">

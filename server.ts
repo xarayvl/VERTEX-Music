@@ -11,30 +11,52 @@ import { readDB, writeDB, readDBAsync, writeDBAsync, initUpstashDB, isUpstashCon
 
 dotenv.config();
 
+const DEFAULT_AVATAR_URL =
+  "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22512%22%20height%3D%22512%22%20viewBox%3D%220%200%20512%20512%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23312e81%22%2F%3E%3Cstop%20offset%3D%220.55%22%20stop-color%3D%22%237e22ce%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23db2777%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%22512%22%20height%3D%22512%22%20rx%3D%2296%22%20fill%3D%22url(%23g)%22%2F%3E%3Ccircle%20cx%3D%22256%22%20cy%3D%22204%22%20r%3D%2278%22%20fill%3D%22%23fff%22%20fill-opacity%3D%220.9%22%2F%3E%3Cpath%20d%3D%22M118%20430c17-88%2069-132%20138-132s121%2044%20138%20132%22%20fill%3D%22%23fff%22%20fill-opacity%3D%220.9%22%2F%3E%3C%2Fsvg%3E";
+
+const emptyStats = () => ({
+  hoursListened: 0,
+  secondsListened: 0,
+  tracksPlayed: 0,
+  topGenre: "N/A",
+  playlistsCreated: 0,
+  followersCount: 0,
+  followingCount: 0,
+});
+
 // Shared shape-builder for turning a stored user record into the public
 // "artist card" shape the client renders in Search / Sidebar / ArtistView.
 // IMPORTANT: keep this in sync with the `Artist`/`UserProfile` fields that
 // ArtistView.tsx actually reads (bannerUrl, social links, artist pick) —
 // leaving one out here silently makes it look like the value doesn't exist
 // for every OTHER user viewing this profile, even though it's saved fine.
-function toPublicArtistCard(u: UserRecord) {
+function toPublicArtistCard(u: UserRecord, tracks: TrackRecord[] = []) {
+  const artistTracks = tracks.filter((track) => track.userId === u.id);
+  const totalPlays = artistTracks.reduce((sum, track) => sum + (Number.parseInt(track.plays || "0", 10) || 0), 0);
+  const storedMonthlyListeners = (u.monthlyListeners || "").trim();
+  const monthlyListeners = storedMonthlyListeners && !/^0\s+monthly listeners$/i.test(storedMonthlyListeners)
+    ? storedMonthlyListeners
+    : `${totalPlays.toLocaleString()} monthly listeners`;
+
   return {
     id: u.id,
     name: u.artistName || u.displayName || u.username,
     username: u.username,
     displayName: u.displayName,
-    avatarUrl: u.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80",
-    bannerUrl: u.bannerUrl || u.avatarUrl,
-    bio: u.bio || u.artistBio || "Music listener & creator on VERTEX Music.",
-    genre: u.favoriteGenres?.[0] || "Electronic",
-    monthlyListeners: u.monthlyListeners || "0 monthly listeners",
-    verified: u.isArtist || u.artistVerified || false,
+    avatarUrl: u.avatarUrl || DEFAULT_AVATAR_URL,
+    bannerUrl: u.bannerUrl || "",
+    bio: u.artistBio || u.bio || "",
+    genre: u.favoriteGenres?.[0] || "",
+    monthlyListeners,
+    verified: u.artistVerified === true,
+    stats: { ...emptyStats(), ...(u.stats || {}) },
     instagramUrl: u.instagramUrl,
     twitterUrl: u.twitterUrl,
     websiteUrl: u.websiteUrl,
     artistPickTrackId: u.artistPickTrackId,
     artistPickComment: u.artistPickComment,
     isUser: true,
+    isSynthetic: false,
   };
 }
 
@@ -408,9 +430,9 @@ async function startServer() {
         email: email.trim().toLowerCase(),
         password: hashedPassword,
         displayName: (displayName || username).trim(),
-        avatarUrl: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80`,
-        bio: "Music listener on VERTEX Music.",
-        favoriteGenres: ["Electronic", "Synthwave", "Pop"],
+        avatarUrl: DEFAULT_AVATAR_URL,
+        bio: "",
+        favoriteGenres: [],
         createdAt: new Date().toISOString(),
         stats: {
           hoursListened: 0,
@@ -518,6 +540,9 @@ async function startServer() {
       return res.json({
         user: currentUser,
         tracks: db.tracks,
+        artists: db.users
+          .filter((user) => user.isArtist || db.tracks.some((track) => track.userId === user.id))
+          .map((user) => toPublicArtistCard(user, db.tracks)),
         playlists: userPlaylists,
         likedTrackIds,
         chatHistory: userChatHistory,
@@ -575,7 +600,7 @@ async function startServer() {
         return res.json({
           query: "",
           tracks: db.tracks.slice(0, 10),
-          artists: db.users.map((u) => toPublicArtistCard(u)),
+          artists: db.users.map((u) => toPublicArtistCard(u, db.tracks)),
           playlists: db.playlists.slice(0, 10),
           topResult: null,
         });
@@ -600,36 +625,51 @@ async function startServer() {
             (u.email && u.email.toLowerCase().includes(query)) ||
             (u.bio && u.bio.toLowerCase().includes(query))
         )
-        .map((u) => toPublicArtistCard(u));
+        .map((u) => toPublicArtistCard(u, db.tracks));
 
       // Extract unique artists from uploaded tracks
-      const trackArtistNames = Array.from(new Set(db.tracks.map((t) => t.artist)));
+      const trackArtistNames = Array.from(new Set(db.tracks.map((t) => t.artist).filter(Boolean)));
       const matchedTrackArtists = trackArtistNames
         .filter((name) => name.toLowerCase().includes(query))
         .filter((name) => !matchedUsers.some((u) => u.name.toLowerCase() === name.toLowerCase()))
         .map((name) => {
-          const userMatch = db.users.find(u => u.displayName?.toLowerCase() === name.toLowerCase() || u.artistName?.toLowerCase() === name.toLowerCase());
+          const sampleTrack = db.tracks.find((t) => t.artist === name);
+          const userMatch = db.users.find(
+            (u) =>
+              (sampleTrack?.userId && sampleTrack.userId !== "public" && u.id === sampleTrack.userId) ||
+              u.displayName?.toLowerCase() === name.toLowerCase() ||
+              u.artistName?.toLowerCase() === name.toLowerCase()
+          );
           
           if (userMatch) {
-            return toPublicArtistCard(userMatch);
+            return toPublicArtistCard(userMatch, db.tracks);
           }
 
-          const sampleTrack = db.tracks.find((t) => t.artist === name);
+          const matchingTracks = db.tracks.filter((track) => track.artist.toLowerCase() === name.toLowerCase());
+          const totalPlays = matchingTracks.reduce(
+            (sum, track) => sum + (Number.parseInt(track.plays || "0", 10) || 0),
+            0
+          );
           return {
             id: `artist-${name.toLowerCase().replace(/\s+/g, "-")}`,
             name: name,
             username: name.toLowerCase().replace(/\s+/g, "_"),
             displayName: name,
-            avatarUrl: sampleTrack?.coverUrl || "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80",
-            bio: `${name} is a featured artist on VERTEX Music.`,
-            genre: sampleTrack?.genre || "Electronic",
-            monthlyListeners: "0 monthly listeners",
-            verified: true,
+            avatarUrl: sampleTrack?.coverUrl || DEFAULT_AVATAR_URL,
+            bannerUrl: "",
+            bio: "",
+            genre: sampleTrack?.genre || "",
+            monthlyListeners: `${totalPlays.toLocaleString()} monthly listeners`,
+            verified: false,
+            stats: emptyStats(),
             isUser: false,
+            isSynthetic: true,
           };
         });
 
-      const combinedArtists = [...matchedUsers, ...matchedTrackArtists];
+      const combinedArtists = Array.from(
+        new Map([...matchedUsers, ...matchedTrackArtists].map((artist) => [artist.id, artist])).values()
+      );
 
       // 3. Match Playlists
       const matchedPlaylists = db.playlists.filter(
@@ -707,7 +747,7 @@ async function startServer() {
       if (!found) {
         return res.status(404).json({ error: "User not found." });
       }
-      return res.json({ success: true, user: toPublicArtistCard(found) });
+      return res.json({ success: true, user: toPublicArtistCard(found, db.tracks) });
     } catch (error: any) {
       console.error("Fetch User Error:", error);
       return res.status(500).json({ error: "Failed to fetch user profile." });
@@ -807,11 +847,11 @@ async function startServer() {
         avatarUrl,
         bannerUrl,
         favoriteGenres: updates.favoriteGenres ?? db.users[index].favoriteGenres,
-        isArtist: updates.isArtist ?? db.users[index].isArtist ?? true,
+        isArtist: updates.isArtist ?? db.users[index].isArtist ?? false,
         artistName: updates.artistName ?? db.users[index].artistName ?? updates.displayName ?? db.users[index].displayName,
         artistBio: updates.artistBio ?? db.users[index].artistBio ?? updates.bio ?? db.users[index].bio,
-        artistVerified: updates.artistVerified ?? db.users[index].artistVerified ?? true,
-        monthlyListeners: updates.monthlyListeners ?? db.users[index].monthlyListeners ?? "1,248 monthly listeners",
+        artistVerified: updates.artistVerified ?? db.users[index].artistVerified ?? false,
+        monthlyListeners: updates.monthlyListeners ?? db.users[index].monthlyListeners ?? "0 monthly listeners",
         instagramUrl: updates.instagramUrl ?? db.users[index].instagramUrl,
         twitterUrl: updates.twitterUrl ?? db.users[index].twitterUrl,
         websiteUrl: updates.websiteUrl ?? db.users[index].websiteUrl,
@@ -844,18 +884,29 @@ async function startServer() {
     try {
       const { userId, title, artist, album, coverUrl, audioUrl, duration, genre, syncedLyrics, releaseType, releaseTitle, releaseId, copyright, releaseYear, trackNumber } = req.body;
 
-      if (!title || !artist) {
-        return res.status(400).json({ success: false, error: "Track title and artist are required." });
+      if (!title) {
+        return res.status(400).json({ success: false, error: "Track title is required." });
       }
 
       const sessionUserId = getUserIdFromToken(req);
-      const folderUserId = sessionUserId || userId || "public";
+      if (!sessionUserId) {
+        return res.status(401).json({ success: false, error: "You must be signed in to upload music." });
+      }
+      const folderUserId = sessionUserId;
 
-      if (userId && userId !== "public" && sessionUserId && userId !== sessionUserId) {
+      if (userId && userId !== sessionUserId) {
         return res.status(403).json({ success: false, error: "Forbidden: Unauthorized user session." });
       }
 
       const db = await readDBAsync();
+      const uploader = db.users.find((user) => user.id === sessionUserId);
+      if (!uploader) {
+        return res.status(404).json({ success: false, error: "Uploader profile was not found." });
+      }
+      const canonicalArtistName = (uploader.artistName || uploader.displayName || uploader.username).trim();
+      if (!canonicalArtistName) {
+        return res.status(400).json({ success: false, error: "Add an artist name to your profile before uploading music." });
+      }
       const trackId = `trk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
       let persistentAudioUrl = audioUrl || "";
@@ -884,15 +935,14 @@ async function startServer() {
       }
 
       if (!persistentCoverUrl) {
-        persistentCoverUrl =
-          "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80";
+        persistentCoverUrl = uploader.avatarUrl || DEFAULT_AVATAR_URL;
       }
 
       const newTrack: TrackRecord = {
         id: trackId,
         userId: folderUserId,
         title: title.trim(),
-        artist: artist.trim(),
+        artist: canonicalArtistName,
         album: (album || "Single").trim(),
         releaseType: releaseType || (album === "Single" ? "SINGLE" : "ALBUM"),
         releaseTitle: releaseTitle || (album === "Single" ? title.trim() : (album || "Single").trim()),
@@ -903,11 +953,8 @@ async function startServer() {
         coverUrl: persistentCoverUrl,
         audioUrl: persistentAudioUrl,
         duration: Number(duration) || 180,
-        genre: genre || "Electronic",
-        syncedLyrics: syncedLyrics || [
-          { time: 0, text: `(Playing ${title} by ${artist})` },
-          { time: 10, text: "Feel the frequency and the beat..." },
-        ],
+        genre: genre || "",
+        syncedLyrics: Array.isArray(syncedLyrics) ? syncedLyrics : [],
         createdAt: new Date().toISOString(),
       };
 
@@ -1368,6 +1415,17 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
         return res.status(400).json({ error: "Music prompt is required" });
       }
 
+      if (!userId || !verifyUserOwnership(req, userId)) {
+        return res.status(401).json({ error: "A valid signed-in artist session is required to generate and save music." });
+      }
+
+      const ownerDB = readDB();
+      const uploader = ownerDB.users.find((user) => user.id === userId);
+      if (!uploader) {
+        return res.status(404).json({ error: "The signed-in artist profile could not be found." });
+      }
+      const uploaderArtistName = (uploader.artistName || uploader.displayName || uploader.username).trim();
+
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.status(500).json({
@@ -1444,9 +1502,9 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
       const db = readDB();
       const newTrack: TrackRecord = {
         id: `ai-track-${Date.now()}`,
-        userId: userId || undefined,
+        userId: uploader.id,
         title: trackTitle,
-        artist: isFallback ? "VERTEX AI Audio Generator" : "VERTEX AI DJ (Lyria)",
+        artist: uploaderArtistName,
         album: selectedModel === "lyria-3-pro-preview" ? "Lyria Full Track" : "Lyria Clip Preview",
         releaseType: "SINGLE",
         releaseTitle: trackTitle,
@@ -1506,8 +1564,18 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
 
       const isGenRequest = /(generate|create|make|compose|produce)\s+(a\s+)?(music|song|track|beat|melody|lofi|synthwave|ambient)/i.test(message);
       let generatedTrack: TrackRecord | undefined = undefined;
+      let generationOwner: UserRecord | undefined;
+      let generationArtistName = "";
 
       if (isGenRequest) {
+        if (!userId || !verifyUserOwnership(req, userId)) {
+          return res.status(401).json({ error: "A valid signed-in artist session is required to generate and save music." });
+        }
+        generationOwner = readDB().users.find((user) => user.id === userId);
+        if (!generationOwner) {
+          return res.status(404).json({ error: "The signed-in artist profile could not be found." });
+        }
+        generationArtistName = (generationOwner.artistName || generationOwner.displayName || generationOwner.username).trim();
         try {
           const responseStream = await ai.models.generateContentStream({
             model: "lyria-3-clip-preview",
@@ -1536,9 +1604,9 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
             const db = readDB();
             generatedTrack = {
               id: `ai-track-${Date.now()}`,
-              userId: userId || undefined,
+              userId: generationOwner.id,
               title: message.length > 28 ? message.slice(0, 28).trim() + "..." : message,
-              artist: "VERTEX AI DJ (Lyria)",
+              artist: generationArtistName,
               album: "AI Chat Creation",
               releaseType: "SINGLE",
               releaseTitle: message.length > 28 ? message.slice(0, 28).trim() + "..." : message,
@@ -1560,9 +1628,9 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
           const db = readDB();
           generatedTrack = {
             id: `ai-track-${Date.now()}`,
-            userId: userId || undefined,
+            userId: generationOwner.id,
             title: message.length > 28 ? message.slice(0, 28).trim() + "..." : message,
-            artist: "VERTEX AI Audio Generator",
+            artist: generationArtistName,
             album: "AI Chat Creation",
             releaseType: "SINGLE",
             releaseTitle: message.length > 28 ? message.slice(0, 28).trim() + "..." : message,

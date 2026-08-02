@@ -323,7 +323,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       {artist.name}
                     </h4>
                     <p className="text-xs text-zinc-400 truncate mt-1">
-                      Artist • {artist.monthlyListeners || '12,400 monthly listeners'}
+                      Artist • {artist.monthlyListeners || '0 monthly listeners'}
                     </p>
                   </div>
                 </div>
@@ -351,7 +351,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         {artist.name}
                       </h4>
                       <p className="text-xs text-zinc-400 truncate">
-                        {artist.monthlyListeners || '12,400 monthly listeners'}
+                        {artist.monthlyListeners || '0 monthly listeners'}
                       </p>
                     </div>
                   </div>

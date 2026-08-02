@@ -242,7 +242,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </h1>
 
             <p className="text-xs sm:text-sm text-zinc-300 max-w-xl line-clamp-2">
-              {userProfile.bio || 'Synthwave producer & spatial audio enthusiast listening on VERTEX Music.'}
+              {userProfile.bio || 'No profile biography has been added yet.'}
             </p>
 
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 text-xs text-zinc-400 font-medium pt-1">
