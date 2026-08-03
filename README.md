@@ -8,7 +8,7 @@ Discover music, explore artists, build playlists, and enjoy a clean, responsive 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 [![Status](https://img.shields.io/badge/status-active%20development-brightgreen)](#project-status)
-[![Made with React](https://img.shields.io/badge/Made%20with-React-61DAFB?logo=react&logoColor=white)](#tech-stack)
+[![Made with Node.JS](https://img.shields.io/badge/Made%20with-React-61DAFB?logo=react&logoColor=white)](#tech-stack)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-blueviolet.svg)](#contributing)
 
 [Features](#-features) · [Getting Started](#-getting-started) · [Tech Stack](#-tech-stack) · [Contributing](#-contributing)
