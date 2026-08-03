@@ -198,7 +198,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   }
 
   return (
-    <div className="space-y-8 pb-24 select-none animate-in fade-in duration-300">
+    <div className="w-full min-w-0 max-w-full space-y-8 overflow-x-hidden pb-24 select-none touch-pan-y animate-in fade-in duration-300">
       {loadError && (
         <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
           {loadError}

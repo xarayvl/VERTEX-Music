@@ -10,6 +10,7 @@ interface AlbumViewProps {
   onPlayTrack: (track: Track) => void;
   onToggleLike: (trackId: string) => void;
   onSelectArtist: (artist: Artist | string) => void;
+  onSelectAlbum: (track: Track) => void;
   onGoBack?: () => void;
   userProfile?: UserProfile | null;
   playlists?: Playlist[];
@@ -27,6 +28,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   onPlayTrack,
   onToggleLike,
   onSelectArtist,
+  onSelectAlbum,
   playlists = [],
   onAddToQueue,
   onAddToPlaylist,
@@ -53,12 +55,27 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
       return aTime - bTime;
     });
 
-  // Find other albums/tracks by the same artist
-  const moreByArtist = allTracks.filter(
-    (t) => t.artist === albumTrack.artist && 
-           (albumTrack.releaseId 
-             ? t.releaseId !== albumTrack.releaseId 
-             : (albumTrack.album === 'Single' ? t.id !== albumTrack.id : t.album !== albumTrack.album))
+  // “More by” is a release shelf, not a track list. Collapse every album or
+  // single to one representative track so a multi-track album is shown once.
+  const moreByArtist = Array.from(
+    new Map(
+      allTracks
+        .filter(
+          (track) => track.artist === albumTrack.artist &&
+            (albumTrack.releaseId
+              ? track.releaseId !== albumTrack.releaseId
+              : albumTrack.album === 'Single'
+                ? track.id !== albumTrack.id
+                : track.album !== albumTrack.album)
+        )
+        .map((track) => {
+          const releaseKey = track.releaseId ||
+            (track.album === 'Single'
+              ? `single:${track.id}`
+              : `album:${track.userId || track.artist}:${track.releaseTitle || track.album}`);
+          return [releaseKey, track] as const;
+        })
+    ).values()
   );
 
   const isCurrentAlbumPlaying = albumTracks.some((t) => t.id === currentTrackId) && isPlaying;
@@ -409,8 +426,9 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                 key={track.id}
                 data-track-id={track.id}
                 data-context-type="track"
-                onClick={() => onPlayTrack(track)}
+                onClick={() => onSelectAlbum(track)}
                 className="group bg-[#181818] hover:bg-[#282828] p-4 rounded-xl transition-all cursor-pointer flex flex-col justify-between shadow-md"
+                aria-label={`Open ${track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}`}
               >
                 <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 shadow">
                   <img
@@ -420,11 +438,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                   <div className="mobile-card-action absolute right-2 bottom-2 w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-200">
-                    {currentTrackId === track.id && isPlaying ? (
-                      <Pause className="w-4 h-4 fill-white" />
-                    ) : (
-                      <Play className="w-4 h-4 fill-white ml-0.5" />
-                    )}
+                    <ChevronRight className="h-4 w-4 stroke-[3]" />
                   </div>
                 </div>
                 <div>

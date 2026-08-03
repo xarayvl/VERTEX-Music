@@ -1754,11 +1754,13 @@ export default function App() {
 
           {/* Scrollable View Content */}
           <div
-            className={`relative flex-1 custom-scrollbar ${
+            className={`relative flex-1 overflow-x-hidden custom-scrollbar ${
               isWorkspacePanelOpen
                 ? 'overflow-y-auto p-0 pb-40 md:pb-24'
+                : isSongScreenOpen
+                  ? 'overflow-hidden p-0 md:overflow-y-auto md:px-6 md:pt-4 md:pb-24'
                 : activeTab === 'chat'
-                  ? `overflow-hidden p-0 ${currentTrack ? 'pb-[9.5rem]' : 'pb-[5.25rem]'} md:pb-0`
+                  ? `overflow-hidden p-0 ${currentTrack ? 'pb-[9.5rem]' : 'pb-[5.25rem]'} md:overflow-y-auto md:px-6 md:pt-4 md:pb-24`
                   : 'overflow-y-auto px-3 pt-4 pb-44 sm:px-6 md:pb-24'
             }`}
           >
@@ -1810,7 +1812,7 @@ export default function App() {
                 }}
               />
             ) : (
-              <div key={activeTab} className={`view-transition ${activeTab === 'chat' ? 'h-full min-h-0' : ''}`}>
+              <div key={activeTab} className={`view-transition ${activeTab === 'chat' ? 'h-full min-h-0 md:h-auto' : ''}`}>
                 {activeTab === 'home' && (
               <HomeView
                 tracks={tracks}
@@ -1961,6 +1963,7 @@ export default function App() {
                 onPlayTrack={handlePlayTrack}
                 onToggleLike={handleToggleLike}
                 onSelectArtist={handleSelectArtist}
+                onSelectAlbum={handleSelectAlbum}
                 onGoBack={handleGoBack}
                 userProfile={userProfile}
                 playlists={ownedPlaylists}

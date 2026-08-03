@@ -70,10 +70,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   const suggestionPrompts = [
-    { label: '30s synthwave', prompt: 'Generate a 30s synthwave beat with heavy bass' },
-    { label: 'Night drive', prompt: 'Recommend synthwave tracks for night driving' },
-    { label: 'Study mix', prompt: 'Suggest a lofi playlist for studying' },
-    { label: 'Genre guide', prompt: 'Explain the difference between Synthwave and Cyberpunk' },
+    { label: '30s synthwave', prompt: '✨ Generate a 30s synthwave beat with heavy bass 🎧' },
+    { label: 'Night drive', prompt: 'Recommend synthwave tracks for night driving 🌙' },
+    { label: 'Study mix', prompt: 'Suggest a lofi playlist for studying 📚' },
+    { label: 'Genre guide', prompt: 'Explain the difference between Synthwave and Cyberpunk ⚡' },
   ];
 
   const handleSendMessage = async (customText?: string) => {
@@ -293,7 +293,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const ActivePhase = THINKING_PHASES[thinkingPhaseIdx];
 
   return (
-    <section className="workspace-screen mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_38%),#121212] text-white select-none">
+    <section className="workspace-screen mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_38%),#121212] text-white select-none md:h-[calc(100vh-140px)] md:min-h-[560px] md:overflow-visible md:bg-[#121212]">
       <header className="workspace-header flex flex-shrink-0 items-center justify-between gap-2 border-b border-white/10 px-3 py-3 sm:items-start sm:gap-4 sm:px-0 sm:pb-5 sm:pt-0">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-12 sm:w-12 sm:rounded-2xl">
@@ -394,7 +394,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <button
                   disabled={isGeneratingTrack || !aiGenPrompt.trim()}
                   onClick={() => handleDirectGenerateMusic()}
-                  className="control-press flex h-12 w-full flex-shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-6 text-xs font-black text-white shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45 lg:w-auto"
+                  className="control-press flex h-12 w-full flex-shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-6 text-xs font-black text-white shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45 md:w-auto"
                 >
                   {isGeneratingTrack ? (
                     <>
@@ -569,7 +569,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   <Bot className="h-4 w-4" />
                   <span className="absolute -inset-1 animate-ping rounded-2xl border border-[#D946EF]/35" />
                 </div>
-                <div className="relative flex min-w-0 max-w-[calc(100%_-_40px)] flex-1 items-center gap-2 overflow-hidden rounded-2xl rounded-tl-md border border-white/[0.08] bg-[#202020] px-4 py-3 sm:max-w-sm sm:flex-none sm:gap-3 sm:rounded-3xl sm:px-5 sm:py-3.5">
+                <div className="relative flex min-w-0 max-w-[calc(100%_-_40px)] flex-1 items-center gap-2 overflow-hidden rounded-2xl rounded-tl-md border border-white/[0.08] bg-[#202020] px-4 py-3 sm:max-w-sm sm:flex-none sm:gap-3 sm:rounded-3xl sm:px-5 sm:py-3.5 md:min-w-[220px]">
                   <span className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite] bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
                   <AnimatePresence mode="wait">
                     <motion.div
@@ -605,13 +605,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 disabled={isLoading}
                 className="control-press flex h-9 flex-shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 text-[11px] font-bold text-zinc-400 hover:border-[#A855F7]/30 hover:bg-[#A855F7]/10 hover:text-white disabled:opacity-40 sm:h-auto sm:py-1.5"
               >
-                <Sparkles className="h-3 w-3 text-[#D946EF]" /> {suggestion.label}
+                <Sparkles className="h-3 w-3 text-[#D946EF]" />
+                <span className="md:hidden">{suggestion.label}</span>
+                <span className="hidden md:inline">{suggestion.prompt}</span>
               </button>
             ))}
           </div>
         )}
 
-        <div className="flex-shrink-0 border-t border-white/[0.06] bg-[#141414] p-2.5 sm:p-4">
+        <div className="flex-shrink-0 border-t border-white/[0.06] bg-[#141414] p-2.5 sm:p-4 md:border-t-0">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -623,7 +625,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               type="text"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask VERTEX AI..."
+              placeholder="Ask about music, artists, genres or your next playlist..."
               disabled={isLoading}
               className="min-w-0 flex-1 bg-transparent px-2.5 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 disabled:opacity-50 sm:px-3"
             />

@@ -247,7 +247,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   }
 
   return (
-    <div className="pb-20 select-none animate-in fade-in duration-300">
+    <div className="w-full min-w-0 max-w-full overflow-x-hidden pb-20 select-none touch-pan-y animate-in fade-in duration-300">
       {/* SPOTIFY PROFILE HERO BANNER */}
       <div className="relative rounded-2xl overflow-hidden bg-gradient-to-b from-[#A855F7]/30 via-[#181818] to-[#121212] p-6 sm:p-8 border border-white/10 shadow-2xl mb-6">
         <div className="flex flex-col md:flex-row items-center md:items-end gap-6 sm:gap-8">
@@ -332,7 +332,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       {/* Sub-Navigation Bar */}
-      <div className="-mx-6 px-6 py-3.5 bg-[#121212] border-b border-white/10 flex items-center space-x-2 mt-0 mb-6">
+      <div className="-mx-3 flex max-w-[calc(100%_+_1.5rem)] items-center space-x-2 overflow-x-hidden border-b border-white/10 bg-[#121212] px-3 py-3.5 mt-0 mb-6 sm:-mx-6 sm:max-w-[calc(100%_+_3rem)] sm:px-6">
         <button
           onClick={() => setActiveSubTab('overview')}
           className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${

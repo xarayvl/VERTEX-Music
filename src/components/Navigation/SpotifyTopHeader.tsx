@@ -146,7 +146,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
             onClick={onOpenAddTrackModal}
             title="Upload"
             aria-label="Upload audio"
-            className="control-press hidden h-9 flex-shrink-0 items-center gap-1.5 bg-transparent px-1.5 text-xs font-extrabold text-white/80 hover:text-white hover:drop-shadow-[0_0_8px_rgba(217,70,239,0.85)] sm:flex"
+            className="control-press flex h-10 w-10 flex-shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-white/[0.06] bg-white/[0.035] text-xs font-extrabold text-white/80 hover:text-white hover:drop-shadow-[0_0_8px_rgba(217,70,239,0.85)] sm:h-9 sm:w-auto sm:rounded-none sm:border-0 sm:bg-transparent sm:px-1.5"
           >
             <Upload className="h-4 w-4 text-[#D946EF]" />
             <span className="spotify-upload-label hidden lg:inline">Upload</span>
