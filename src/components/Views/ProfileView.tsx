@@ -24,9 +24,12 @@ import {
   Radio,
   SlidersHorizontal,
   BarChart3,
+  Disc3,
+  ListMusic,
 } from 'lucide-react';
 import { UserProfile, Track, Playlist, Artist } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
+import { groupTracksByRelease } from '../../utils/artistUtils';
 
 interface ProfileViewProps {
   userProfile: UserProfile | null;
@@ -546,6 +549,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               const myUploadedTracks = (tracks || []).filter(
                 (t) => t && t.id && userProfile && t.userId === userProfile.id
               );
+              const uploadedReleases = groupTracksByRelease(myUploadedTracks);
 
               if (myUploadedTracks.length === 0) {
                 return (
@@ -568,68 +572,92 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               }
 
               return (
-                <div className="bg-[#121212] rounded-xl overflow-hidden border border-white/5 divide-y divide-white/5">
-                  {myUploadedTracks.map((track) => (
-                    <div
-                      key={track.id}
-                      data-track-id={track.id}
-                      data-context-type="track"
-                      className="flex items-center justify-between px-4 py-3 hover:bg-white/10 group transition-colors"
-                    >
-                      <div className="flex items-center space-x-3.5 min-w-0">
-                        <button
-                          onClick={() => onPlayTrack(track)}
-                          className="w-8 h-8 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-105 transition-all flex-shrink-0 shadow"
-                        >
-                          <Play className="w-4 h-4 fill-white ml-0.5" />
-                        </button>
-
-                        <img
-                          src={track.coverUrl}
-                          alt={track.title}
-                          referrerPolicy="no-referrer"
-                          className="w-10 h-10 rounded shadow flex-shrink-0 object-cover border border-white/10"
-                        />
-
-                        <div className="min-w-0">
-                          <p className="text-xs font-extrabold text-white truncate">{track.title}</p>
-                          <div className="flex items-center space-x-2 text-[11px] text-zinc-400">
-                            <span className="truncate">{track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}</span>
-                            <span>•</span>
-                            <span className="font-mono text-[10px] text-[#C084FC] truncate">
-                              {track.audioUrl?.startsWith('/uploads/') ? track.audioUrl : 'Uploaded File'}
+                <div className="space-y-3">
+                  {uploadedReleases.map((release, releaseIndex) => {
+                    const isCollection = release.tracks.length > 1 || release.releaseType !== 'Single';
+                    const representative = release.representative;
+                    return (
+                      <article
+                        key={release.key}
+                        data-track-id={representative.id}
+                        data-context-type="track"
+                        style={{ '--stagger-index': releaseIndex } as React.CSSProperties}
+                        className="stagger-item overflow-hidden rounded-2xl border border-white/[0.08] bg-[#121212] shadow-lg transition-colors hover:border-white/[0.14]"
+                      >
+                        <div className="flex items-center gap-3 p-3 sm:p-4">
+                          <button
+                            type="button"
+                            onClick={() => onPlayTrack(representative)}
+                            className="control-press relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-lg"
+                            aria-label={`Play ${release.title}`}
+                          >
+                            <img src={release.coverUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity hover:opacity-100">
+                              <Play className="h-5 w-5 fill-white text-white" />
                             </span>
+                          </button>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              {isCollection ? <Disc3 className="h-3.5 w-3.5 shrink-0 text-[#D946EF]" /> : <Music className="h-3.5 w-3.5 shrink-0 text-[#D946EF]" />}
+                              <span className="text-[9px] font-black uppercase tracking-[0.16em] text-[#D8B4FE]">{release.releaseType}</span>
+                            </div>
+                            <p className="mt-1 truncate text-sm font-black text-white">{release.title}</p>
+                            <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold text-zinc-500">
+                              <span>{release.tracks.length} track{release.tracks.length === 1 ? '' : 's'}</span>
+                              <span>•</span>
+                              <span>{representative.releaseYear || new Date(representative.createdAt || Date.now()).getFullYear()}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {onEditTrack && (
+                              <button
+                                type="button"
+                                onClick={() => onEditTrack(representative)}
+                                className="control-press flex items-center gap-2 rounded-xl border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-2 text-[10px] font-black text-[#F0ABFC] hover:bg-[#D946EF]/20"
+                                title={isCollection ? 'Edit release and tracklist' : 'Edit track'}
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">{isCollection ? 'Edit release' : 'Edit'}</span>
+                              </button>
+                            )}
+                            {!isCollection && onDeleteTrack && (
+                              <button type="button" onClick={() => onDeleteTrack(representative.id)} className="control-press rounded-xl p-2 text-zinc-500 hover:bg-red-400/10 hover:text-red-300" title="Delete track">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center space-x-4">
-                        <span className="text-xs font-mono text-zinc-400 hidden sm:inline">
-                          {Math.floor(track.duration / 60)}:{(track.duration % 60).toString().padStart(2, '0')}
-                        </span>
-
-                        {onEditTrack && (
-                          <button
-                            onClick={() => onEditTrack(track)}
-                            className="p-1.5 text-zinc-500 hover:text-[#D946EF] transition-colors"
-                            title="Edit track"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
+                        {isCollection && (
+                          <div className="border-t border-white/[0.06] bg-black/15 px-2 py-2 sm:px-3">
+                            <div className="mb-1 flex items-center gap-2 px-2 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-zinc-600">
+                              <ListMusic className="h-3 w-3" /> Tracklist
+                            </div>
+                            {release.tracks.map((releaseTrack, trackIndex) => (
+                              <div key={releaseTrack.id} data-track-id={releaseTrack.id} data-context-type="track" className="group flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-white/[0.055]">
+                                <button type="button" onClick={() => onPlayTrack(releaseTrack)} className="control-press flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-zinc-400 hover:bg-[#D946EF]/15 hover:text-[#F0ABFC]" aria-label={`Play ${releaseTrack.title}`}>
+                                  <Play className="h-3 w-3 fill-current" />
+                                </button>
+                                <span className="w-5 shrink-0 text-center font-mono text-[10px] text-zinc-600">{releaseTrack.trackNumber || trackIndex + 1}</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs font-bold text-zinc-200">{releaseTrack.title}</p>
+                                  <p className="truncate text-[9px] text-zinc-600">{releaseTrack.genre || 'No genre'}</p>
+                                </div>
+                                <span className="hidden font-mono text-[10px] text-zinc-600 sm:block">{Math.floor(releaseTrack.duration / 60)}:{Math.floor(releaseTrack.duration % 60).toString().padStart(2, '0')}</span>
+                                {onDeleteTrack && (
+                                  <button type="button" onClick={() => onDeleteTrack(releaseTrack.id)} className="control-press rounded-lg p-1.5 text-zinc-600 opacity-100 hover:bg-red-400/10 hover:text-red-300 sm:opacity-0 sm:group-hover:opacity-100" title="Delete track">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         )}
-
-                        {onDeleteTrack && (
-                          <button
-                            onClick={() => onDeleteTrack(track.id)}
-                            className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors"
-                            title="Delete track"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               );
             })()}

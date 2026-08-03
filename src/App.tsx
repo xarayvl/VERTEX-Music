@@ -2125,6 +2125,7 @@ export default function App() {
         isOpen={!!editingTrack}
         onClose={() => setEditingTrack(null)}
         track={editingTrack}
+        tracks={tracks}
         userId={userProfile?.id}
         onTrackUpdated={(updated) => {
           setTracks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
@@ -2132,6 +2133,12 @@ export default function App() {
             setCurrentTrack((prev) => (prev ? { ...prev, ...updated } : null));
           }
           showToast(`Updated "${updated.title}" metadata!`);
+        }}
+        onTracksUpdated={(updatedTracks) => {
+          const updatedById = new Map(updatedTracks.map((updated) => [updated.id, updated]));
+          setTracks((previous) => previous.map((item) => updatedById.get(item.id) || item));
+          setCurrentTrack((previous) => previous ? updatedById.get(previous.id) || previous : null);
+          showToast(updatedTracks.length > 1 ? `Updated ${updatedTracks.length} tracks and release metadata!` : `Updated "${updatedTracks[0]?.title || 'track'}" metadata!`);
         }}
       />
 

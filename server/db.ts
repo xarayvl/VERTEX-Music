@@ -125,6 +125,12 @@ function normalizedIsoDate(value: unknown): string {
     : new Date(0).toISOString();
 }
 
+function normalizeCopyright(value: unknown, fallback: string): string {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  const body = raw.replace(/^(?:©|\(c\))\s*/i, '').trim() || fallback.trim();
+  return `©${body ? ` ${body}` : ''}`.slice(0, 300).trimEnd();
+}
+
 /**
  * Removes legacy/orphaned entities before they can reach the API.
  * A playable track or playlist must always belong to a real registered user.
@@ -228,6 +234,12 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
       : album === 'Single' ? title : album;
     const releaseYear = Number(rawTrack.releaseYear);
     const currentYear = new Date().getFullYear();
+    const cleanReleaseYear = Number.isInteger(releaseYear) && releaseYear >= 1850 && releaseYear <= currentYear + 1
+      ? releaseYear
+      : undefined;
+    const createdYear = typeof rawTrack.createdAt === 'string' && !Number.isNaN(Date.parse(rawTrack.createdAt))
+      ? new Date(rawTrack.createdAt).getUTCFullYear()
+      : currentYear;
     const trackNumber = Number(rawTrack.trackNumber);
     const coverCandidate = typeof rawTrack.coverUrl === 'string' ? rawTrack.coverUrl.trim() : '';
     const coverUrl = coverCandidate && isPersistedMediaUrl(coverCandidate, 'image')
@@ -256,8 +268,8 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
       releaseType,
       releaseTitle,
       releaseId: typeof rawTrack.releaseId === 'string' && rawTrack.releaseId.trim() ? rawTrack.releaseId.trim().slice(0, 200) : undefined,
-      copyright: typeof rawTrack.copyright === 'string' && rawTrack.copyright.trim() ? rawTrack.copyright.trim().slice(0, 300) : undefined,
-      releaseYear: Number.isInteger(releaseYear) && releaseYear >= 1850 && releaseYear <= currentYear + 1 ? releaseYear : undefined,
+      copyright: normalizeCopyright(rawTrack.copyright, `${cleanReleaseYear || createdYear} ${canonicalArtistName}`),
+      releaseYear: cleanReleaseYear,
       trackNumber: Number.isInteger(trackNumber) && trackNumber >= 1 && trackNumber <= 999 ? trackNumber : undefined,
     });
   }

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Play, Pause, Heart, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Pause, Heart, Clock, ArrowLeft, ListMusic, History } from 'lucide-react';
 import { Track, Playlist, Album, TabType } from '../../types';
 import { groupTracksByRelease } from '../../utils/artistUtils';
 import { LIKED_SONGS_COVER_URL } from '../../utils/profilePlaceholders';
@@ -39,6 +39,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenNewPlaylistModal,
   recentlyPlayed = [],
 }) => {
+  const [activeHomeSection, setActiveHomeSection] = useState<'overview' | 'playlists' | 'recent'>('overview');
+
   const getGreeting = () => {
     const hrs = new Date().getHours();
     if (hrs < 12) return 'Good morning';
@@ -72,9 +74,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   // Use only the real user-scoped listening history.
   const validRecentTracks = recentlyPlayed
-    .filter((track) => track && tracks.some((candidate) => candidate.id === track.id))
-    .slice(0, 12);
-  const recentReleaseGroups = groupTracksByRelease(validRecentTracks).slice(0, 5);
+    .filter((track) => track && tracks.some((candidate) => candidate.id === track.id));
+  const allRecentReleaseGroups = groupTracksByRelease(validRecentTracks);
+  const recentReleaseGroups = allRecentReleaseGroups.slice(0, 5);
 
   // The greeting area now includes actual recently played songs instead of
   // being limited to Liked Songs and playlist shortcuts.
@@ -107,6 +109,126 @@ export const HomeView: React.FC<HomeViewProps> = ({
     ...recentQuickItems,
     ...playlistQuickItems,
   ].slice(0, 6);
+
+  if (activeHomeSection !== 'overview') {
+    const isPlaylistScreen = activeHomeSection === 'playlists';
+
+    return (
+      <div className="workspace-screen min-h-full space-y-6 overflow-x-hidden pb-12 select-none">
+        <button
+          onClick={() => setActiveHomeSection('overview')}
+          className="control-press flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"
+        >
+          <ArrowLeft className="h-4 w-4" /> Home
+        </button>
+
+        <header className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-[#2b1738] via-[#19131f] to-[#121212] p-6 shadow-2xl sm:p-8">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[#D946EF]/20 blur-3xl" />
+          <div className="relative flex items-center gap-4">
+            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
+              {isPlaylistScreen ? <ListMusic className="h-7 w-7" /> : <History className="h-7 w-7" />}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">Home collection</p>
+              <h1 className="mt-1 truncate text-3xl font-black tracking-tight text-white sm:text-4xl">
+                {isPlaylistScreen ? 'All Playlists' : 'Recently Played'}
+              </h1>
+              <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
+                {isPlaylistScreen
+                  ? `${filteredPlaylists.length} playlist${filteredPlaylists.length === 1 ? '' : 's'} available`
+                  : `${allRecentReleaseGroups.length} recent release${allRecentReleaseGroups.length === 1 ? '' : 's'}`}
+              </p>
+            </div>
+          </div>
+        </header>
+
+        {isPlaylistScreen ? (
+          filteredPlaylists.length === 0 ? (
+            <div className="rounded-2xl border border-white/5 bg-[#181818] p-8 text-center">
+              <p className="text-sm font-bold text-white">No playlists available</p>
+              <p className="mt-2 text-xs text-zinc-400">Create a playlist and it will appear here.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {filteredPlaylists.map((playlist, idx) => (
+                <div
+                  key={playlist.id}
+                  data-playlist-id={playlist.id}
+                  data-context-type="playlist"
+                  onClick={() => onSelectPlaylist(playlist)}
+                  style={{ '--stagger-index': idx } as React.CSSProperties}
+                  className="stagger-item card-interactive group relative flex cursor-pointer flex-col justify-between rounded-xl bg-[#181818] p-4 shadow-md transition-all duration-300 hover:bg-[#282828]"
+                >
+                  <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-lg shadow-md">
+                    <img src={playlist.coverUrl} alt={playlist.title} referrerPolicy="no-referrer" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    <div className="mobile-card-action absolute bottom-2 right-2 flex h-11 w-11 translate-y-3 items-center justify-center rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white opacity-0 shadow-2xl transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+                      <Play className="ml-0.5 h-5 w-5 fill-white" />
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-bold text-white">{playlist.title}</h3>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-400">{playlist.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : allRecentReleaseGroups.length === 0 ? (
+          <div className="rounded-2xl border border-white/5 bg-[#181818] p-8 text-center">
+            <p className="text-sm font-bold text-white">Nothing played yet</p>
+            <p className="mt-2 text-xs text-zinc-400">Your listening history will appear here.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {allRecentReleaseGroups.map((group, idx) => {
+              const track = group.representative;
+              const isThisTrackPlaying = group.tracks.some((candidate) => candidate.id === currentTrackId) && isPlaying;
+              return (
+                <div
+                  key={group.key}
+                  data-track-id={track.id}
+                  data-context-type="track"
+                  onClick={() => onSelectAlbum?.(track)}
+                  style={{ '--stagger-index': idx } as React.CSSProperties}
+                  className="stagger-item card-interactive group relative flex cursor-pointer flex-col justify-between rounded-xl bg-[#181818] p-4 shadow-md transition-all duration-300 hover:bg-[#282828]"
+                >
+                  <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-lg shadow-md">
+                    <img src={group.coverUrl} alt={group.title} referrerPolicy="no-referrer" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onPlayTrack(track);
+                      }}
+                      className={`mobile-card-action absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white shadow-2xl transition-all duration-200 ${
+                        isThisTrackPlaying ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100'
+                      }`}
+                      aria-label={isThisTrackPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
+                    >
+                      {isThisTrackPlaying ? <Pause className="h-5 w-5 fill-white" /> : <Play className="ml-0.5 h-5 w-5 fill-white" />}
+                    </button>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className={`truncate text-sm font-bold ${isThisTrackPlaying ? 'text-[#D946EF]' : 'text-white'}`}>{group.title}</h3>
+                    <button
+                      data-artist-id={track.userId}
+                      data-context-type="artist"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelectArtist?.(track.userId || '');
+                      }}
+                      className="mt-1 block w-full truncate text-left text-xs text-zinc-400 hover:text-[#D946EF] hover:underline"
+                    >
+                      {track.artist}{group.isMultiTrack ? ` • ${group.releaseType}` : ''}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-12 select-none">
@@ -179,7 +301,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <p className="text-xs text-zinc-400">Playlists currently available in the catalog</p>
           </div>
           <button
-            onClick={() => onSelectTab && onSelectTab('browse')}
+            onClick={() => setActiveHomeSection('playlists')}
             className="text-xs font-bold text-zinc-400 hover:text-white uppercase tracking-wider transition-colors"
           >
             Show all
@@ -243,7 +365,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-extrabold text-white tracking-tight">Recently Played</h2>
           <button
-            onClick={() => onSelectTab && onSelectTab('browse')}
+            onClick={() => setActiveHomeSection('recent')}
             className="text-xs font-bold text-zinc-400 hover:text-white uppercase tracking-wider transition-colors"
           >
             Show all

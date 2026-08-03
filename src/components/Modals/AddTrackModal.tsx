@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Music, Upload, Link, Sparkles, Image, Check, FileAudio, AlertCircle, GripVertical, ArrowUp, ArrowDown, Trash2, ListMusic } from 'lucide-react';
 import { Track } from '../../types';
+import { formatCopyright, stripCopyrightPrefix } from '../../utils/copyright';
 
 interface AlbumTrackItem {
   clientId: string;
@@ -173,7 +174,24 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
         else reject(new Error(`Could not read "${file.name}".`));
       };
       reader.onerror = () => reject(new Error(`Error reading "${file.name}".`));
-      reader.readAsDataURL(file);
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      const inferredMime = extension === 'mp3'
+        ? 'audio/mpeg'
+        : extension === 'wav'
+          ? 'audio/wav'
+          : extension === 'ogg'
+            ? 'audio/ogg'
+            : extension === 'm4a'
+              ? 'audio/mp4'
+              : extension === 'aac'
+                ? 'audio/aac'
+                : extension === 'flac'
+                  ? 'audio/flac'
+                  : '';
+      const readableFile = file.type.startsWith('audio/') || !inferredMime
+        ? file
+        : new Blob([file], { type: inferredMime });
+      reader.readAsDataURL(readableFile);
     });
 
   const processAudioFile = async (file: File) => {
@@ -422,11 +440,12 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
           releaseType,
           releaseTitle: releaseType === 'Single' ? title.trim() : finalAlbumName.trim() || 'Single',
           releaseId: crypto.randomUUID(),
-          copyright: copyright.trim() || undefined,
+          copyright: formatCopyright(copyright),
           releaseYear: Number(releaseYear) || new Date().getFullYear(),
           genre,
           duration,
           audioUrl: finalAudioUrl,
+          audioFileName: loadedFileName || undefined,
           coverUrl: finalCover,
         }),
       });
@@ -499,11 +518,12 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
             releaseType,
             releaseTitle: finalAlbumName,
             releaseId: sharedReleaseId,
-            copyright: copyright.trim() || undefined,
+            copyright: formatCopyright(copyright),
             releaseYear: Number(releaseYear) || new Date().getFullYear(),
             genre,
             duration: item.duration,
             audioUrl: item.audioUrl,
+            audioFileName: item.fileName,
             coverUrl: finalCover,
             trackNumber: i + 1,
           }),
@@ -1027,13 +1047,17 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
                 <div className="mt-5">
                   <label className={labelClass}>Copyright / label</label>
-                  <input
-                    type="text"
-                    value={copyright}
-                    onChange={(event) => setCopyright(event.target.value)}
-                    placeholder="e.g. © 2026 Your Label"
-                    className={fieldClass}
-                  />
+                  <div className="flex overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] transition-all focus-within:border-[#C084FC]/70 focus-within:bg-white/[0.07] focus-within:ring-4 focus-within:ring-[#A855F7]/10">
+                    <span aria-hidden="true" className="flex shrink-0 select-none items-center border-r border-white/10 px-4 text-sm font-black text-white">©</span>
+                    <input
+                      type="text"
+                      value={copyright}
+                      onChange={(event) => setCopyright(stripCopyrightPrefix(event.target.value))}
+                      placeholder="2026 Your Label"
+                      aria-label="Copyright owner and year"
+                      className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-sm text-white outline-none placeholder:text-zinc-600"
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-5">

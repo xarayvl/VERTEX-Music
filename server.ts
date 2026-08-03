@@ -41,6 +41,39 @@ function isStoredMediaUrl(value: string): boolean {
   return value.startsWith("/uploads/") || value.startsWith("/api/r2-file/") || isHttpUrl(value);
 }
 
+function normalizeCopyright(value: unknown, fallback: string): string {
+  const raw = typeof value === "string" ? value.trim() : "";
+  const body = raw.replace(/^(?:©|\(c\))\s*/i, "").trim() || fallback.trim();
+  return `©${body ? ` ${body}` : ""}`.trimEnd();
+}
+
+const AUDIO_MIME_BY_EXTENSION: Record<string, string> = {
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  flac: "audio/flac",
+};
+
+function inferAudioMimeType(fileName: unknown): string | undefined {
+  if (typeof fileName !== "string") return undefined;
+  const extension = fileName.trim().toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
+  return extension ? AUDIO_MIME_BY_EXTENSION[extension] : undefined;
+}
+
+function parseAudioDataUrl(value: string, fileName: unknown): { base64Data: string; mimeType: string } | null {
+  const match = value.match(/^data:([^;,]*)(?:;[^,]*)?;base64,([\s\S]+)$/i);
+  if (!match?.[2]) return null;
+
+  const declaredMime = match[1].trim().toLowerCase();
+  const inferredMime = inferAudioMimeType(fileName);
+  const mimeType = declaredMime.startsWith("audio/") ? declaredMime : inferredMime;
+  if (!mimeType) return null;
+
+  return { base64Data: match[2], mimeType };
+}
+
 function sanitizeChatHistory(value: unknown, tracks: TrackRecord[] = []): any[] {
   if (!Array.isArray(value)) return [];
   const trackById = new Map(tracks.map((track) => [track.id, track]));
@@ -1187,7 +1220,7 @@ async function startServer() {
   // metadata-only records.
   app.post("/api/tracks", async (req, res) => {
     try {
-      const { userId, title, album, coverUrl, audioUrl, duration, genre, syncedLyrics, releaseType, releaseTitle, releaseId, copyright, releaseYear, trackNumber } = req.body;
+      const { userId, title, album, coverUrl, audioUrl, audioFileName, duration, genre, syncedLyrics, releaseType, releaseTitle, releaseId, copyright, releaseYear, trackNumber } = req.body;
       const sessionUserId = getUserIdFromToken(req);
 
       if (!sessionUserId) {
@@ -1223,11 +1256,9 @@ async function startServer() {
       let persistentAudioUrl = audioUrl.trim();
       let persistentCoverUrl = typeof coverUrl === "string" ? coverUrl.trim() : "";
       if (persistentAudioUrl.startsWith("data:")) {
-        const mimeMatch = persistentAudioUrl.match(/^data:(audio\/[^;]+);base64,/);
-        if (!mimeMatch) return res.status(400).json({ success: false, error: "Audio upload must contain an audio MIME type." });
-        const base64Data = persistentAudioUrl.includes(",") ? persistentAudioUrl.split(",")[1] : "";
-        if (!base64Data) return res.status(400).json({ success: false, error: "Invalid audio file." });
-        persistentAudioUrl = await saveUploadedFile(base64Data, mimeMatch?.[1] || "audio/mpeg", sessionUserId, "audio");
+        const parsedAudio = parseAudioDataUrl(persistentAudioUrl, audioFileName);
+        if (!parsedAudio) return res.status(400).json({ success: false, error: "Unsupported audio file. Use MP3, WAV, OGG, M4A, AAC, or FLAC." });
+        persistentAudioUrl = await saveUploadedFile(parsedAudio.base64Data, parsedAudio.mimeType, sessionUserId, "audio");
       }
       if (persistentCoverUrl.startsWith("data:")) {
         const mimeMatch = persistentCoverUrl.match(/^data:(image\/[^;]+);base64,/);
@@ -1267,8 +1298,8 @@ async function startServer() {
       if (cleanTrackNumber !== undefined && (!Number.isInteger(cleanTrackNumber) || cleanTrackNumber < 1 || cleanTrackNumber > 999)) {
         return res.status(400).json({ success: false, error: "Track number must be an integer between 1 and 999." });
       }
-      const cleanCopyright = typeof copyright === "string" && copyright.trim() ? copyright.trim() : undefined;
-      if (cleanCopyright && cleanCopyright.length > 300) return res.status(400).json({ success: false, error: "Copyright text cannot exceed 300 characters." });
+      const cleanCopyright = normalizeCopyright(copyright, `${cleanReleaseYear || currentYear} ${canonicalArtistName}`);
+      if (cleanCopyright.length > 300) return res.status(400).json({ success: false, error: "Copyright text cannot exceed 300 characters." });
       const newTrack: TrackRecord = {
         id: createEntityId("trk"),
         userId: sessionUserId,
@@ -1308,12 +1339,110 @@ async function startServer() {
     }
   });
 
+  // Update a complete album/EP in one database write. The track ID resolves
+  // the release, including legacy albums that predate shared releaseId values.
+  app.put("/api/releases/:trackId", async (req, res) => {
+    try {
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
+
+      const db = await readDBAsync();
+      const seedTrack = db.tracks.find((item) => item.id === req.params.trackId);
+      if (!seedTrack) return res.status(404).json({ error: "Release not found." });
+      if (seedTrack.userId !== sessionUserId) return res.status(403).json({ error: "Forbidden: You can only edit releases you uploaded." });
+
+      const releaseTracks = db.tracks.filter((item) => {
+        if (item.userId !== sessionUserId) return false;
+        if (seedTrack.releaseId) return item.releaseId === seedTrack.releaseId;
+        return seedTrack.album !== "Single" && item.album === seedTrack.album;
+      });
+      const resolvedReleaseTracks = releaseTracks.length > 0 ? releaseTracks : [seedTrack];
+      const requestedTracks = Array.isArray(req.body.tracks) ? req.body.tracks : [];
+      if (requestedTracks.length !== resolvedReleaseTracks.length) {
+        return res.status(409).json({ error: "The release tracklist changed. Reopen the editor and try again." });
+      }
+
+      const requestedById = new Map<string, any>();
+      for (const item of requestedTracks) {
+        const id = typeof item?.id === "string" ? item.id.trim() : "";
+        if (!id || requestedById.has(id) || !resolvedReleaseTracks.some((candidate) => candidate.id === id)) {
+          return res.status(400).json({ error: "The release contains an invalid or duplicate track." });
+        }
+        const title = typeof item.title === "string" ? item.title.trim() : "";
+        const genre = typeof item.genre === "string" ? item.genre.trim() : "";
+        if (!title || title.length > 160) return res.status(400).json({ error: "Every track needs a title of at most 160 characters." });
+        if (genre.length > 80) return res.status(400).json({ error: "Genre cannot exceed 80 characters." });
+        requestedById.set(id, { title, genre });
+      }
+
+      const cleanReleaseType = typeof req.body.releaseType === "string" ? req.body.releaseType.trim().toUpperCase() : "";
+      if (!["EP", "ALBUM"].includes(cleanReleaseType)) return res.status(400).json({ error: "A multi-track release must be an EP or album." });
+      const cleanReleaseTitle = typeof req.body.releaseTitle === "string" ? req.body.releaseTitle.trim() : "";
+      if (!cleanReleaseTitle || cleanReleaseTitle.length > 160) return res.status(400).json({ error: "A valid release title is required." });
+
+      const currentYear = new Date().getFullYear();
+      const cleanReleaseYear = Number(req.body.releaseYear);
+      if (!Number.isInteger(cleanReleaseYear) || cleanReleaseYear < 1850 || cleanReleaseYear > currentYear + 1) {
+        return res.status(400).json({ error: "Release year is invalid." });
+      }
+
+      const owner = db.users.find((user) => user.id === sessionUserId);
+      if (!owner) return res.status(404).json({ error: "Track owner not found." });
+      const artistName = (owner.artistName || owner.displayName || owner.username).trim();
+      const cleanCopyright = normalizeCopyright(req.body.copyright, `${cleanReleaseYear} ${artistName}`);
+      if (cleanCopyright.length > 300) return res.status(400).json({ error: "Copyright text cannot exceed 300 characters." });
+
+      let persistentCoverUrl = seedTrack.coverUrl || owner.avatarUrl || DEFAULT_AVATAR_URL;
+      if (typeof req.body.coverUrl === "string" && req.body.coverUrl.trim()) {
+        const cleanCover = req.body.coverUrl.trim();
+        if (cleanCover.startsWith("data:")) {
+          const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
+          const imageBase64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
+          if (!mimeMatch || !imageBase64) return res.status(400).json({ error: "Invalid cover image." });
+          persistentCoverUrl = await saveUploadedFile(imageBase64, mimeMatch[1], sessionUserId, "cover");
+        } else {
+          if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Cover URL must use HTTP(S) or an uploaded file." });
+          persistentCoverUrl = cleanCover;
+        }
+      }
+
+      const sharedReleaseId = seedTrack.releaseId || createEntityId("rel");
+      const updatedTracks = requestedTracks.map((requestedTrack: any, index: number) => {
+        const existingIndex = db.tracks.findIndex((item) => item.id === requestedTrack.id);
+        const existingTrack = db.tracks[existingIndex];
+        const requested = requestedById.get(existingTrack.id)!;
+        const updatedTrack: TrackRecord = {
+          ...existingTrack,
+          artist: artistName,
+          title: requested.title,
+          genre: requested.genre,
+          album: cleanReleaseTitle,
+          releaseType: cleanReleaseType,
+          releaseTitle: cleanReleaseTitle,
+          releaseId: sharedReleaseId,
+          coverUrl: persistentCoverUrl,
+          copyright: cleanCopyright,
+          releaseYear: cleanReleaseYear,
+          trackNumber: index + 1,
+        };
+        db.tracks[existingIndex] = updatedTrack;
+        return updatedTrack;
+      });
+
+      await writeDBAsync(db);
+      return res.json({ success: true, tracks: updatedTracks });
+    } catch (error: any) {
+      console.error("Update Release Error:", error);
+      return res.status(500).json({ error: error?.message || "Failed to update release." });
+    }
+  });
+
   // Update Track (strict uploader ownership). Owner and artist identity are
   // immutable from the request body and are derived from the session user.
   app.put("/api/tracks/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const { title, album, genre, coverUrl, audioUrl, duration, releaseType, releaseTitle, copyright, releaseYear, trackNumber } = req.body;
+      const { title, album, genre, coverUrl, audioUrl, audioFileName, duration, releaseType, releaseTitle, copyright, releaseYear, trackNumber } = req.body;
       const sessionUserId = getUserIdFromToken(req);
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
 
@@ -1346,10 +1475,9 @@ async function startServer() {
       if (typeof audioUrl === "string" && audioUrl.trim()) {
         const cleanAudio = audioUrl.trim();
         if (cleanAudio.startsWith("data:")) {
-          const mimeMatch = cleanAudio.match(/^data:(audio\/[^;]+);base64,/);
-          const audioBase64 = cleanAudio.includes(",") ? cleanAudio.split(",")[1] : "";
-          if (!mimeMatch || !audioBase64) return res.status(400).json({ error: "Invalid audio file." });
-          persistentAudioUrl = await saveUploadedFile(audioBase64, mimeMatch?.[1] || "audio/mpeg", sessionUserId, "audio");
+          const parsedAudio = parseAudioDataUrl(cleanAudio, audioFileName);
+          if (!parsedAudio) return res.status(400).json({ error: "Unsupported audio file. Use MP3, WAV, OGG, M4A, AAC, or FLAC." });
+          persistentAudioUrl = await saveUploadedFile(parsedAudio.base64Data, parsedAudio.mimeType, sessionUserId, "audio");
         } else {
           if (!isStoredMediaUrl(cleanAudio)) return res.status(400).json({ error: "Audio URL must use HTTP(S) or an uploaded file." });
           persistentAudioUrl = cleanAudio;
@@ -1381,13 +1509,17 @@ async function startServer() {
       if (nextTrackNumber !== undefined && (!Number.isInteger(nextTrackNumber) || nextTrackNumber < 1 || nextTrackNumber > 999)) {
         return res.status(400).json({ error: "Track number must be an integer between 1 and 999." });
       }
-      const nextCopyright = copyright !== undefined ? (String(copyright).trim() || undefined) : existingTrack.copyright;
-      if (nextCopyright && nextCopyright.length > 300) return res.status(400).json({ error: "Copyright text cannot exceed 300 characters." });
+      const ownerArtistName = (owner.artistName || owner.displayName || owner.username).trim();
+      const nextCopyright = normalizeCopyright(
+        copyright !== undefined ? copyright : existingTrack.copyright,
+        `${nextReleaseYear || currentYear} ${ownerArtistName}`,
+      );
+      if (nextCopyright.length > 300) return res.status(400).json({ error: "Copyright text cannot exceed 300 characters." });
 
       const updatedTrack: TrackRecord = {
         ...existingTrack,
         userId: sessionUserId,
-        artist: (owner.artistName || owner.displayName || owner.username).trim(),
+        artist: ownerArtistName,
         title: nextTitle,
         album: nextAlbum,
         releaseType: nextReleaseType,
@@ -1966,6 +2098,8 @@ function parseCleanErrorMessage(err: any): { message: string; rateLimited: boole
           releaseType: "SINGLE",
           releaseTitle: title,
           releaseId: createEntityId("rel"),
+          copyright: normalizeCopyright(undefined, `${new Date().getFullYear()} ${(currentOwner.artistName || currentOwner.displayName || currentOwner.username).trim()}`),
+          releaseYear: new Date().getFullYear(),
           genre: "",
           duration: generatedDuration,
           audioUrl,
