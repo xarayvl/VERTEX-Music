@@ -1,5 +1,6 @@
 import { getArtistStats, groupTracksByRelease } from "../../utils/artistUtils";
-import React, { useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Play,
   Pause,
@@ -19,6 +20,9 @@ import {
   Twitter,
   Globe,
   Edit3,
+  Copy,
+  ExternalLink,
+  UserPlus,
 } from 'lucide-react';
 import { Artist, UserProfile, Track, Playlist } from '../../types';
 import { EditArtistModal } from '../Modals/EditArtistModal';
@@ -78,6 +82,51 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   const [discographyFilter, setDiscographyFilter] = useState<'popular' | 'singles'>('popular');
   const [showAllPopular, setShowAllPopular] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isArtistMenuOpen, setIsArtistMenuOpen] = useState(false);
+  const artistMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const artistMenuPanelRef = useRef<HTMLDivElement>(null);
+  const [artistMenuPosition, setArtistMenuPosition] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    setIsArtistMenuOpen(false);
+  }, [artist?.id]);
+
+  useEffect(() => {
+    if (!isArtistMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!artistMenuButtonRef.current?.contains(target) && !artistMenuPanelRef.current?.contains(target)) {
+        setIsArtistMenuOpen(false);
+      }
+    };
+    const closeMenu = () => setIsArtistMenuOpen(false);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeMenu();
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', closeMenu);
+    window.addEventListener('scroll', closeMenu, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', closeMenu);
+      window.removeEventListener('scroll', closeMenu, true);
+    };
+  }, [isArtistMenuOpen]);
+
+  useLayoutEffect(() => {
+    if (!isArtistMenuOpen || !artistMenuButtonRef.current || !artistMenuPanelRef.current) return;
+    const buttonRect = artistMenuButtonRef.current.getBoundingClientRect();
+    const panelRect = artistMenuPanelRef.current.getBoundingClientRect();
+    const padding = 12;
+    const left = Math.min(Math.max(padding, buttonRect.left), window.innerWidth - panelRect.width - padding);
+    const preferredTop = buttonRect.bottom + 8;
+    const top = preferredTop + panelRect.height <= window.innerHeight - padding
+      ? preferredTop
+      : Math.max(padding, buttonRect.top - panelRect.height - 8);
+    setArtistMenuPosition({ top, left });
+  }, [isArtistMenuOpen]);
 
   if (isLoading) {
     return (
@@ -176,6 +225,45 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   const instagramUrl = artist.instagramUrl;
   const twitterUrl = artist.twitterUrl;
   const websiteUrl = artist.websiteUrl;
+
+  const closeArtistMenu = () => setIsArtistMenuOpen(false);
+
+  const toggleArtistMenu = () => {
+    if (!isArtistMenuOpen && artistMenuButtonRef.current) {
+      const rect = artistMenuButtonRef.current.getBoundingClientRect();
+      setArtistMenuPosition({ top: rect.bottom + 8, left: Math.max(12, rect.left) });
+    }
+    setIsArtistMenuOpen((open) => !open);
+  };
+
+  const copyArtistLink = async () => {
+    const link = `${window.location.origin}/artist/${artist.id}`;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      const input = document.createElement('textarea');
+      input.value = link;
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+    }
+    closeArtistMenu();
+  };
+
+  const openArtistUrl = (value: string, provider: 'instagram' | 'twitter' | 'website') => {
+    const normalized = value.startsWith('http')
+      ? value
+      : provider === 'instagram'
+        ? `https://instagram.com/${value.replace('@', '')}`
+        : provider === 'twitter'
+          ? `https://twitter.com/${value.replace('@', '')}`
+          : `https://${value}`;
+    window.open(normalized, '_blank', 'noopener,noreferrer');
+    closeArtistMenu();
+  };
 
   const handlePlayArtist = () => {
     if (displayTracks.length > 0) {
@@ -318,24 +406,50 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
           <Shuffle className="w-6 h-6" />
         </button>
 
-        {/* Context Options Button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            const event = new MouseEvent('contextmenu', {
-              clientX: e.clientX,
-              clientY: e.clientY,
-              bubbles: true,
-            });
-            e.target?.dispatchEvent(event);
-          }}
-          data-artist-id={artist.id}
-          data-context-type="artist"
-          className="p-3 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
-          title="More options"
-        >
-          <MoreHorizontal className="w-6 h-6" />
-        </button>
+        {/* Artist-specific options — this intentionally does not dispatch the global right-click menu. */}
+        <div className="relative">
+          <button
+            ref={artistMenuButtonRef}
+            type="button"
+            onClick={(event) => { event.stopPropagation(); toggleArtistMenu(); }}
+            onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
+            aria-haspopup="menu"
+            aria-expanded={isArtistMenuOpen}
+            aria-label="More artist actions"
+            className={`control-press flex h-11 w-11 items-center justify-center rounded-2xl border transition-colors ${isArtistMenuOpen ? 'border-[#D946EF]/40 bg-[#D946EF]/15 text-[#F0ABFC]' : 'border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}
+            title="More artist actions"
+          >
+            <MoreHorizontal className="h-6 w-6" />
+          </button>
+
+          {isArtistMenuOpen && createPortal(
+            <div
+              ref={artistMenuPanelRef}
+              role="menu"
+              onClick={(event) => event.stopPropagation()}
+              onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
+              className="fixed z-[1000] w-64 max-h-[calc(100dvh-24px)] overflow-y-auto rounded-2xl border border-white/12 bg-[#161618] p-1.5 text-xs font-medium text-zinc-200 shadow-[0_24px_70px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-100 select-none"
+              style={{ top: artistMenuPosition.top, left: artistMenuPosition.left }}
+            >
+              <div className="space-y-0.5">
+                <button type="button" onClick={() => { handlePlayArtist(); closeArtistMenu(); }} disabled={displayTracks.length === 0} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><Play className="h-4 w-4 text-zinc-400" /><span>Play artist</span></button>
+                <button type="button" onClick={() => { onToggleShuffle?.(displayTracks); closeArtistMenu(); }} disabled={displayTracks.length === 0 || !onToggleShuffle} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><Shuffle className="h-4 w-4 text-zinc-400" /><span>{isShuffle ? 'Disable artist shuffle' : 'Shuffle artist'}</span></button>
+
+                {!isOwner && <button type="button" onClick={() => { onToggleFollow?.(artist); closeArtistMenu(); }} disabled={!onToggleFollow} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40">{isFollowing ? <Check className="h-4 w-4 text-[#D946EF]" /> : <UserPlus className="h-4 w-4 text-zinc-400" />}<span>{isFollowing ? 'Unfollow artist' : 'Follow artist'}</span></button>}
+                {isOwner && <button type="button" onClick={() => { setIsEditModalOpen(true); closeArtistMenu(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Edit3 className="h-4 w-4 text-[#D946EF]" /><span>Edit artist profile</span></button>}
+
+                <div className="my-1 h-px bg-white/[0.08]" />
+                <button type="button" onClick={() => void copyArtistLink()} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Copy className="h-4 w-4 text-zinc-400" /><span>Copy artist link</span></button>
+
+                {(instagramUrl || twitterUrl || websiteUrl) && <div className="my-1 h-px bg-white/[0.08]" />}
+                {instagramUrl && <button type="button" onClick={() => openArtistUrl(instagramUrl, 'instagram')} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Instagram className="h-4 w-4 text-pink-400" /><span>Open Instagram</span><ExternalLink className="ml-auto h-3 w-3 text-zinc-600" /></button>}
+                {twitterUrl && <button type="button" onClick={() => openArtistUrl(twitterUrl, 'twitter')} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Twitter className="h-4 w-4 text-sky-400" /><span>Open Twitter</span><ExternalLink className="ml-auto h-3 w-3 text-zinc-600" /></button>}
+                {websiteUrl && <button type="button" onClick={() => openArtistUrl(websiteUrl, 'website')} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Globe className="h-4 w-4 text-[#D946EF]" /><span>Open official site</span><ExternalLink className="ml-auto h-3 w-3 text-zinc-600" /></button>}
+              </div>
+            </div>,
+            document.body
+          )}
+        </div>
       </div>
 
       {/* MAIN CONTENT GRID (Popular Tracks + Artist Pick) */}

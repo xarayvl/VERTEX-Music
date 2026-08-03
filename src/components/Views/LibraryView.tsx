@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Library, Plus, Heart, Play, Grid, List, Disc } from 'lucide-react';
-import { Track, Playlist, Artist } from '../../types';
+import { Grid, Heart, Library, List, Mic2, Play, Plus } from 'lucide-react';
+import { Artist, Playlist, Track } from '../../types';
 
 interface LibraryViewProps {
   tracks: Track[];
@@ -17,6 +17,8 @@ interface LibraryViewProps {
   onToggleLike: (trackId: string) => void;
 }
 
+type LibraryFilter = 'liked' | 'playlists' | 'artists';
+
 export const LibraryView: React.FC<LibraryViewProps> = ({
   tracks,
   playlists,
@@ -28,364 +30,102 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onSelectArtist,
   onOpenNewPlaylistModal,
   onOpenAddTrackModal,
-  onWipeAllTracks,
   onToggleLike,
 }) => {
-  const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'liked' | 'artists'>(
-    'all'
-  );
+  // Playlists open first so anything the user just created is immediately
+  // visible when they return to Your Library.
+  const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>('playlists');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const likedTracks = tracks.filter((track) => track.isLiked);
 
-  const likedTracks = tracks.filter((t) => t.isLiked);
+  const emptyState = (icon: React.ReactNode, title: string, description: string, action?: React.ReactNode) => (
+    <div className="rounded-3xl border border-white/[0.07] bg-[#181818]/80 px-6 py-14 text-center shadow-xl">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-zinc-500">{icon}</div>
+      <h2 className="mt-4 text-base font-black text-white">{title}</h2>
+      <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-zinc-500">{description}</p>
+      {action}
+    </div>
+  );
 
   return (
-    <div className="space-y-6 pb-12 select-none">
-      {/* Header & Create Actions */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">Your Library</h1>
-
-        <div className="flex items-center space-x-2">
-          {onOpenAddTrackModal && (
-            <button
-              onClick={onOpenAddTrackModal}
-              className="flex items-center space-x-1.5 px-2 py-2 text-white/80 hover:text-white font-extrabold text-xs transition-all active:scale-95 hover:drop-shadow-[0_0_8px_rgba(217,70,239,0.85)]"
-            >
-              <span aria-hidden="true" className="text-[#D946EF]">+</span>
-              <span>Upload</span>
-            </button>
-          )}
-
-          <button
-            onClick={onOpenNewPlaylistModal}
-            className="flex items-center space-x-2 px-4 py-2 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white font-extrabold text-xs shadow-lg transition-all active:scale-95"
-          >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Create Playlist</span>
-          </button>
+    <div className="workspace-screen min-h-full space-y-6 overflow-x-hidden pb-14 text-white select-none">
+      <header className="workspace-card section-reveal relative overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-[#2b1738] via-[#19131f] to-[#121212] p-6 shadow-2xl sm:p-8">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-[#D946EF]/20 blur-3xl" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_14px_38px_rgba(168,85,247,0.3)]"><Library className="h-7 w-7" /></div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">Your collection</p>
+              <h1 className="mt-1 text-3xl font-black tracking-tight sm:text-4xl">Your Library</h1>
+              <p className="mt-1 text-xs text-zinc-400">Liked Songs · Playlists · Artists</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {onOpenAddTrackModal && <button type="button" onClick={onOpenAddTrackModal} className="control-press rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white">Upload</button>}
+            <button type="button" onClick={onOpenNewPlaylistModal} className="control-press flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3 text-xs font-black shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110"><Plus className="h-4 w-4" /> Create playlist</button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Filter Chips & View Mode Toggle */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2 overflow-x-auto">
-          {[
-            { id: 'all', label: 'All' },
-            { id: 'playlists', label: `Playlists (${playlists.length})` },
-            { id: 'liked', label: `Liked Songs (${likedTracks.length})` },
-            { id: 'artists', label: `Artists (${artists.length})` },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setLibraryFilter(tab.id as typeof libraryFilter)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-                libraryFilter === tab.id
-                  ? 'bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white shadow'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
-            >
-              {tab.label}
-            </button>
+      <div className="workspace-card section-reveal flex flex-col gap-3 rounded-3xl border border-white/10 bg-[#181818] p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
+          {([
+            { id: 'liked', label: `Liked Songs (${likedTracks.length})`, icon: Heart },
+            { id: 'playlists', label: `Playlists (${playlists.length})`, icon: List },
+            { id: 'artists', label: `Artists (${artists.length})`, icon: Mic2 },
+          ] as const).map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" onClick={() => setLibraryFilter(id)} className={`control-press flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-black transition-all ${libraryFilter === id ? 'border-[#D946EF]/45 bg-[#D946EF]/15 text-[#F0ABFC]' : 'border-white/[0.08] bg-white/[0.04] text-zinc-400 hover:bg-white/[0.08] hover:text-white'}`}><Icon className={`h-4 w-4 ${id === 'liked' && libraryFilter === id ? 'fill-current' : ''}`} /> {label}</button>
           ))}
         </div>
 
-        <div className="flex items-center space-x-1 p-1 bg-white/5 rounded-lg border border-white/10">
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-1.5 rounded transition-colors ${
-              viewMode === 'grid' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-white'
-            }`}
-            title="Grid View"
-          >
-            <Grid className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-1.5 rounded transition-colors ${
-              viewMode === 'list' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-white'
-            }`}
-            title="List View"
-          >
-            <List className="w-4 h-4" />
-          </button>
-        </div>
+        {libraryFilter !== 'liked' && <div className="flex self-end rounded-xl border border-white/10 bg-black/20 p-1 sm:self-auto">
+          <button type="button" onClick={() => setViewMode('grid')} className={`rounded-lg p-2 transition-colors ${viewMode === 'grid' ? 'bg-white/15 text-white' : 'text-zinc-500 hover:text-white'}`} aria-label="Grid view"><Grid className="h-4 w-4" /></button>
+          <button type="button" onClick={() => setViewMode('list')} className={`rounded-lg p-2 transition-colors ${viewMode === 'list' ? 'bg-white/15 text-white' : 'text-zinc-500 hover:text-white'}`} aria-label="List view"><List className="h-4 w-4" /></button>
+        </div>}
       </div>
 
-      {/* Liked Songs Gradient Banner */}
-      {(libraryFilter === 'all' || libraryFilter === 'liked') && (
-        <div className="relative overflow-hidden rounded-2xl p-6 bg-gradient-to-r from-purple-800 via-fuchsia-800 to-pink-700 shadow-xl flex items-center justify-between border border-white/10">
-          <div className="flex items-center space-x-5">
-            <div className="w-16 h-16 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center flex-shrink-0 shadow-lg">
-              <Heart className="w-8 h-8 text-white fill-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-black text-white tracking-tight">Liked Songs</h2>
-              <p className="text-xs text-white/80 font-medium mt-1">
-                {likedTracks.length} favorite tracks saved
-              </p>
-            </div>
+      {libraryFilter === 'liked' && (
+        <section className="space-y-5">
+          <div className="relative flex items-center justify-between overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-r from-purple-800 via-fuchsia-800 to-pink-700 p-6 shadow-2xl">
+            <div className="flex min-w-0 items-center gap-5"><div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/20 shadow-lg"><Heart className="h-8 w-8 fill-white" /></div><div className="min-w-0"><h2 className="truncate text-2xl font-black">Liked Songs</h2><p className="mt-1 text-xs font-medium text-white/75">{likedTracks.length} saved song{likedTracks.length === 1 ? '' : 's'}</p></div></div>
+            <button type="button" onClick={() => likedTracks[0] && onPlayTrack(likedTracks[0])} disabled={likedTracks.length === 0} className="control-press flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-2xl hover:scale-105 disabled:opacity-40"><Play className="ml-0.5 h-5 w-5 fill-black" /></button>
           </div>
 
-          <button
-            onClick={() => likedTracks[0] && onPlayTrack(likedTracks[0])}
-            disabled={likedTracks.length === 0}
-            className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
-          >
-            <Play className="w-6 h-6 fill-black ml-0.5" />
-          </button>
-        </div>
-      )}
-
-      {/* Your Library Collection: Playlists + Followed Artists live together
-          in one unified grid, just like the tracks above — they used to be
-          two separate sections that could each vanish independently when
-          empty, leaving an ugly blank gap at the bottom of the screen. */}
-      {(libraryFilter === 'all' || libraryFilter === 'playlists' || libraryFilter === 'artists') && (
-        <div>
-          <h3 className="text-lg font-extrabold text-white tracking-tight mb-4">
-            {libraryFilter === 'playlists'
-              ? 'Playlists'
-              : libraryFilter === 'artists'
-              ? 'Followed Artists'
-              : 'Your Collection'}
-          </h3>
-
-          {(libraryFilter === 'playlists' ? playlists.length === 0 : false) ||
-          (libraryFilter === 'artists' ? artists.length === 0 : false) ||
-          (libraryFilter === 'all' ? playlists.length === 0 && artists.length === 0 : false) ? (
-            <div className="p-8 rounded-2xl bg-[#181818]/70 border border-white/5 text-center text-zinc-400 space-y-2">
-              <Library className="w-10 h-10 mx-auto text-zinc-600 mb-2" />
-              <p className="text-sm font-bold text-white">
-                {libraryFilter === 'artists' ? 'No followed artists yet' : 'Nothing here yet'}
-              </p>
-              <p className="text-xs text-zinc-500">
-                {libraryFilter === 'artists'
-                  ? 'Follow an artist from their profile to see them here.'
-                  : 'Create a playlist or follow an artist to fill up your library.'}
-              </p>
-            </div>
-          ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {(libraryFilter === 'all' || libraryFilter === 'playlists') &&
-                playlists.map((pl) => (
-                  <div
-                    key={`pl-${pl.id}`}
-                    data-playlist-id={pl.id}
-                    data-context-type="playlist"
-                    onClick={() => onSelectPlaylist(pl)}
-                    className="card-interactive bg-[#181818] hover:bg-[#282828] p-4 rounded-xl flex flex-col justify-between group cursor-pointer transition-all shadow relative"
-                  >
-                    <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 shadow">
-                      <img
-                        src={pl.coverUrl}
-                        alt={pl.title}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      />
-                      {/* Quick Play Button */}
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onPlayPlaylist(pl);
-                        }}
-                        className="mobile-card-action absolute right-2 bottom-2 w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-200 hover:scale-110"
-                        title="Quick Play"
-                      >
-                        <Play className="w-5 h-5 fill-white ml-0.5" />
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
-                        {pl.title}
-                      </h4>
-                      <p className="text-xs text-zinc-400 truncate mt-1">
-                        Playlist • {pl.trackCount} tracks
-                      </p>
-                    </div>
-                  </div>
-                ))}
-
-              {(libraryFilter === 'all' || libraryFilter === 'artists') &&
-                artists.map((artist) => (
-                  <div
-                    key={`artist-${artist.id}`}
-                    data-artist-id={artist.id}
-                    data-context-type="artist"
-                    onClick={() => onSelectArtist && onSelectArtist(artist)}
-                    className="bg-[#181818] hover:bg-[#282828] p-4 rounded-xl flex flex-col justify-between group cursor-pointer transition-all shadow relative"
-                  >
-                    <div className="relative aspect-square w-full rounded-full overflow-hidden mb-3 shadow border border-white/5">
-                      <img
-                        src={artist.avatarUrl}
-                        alt={artist.name}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
-                        {artist.name}
-                      </h4>
-                      <p className="text-xs text-zinc-400 truncate mt-1">
-                        Artist • {artist.totalStreamsLabel || '0 total streams'}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          ) : (
-            <div className="bg-[#181818]/60 rounded-xl divide-y divide-white/[0.04] border border-white/[0.04]">
-              {(libraryFilter === 'all' || libraryFilter === 'playlists') &&
-                playlists.map((pl) => (
-                  <div
-                    key={`pl-${pl.id}`}
-                    data-playlist-id={pl.id}
-                    data-context-type="playlist"
-                    onClick={() => onSelectPlaylist(pl)}
-                    className="p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer group"
-                  >
-                    <div className="flex items-center space-x-4 min-w-0">
-                      <img
-                        src={pl.coverUrl}
-                        alt={pl.title}
-                        referrerPolicy="no-referrer"
-                        className="w-12 h-12 rounded object-cover shadow"
-                      />
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF]">
-                          {pl.title}
-                        </h4>
-                        <p className="text-xs text-zinc-400 truncate">{pl.description}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className="text-xs font-mono text-zinc-400">{pl.trackCount} Tracks</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onPlayPlaylist(pl);
-                        }}
-                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-[#A855F7] text-white flex items-center justify-center transition-colors"
-                        title="Quick Play"
-                      >
-                        <Play className="w-4 h-4 fill-white ml-0.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-              {(libraryFilter === 'all' || libraryFilter === 'artists') &&
-                artists.map((artist) => (
-                  <div
-                    key={`artist-${artist.id}`}
-                    data-artist-id={artist.id}
-                    data-context-type="artist"
-                    onClick={() => onSelectArtist && onSelectArtist(artist)}
-                    className="p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer group"
-                  >
-                    <div className="flex items-center space-x-4 min-w-0">
-                      <img
-                        src={artist.avatarUrl}
-                        alt={artist.name}
-                        referrerPolicy="no-referrer"
-                        className="w-12 h-12 rounded-full object-cover shadow border border-white/5"
-                      />
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF]">
-                          {artist.name}
-                        </h4>
-                        <p className="text-xs text-zinc-400 truncate">
-                          {artist.totalStreamsLabel || '0 total streams'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+          {likedTracks.length === 0 ? emptyState(<Heart className="h-6 w-6" />, 'No liked songs yet', 'Tap the heart on any track to save it here.') : (
+            <div className="overflow-hidden rounded-3xl border border-white/[0.07] bg-[#181818]/80 divide-y divide-white/[0.045]">
+              {likedTracks.map((track) => <div key={track.id} data-track-id={track.id} data-context-type="track" onClick={() => onSelectAlbum?.(track)} className="group flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-white/[0.06] sm:px-5">
+                <button type="button" onClick={(event) => { event.stopPropagation(); onPlayTrack(track); }} className="control-press group/cover relative h-11 w-11 shrink-0 overflow-hidden rounded-xl"><img src={track.coverUrl} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" /><span className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 group-hover/cover:opacity-100"><Play className="h-4 w-4 fill-white" /></span></button>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{track.title}</p><button type="button" data-artist-id={track.userId} data-context-type="artist" onClick={(event) => { event.stopPropagation(); onSelectArtist?.(track.userId || ''); }} className="mt-1 truncate text-left text-[10px] text-zinc-500 hover:text-[#D946EF] hover:underline">{track.artist}</button></div>
+                <button type="button" onClick={(event) => { event.stopPropagation(); onToggleLike(track.id); }} className="control-press rounded-xl p-2 text-[#D946EF]" aria-label={`Remove ${track.title} from Liked Songs`}><Heart className="h-4 w-4 fill-current" /></button>
+                <span className="hidden font-mono text-[10px] text-zinc-500 sm:block">{Math.floor(track.duration / 60)}:{Math.floor(track.duration % 60).toString().padStart(2, '0')}</span>
+              </div>)}
             </div>
           )}
-        </div>
+        </section>
       )}
 
-      {/* Liked Songs List View */}
-      {(libraryFilter === 'all' || libraryFilter === 'liked') && (
-        <div>
-          <h3 className="text-lg font-extrabold text-white tracking-tight mb-4">Saved Tracks</h3>
-          {likedTracks.length === 0 ? (
-            <div className="p-8 rounded-2xl bg-[#181818]/70 border border-white/5 text-center text-zinc-400 space-y-2">
-              <Heart className="w-10 h-10 mx-auto text-zinc-600 mb-2" />
-              <p className="text-sm font-bold text-white">No liked songs yet</p>
-              <p className="text-xs text-zinc-500">Tap the heart on any track to save it here.</p>
-            </div>
+      {libraryFilter === 'playlists' && (
+        <section>
+          {playlists.length === 0 ? emptyState(<List className="h-6 w-6" />, 'No playlists yet', 'Create your first playlist and it will appear here immediately.', <button type="button" onClick={onOpenNewPlaylistModal} className="control-press mt-5 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3 text-xs font-black"><Plus className="h-4 w-4" /> Create playlist</button>) : viewMode === 'grid' ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">{playlists.map((playlist, index) => <article key={playlist.id} data-playlist-id={playlist.id} data-context-type="playlist" onClick={() => onSelectPlaylist(playlist)} style={{ '--stagger-index': index } as React.CSSProperties} className="stagger-item card-interactive group cursor-pointer rounded-2xl border border-white/[0.06] bg-[#181818] p-3.5 shadow-xl hover:bg-[#282828]">
+              <div className="relative aspect-square overflow-hidden rounded-xl shadow-lg"><img src={playlist.coverUrl} alt={playlist.title} referrerPolicy="no-referrer" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" /><button type="button" onClick={(event) => { event.stopPropagation(); onPlayPlaylist(playlist); }} disabled={playlist.trackIds.length === 0} className="mobile-card-action control-press absolute bottom-2 right-2 flex h-11 w-11 translate-y-2 items-center justify-center rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] opacity-0 shadow-2xl group-hover:translate-y-0 group-hover:opacity-100 disabled:opacity-40"><Play className="ml-0.5 h-5 w-5 fill-white" /></button></div>
+              <h3 className="mt-3 truncate text-sm font-black transition-colors group-hover:text-[#F0ABFC]">{playlist.title}</h3><p className="mt-1 truncate text-[10px] text-zinc-500">Playlist · {playlist.trackCount} tracks</p>
+            </article>)}</div>
           ) : (
-          <div className="bg-[#181818]/60 rounded-xl divide-y divide-white/[0.04] border border-white/[0.04]">
-            {likedTracks.map((track) => (
-              <div
-                key={track.id}
-                data-track-id={track.id}
-                data-context-type="track"
-                onClick={() => {
-                  if (onSelectAlbum) onSelectAlbum(track);
-                }}
-                className="p-3 flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer group"
-              >
-                <div className="flex items-center space-x-3.5 min-w-0 flex-1">
-                  <div className="relative flex-shrink-0">
-                    <img
-                      src={track.coverUrl}
-                      alt={track.title}
-                      referrerPolicy="no-referrer"
-                      className="w-10 h-10 rounded object-cover"
-                    />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPlayTrack(track);
-                      }}
-                      className="absolute inset-0 bg-black/60 items-center justify-center rounded hidden group-hover:flex"
-                    >
-                      <Play className="w-4 h-4 fill-white ml-0.5" />
-                    </button>
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF]">
-                      {track.title}
-                    </h4>
-                    <p
-                      data-artist-id={track.userId}
-                      data-context-type="artist"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onSelectArtist) onSelectArtist(track.userId || '');
-                      }}
-                      className="text-xs text-zinc-400 truncate hover:underline hover:text-[#D946EF]"
-                    >
-                      {track.artist}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleLike(track.id);
-                    }}
-                    className="p-1.5 text-[#D946EF]"
-                  >
-                    <Heart className="w-4 h-4 fill-[#D946EF]" />
-                  </button>
-                  <span className="text-xs font-mono text-zinc-400">
-                    {Math.floor(track.duration / 60)}:
-                    {track.duration % 60 < 10 ? '0' : ''}
-                    {track.duration % 60}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+            <div className="overflow-hidden rounded-3xl border border-white/[0.07] bg-[#181818]/80 divide-y divide-white/[0.045]">{playlists.map((playlist) => <div key={playlist.id} data-playlist-id={playlist.id} data-context-type="playlist" onClick={() => onSelectPlaylist(playlist)} className="group flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-white/[0.06] sm:px-5"><img src={playlist.coverUrl} alt="" referrerPolicy="no-referrer" className="h-12 w-12 rounded-xl object-cover" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-black group-hover:text-[#F0ABFC]">{playlist.title}</p><p className="mt-1 truncate text-[10px] text-zinc-500">{playlist.description || `${playlist.trackCount} tracks`}</p></div><span className="hidden text-[10px] font-bold text-zinc-500 sm:block">{playlist.trackCount} tracks</span><button type="button" onClick={(event) => { event.stopPropagation(); onPlayPlaylist(playlist); }} disabled={playlist.trackIds.length === 0} className="control-press flex h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-[#A855F7] disabled:opacity-40"><Play className="h-4 w-4 fill-white" /></button></div>)}</div>
           )}
-        </div>
+        </section>
       )}
 
+      {libraryFilter === 'artists' && (
+        <section>
+          {artists.length === 0 ? emptyState(<Mic2 className="h-6 w-6" />, 'No followed artists yet', 'Follow an artist from their profile to keep them in Your Library.') : viewMode === 'grid' ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">{artists.map((artist, index) => <article key={artist.id} data-artist-id={artist.id} data-context-type="artist" onClick={() => onSelectArtist?.(artist)} style={{ '--stagger-index': index } as React.CSSProperties} className="stagger-item group cursor-pointer rounded-2xl border border-white/[0.06] bg-[#181818] p-4 text-center shadow-xl hover:bg-[#282828]"><img src={artist.avatarUrl} alt={artist.name} referrerPolicy="no-referrer" className="mx-auto aspect-square w-full rounded-full border border-white/[0.08] object-cover shadow-xl transition-transform duration-300 group-hover:scale-[1.03]" /><h3 className="mt-3 truncate text-sm font-black group-hover:text-[#F0ABFC]">{artist.name}</h3><p className="mt-1 text-[10px] text-zinc-500">Artist</p></article>)}</div>
+          ) : (
+            <div className="overflow-hidden rounded-3xl border border-white/[0.07] bg-[#181818]/80 divide-y divide-white/[0.045]">{artists.map((artist) => <div key={artist.id} data-artist-id={artist.id} data-context-type="artist" onClick={() => onSelectArtist?.(artist)} className="group flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-white/[0.06] sm:px-5"><img src={artist.avatarUrl} alt="" referrerPolicy="no-referrer" className="h-12 w-12 rounded-full border border-white/[0.08] object-cover" /><div className="min-w-0"><p className="truncate text-sm font-black group-hover:text-[#F0ABFC]">{artist.name}</p><p className="mt-1 truncate text-[10px] text-zinc-500">{artist.totalStreamsLabel || 'Artist'}</p></div></div>)}</div>
+          )}
+        </section>
+      )}
     </div>
   );
 };

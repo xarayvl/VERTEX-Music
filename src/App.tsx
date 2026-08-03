@@ -80,6 +80,10 @@ export default function App() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [artists, setArtists] = useState<Artist[]>([]);
   const [serverDataLoaded, setServerDataLoaded] = useState(false);
+  // Prevent a slower background /api/data request from replacing a playlist
+  // that was created or edited while that request was still in flight.
+  const playlistMutationVersionRef = useRef(0);
+  const activePlaylistMutationsRef = useRef(0);
 
   // Followed Artists State (User-Scoped)
   const [followedArtistIds, setFollowedArtistIds] = useState<string[]>([]);
@@ -526,6 +530,7 @@ export default function App() {
   // background polls only need to keep the shared tracks/playlists lists (i.e. other users'
   // uploads) up to date.
   const fetchServerData = React.useCallback(async (includeChatAndUser: boolean = true) => {
+    const playlistVersionAtRequestStart = playlistMutationVersionRef.current;
     try {
       const token = localStorage.getItem('vertex_session_token');
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
@@ -535,7 +540,12 @@ export default function App() {
         const serverTracks: Track[] = Array.isArray(data.tracks) ? data.tracks : [];
         const likedIds: string[] = Array.isArray(data.likedTrackIds) ? data.likedTrackIds : [];
         setTracks(serverTracks.map((track) => ({ ...track, isLiked: likedIds.includes(track.id) })));
-        setPlaylists(Array.isArray(data.playlists) ? data.playlists : []);
+        if (
+          activePlaylistMutationsRef.current === 0 &&
+          playlistMutationVersionRef.current === playlistVersionAtRequestStart
+        ) {
+          setPlaylists(Array.isArray(data.playlists) ? data.playlists : []);
+        }
         setArtists(Array.isArray(data.artists) ? data.artists.map(normalizePublicArtist).filter((artist: Artist) => artist.id && artist.name) : []);
         setFollowedArtistIds(Array.isArray(data.followedArtistIds) ? data.followedArtistIds : []);
         const recentIds: string[] = Array.isArray(data.recentTrackIds) ? data.recentTrackIds : [];
@@ -1210,11 +1220,18 @@ export default function App() {
     handleSelectTab('playlist');
   };
 
-  const handleUpdatePlaylist = async (updatedPlaylist: Playlist) => {
+  const handleUpdatePlaylist = async (updatedPlaylist: Playlist): Promise<boolean> => {
     const existing = playlists.find((playlist) => playlist.id === updatedPlaylist.id);
-    if (!existing) return showToast('404 — Playlist not found.');
-    if (!userProfile || existing.userId !== userProfile.id) return showToast('Only the playlist owner can edit it.');
+    if (!existing) {
+      showToast('404 — Playlist not found.');
+      return false;
+    }
+    if (!userProfile || existing.userId !== userProfile.id) {
+      showToast('Only the playlist owner can edit it.');
+      return false;
+    }
 
+    activePlaylistMutationsRef.current += 1;
     try {
       const response = await fetch(`/api/playlists/${updatedPlaylist.id}`, {
         method: 'PUT',
@@ -1227,11 +1244,20 @@ export default function App() {
         }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.playlist) return showToast(data?.error || 'Playlist update failed.');
+      if (!response.ok || !data?.playlist) {
+        showToast(data?.error || 'Playlist update failed.');
+        return false;
+      }
       setPlaylists((previous) => previous.map((playlist) => (playlist.id === data.playlist.id ? data.playlist : playlist)));
+      showToast('Playlist updated.');
+      return true;
     } catch (error) {
       console.error('Error updating playlist:', error);
       showToast('Playlist update failed.');
+      return false;
+    } finally {
+      activePlaylistMutationsRef.current = Math.max(0, activePlaylistMutationsRef.current - 1);
+      playlistMutationVersionRef.current += 1;
     }
   };
 
@@ -1240,6 +1266,7 @@ export default function App() {
     if (!target) return showToast('404 — Playlist not found.');
     if (!userProfile || target.userId !== userProfile.id) return showToast('Only the playlist owner can delete it.');
 
+    activePlaylistMutationsRef.current += 1;
     try {
       const response = await fetch(`/api/playlists/${playlistId}`, { method: 'DELETE', headers: getAuthHeaders() });
       const data = await response.json().catch(() => null);
@@ -1252,6 +1279,9 @@ export default function App() {
     } catch (error) {
       console.error('Error deleting playlist:', error);
       showToast('Playlist delete failed.');
+    } finally {
+      activePlaylistMutationsRef.current = Math.max(0, activePlaylistMutationsRef.current - 1);
+      playlistMutationVersionRef.current += 1;
     }
   };
 
@@ -1266,6 +1296,7 @@ export default function App() {
       return null;
     }
 
+    activePlaylistMutationsRef.current += 1;
     try {
       const response = await fetch(`/api/playlists/${playlistId}`, {
         method: 'PUT',
@@ -1283,6 +1314,9 @@ export default function App() {
       console.error('Error changing playlist tracks:', error);
       showToast('Playlist update failed.');
       return null;
+    } finally {
+      activePlaylistMutationsRef.current = Math.max(0, activePlaylistMutationsRef.current - 1);
+      playlistMutationVersionRef.current += 1;
     }
   };
 
@@ -1315,6 +1349,7 @@ export default function App() {
 
   const handleCreatePlaylist = async (draft: NewPlaylistDraft) => {
     if (!userProfile) return showToast('Sign in to create a playlist.');
+    activePlaylistMutationsRef.current += 1;
     try {
       const response = await fetch('/api/playlists', {
         method: 'POST',
@@ -1328,12 +1363,22 @@ export default function App() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.playlist) return showToast(data?.error || 'Playlist creation failed.');
-      setPlaylists((previous) => [data.playlist, ...previous.filter((playlist) => playlist.id !== data.playlist.id)]);
-      setSelectedPlaylistId(data.playlist.id);
+      const createdPlaylist: Playlist = {
+        ...data.playlist,
+        userId: String(data.playlist.userId || userProfile.id),
+        trackIds: Array.isArray(data.playlist.trackIds) ? data.playlist.trackIds : [],
+        trackCount: Number(data.playlist.trackCount) || 0,
+      };
+      setPlaylists((previous) => [createdPlaylist, ...previous.filter((playlist) => playlist.id !== createdPlaylist.id)]);
+      setSelectedPlaylistId(createdPlaylist.id);
       handleSelectTab('playlist');
+      showToast(`Created "${createdPlaylist.title}" and added it to Your Library.`);
     } catch (error) {
       console.error('Error creating playlist:', error);
       showToast('Playlist creation failed.');
+    } finally {
+      activePlaylistMutationsRef.current = Math.max(0, activePlaylistMutationsRef.current - 1);
+      playlistMutationVersionRef.current += 1;
     }
   };
 

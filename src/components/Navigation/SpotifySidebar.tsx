@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Home,
   Search,
@@ -51,8 +51,17 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
   onSelectArtist,
   isCompact = false,
 }) => {
-  const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists'>('all');
+  const [libraryFilter, setLibraryFilter] = useState<'all' | 'liked' | 'playlists' | 'artists'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const previousPlaylistCountRef = useRef(playlists.length);
+
+  useEffect(() => {
+    if (playlists.length > previousPlaylistCountRef.current) {
+      setLibraryFilter('playlists');
+      setSearchQuery('');
+    }
+    previousPlaylistCountRef.current = playlists.length;
+  }, [playlists.length]);
 
   const likedTracks = tracks.filter((t) => t.isLiked);
 
@@ -190,6 +199,16 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
         {/* Filter Pills */}
         <div className={`${isCompact ? 'hidden' : 'flex'} items-center space-x-2 px-2 py-2 overflow-x-auto scrollbar-none`}>
           <button
+            onClick={() => setLibraryFilter(libraryFilter === 'liked' ? 'all' : 'liked')}
+            className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+              libraryFilter === 'liked'
+                ? 'bg-white text-black font-bold'
+                : 'bg-[#242424] text-white hover:bg-[#2a2a2a]'
+            }`}
+          >
+            Liked Songs
+          </button>
+          <button
             onClick={() => setLibraryFilter(libraryFilter === 'playlists' ? 'all' : 'playlists')}
             className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
               libraryFilter === 'playlists'
@@ -228,7 +247,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
         {/* Scrollable Library Contents */}
         <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar mt-1">
           {/* Liked Songs Tile */}
-          <div
+          {(libraryFilter === 'all' || libraryFilter === 'liked') && <div
             onClick={() => onSelectTab('library')}
             title="Liked Songs"
             className={`flex items-center p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors ${isCompact ? 'justify-center' : 'space-x-3'}`}
@@ -244,79 +263,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
                 <span>Playlist</span> • <span>{likedTracks.length} songs</span>
               </p>
             </div>
-          </div>
-
-          {/* Saved Artists — grouped with Liked Songs & Recently Played so
-              this whole "your stuff at a glance" cluster stays together,
-              instead of Artists sitting all the way down past Playlists. */}
-          {(libraryFilter === 'all' || libraryFilter === 'artists') &&
-            filteredArtists.map((artist) => {
-              return (
-                <div
-                  key={artist.id}
-                  data-artist-id={artist.id}
-                  data-context-type="artist"
-                  onClick={() => onSelectArtist?.(artist)}
-                  title={artist.name}
-                  className={`flex items-center p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors ${isCompact ? 'justify-center' : 'space-x-3'}`}
-                >
-                  <img
-                    src={artist.avatarUrl}
-                    alt={artist.name}
-                    referrerPolicy="no-referrer"
-                    className="w-12 h-12 rounded-full object-cover flex-shrink-0 shadow-md border border-white/10"
-                  />
-                  <div className={isCompact ? 'hidden' : 'min-w-0 flex-1'}>
-                    <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
-                      {artist.name}
-                    </h4>
-                    <p className="text-xs text-zinc-400 truncate">Artist</p>
-                  </div>
-                </div>
-              );
-            })}
-
-          {/* Recently Played List */}
-          {recentlyPlayed && recentlyPlayed.length > 0 && (
-            <div className={`${isCompact ? 'pt-1' : 'pt-3'} pb-1 mt-1`}>
-              <p className={isCompact ? 'hidden' : 'text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider px-2 mb-1'}>
-                Recently Played
-              </p>
-              <div className="space-y-0.5">
-                {recentlyPlayed.map((track) => (
-                  <div
-                    key={`sidebar-recent-${track.id}`}
-                    data-track-id={track.id}
-                    data-context-type="track"
-                    onClick={() => {
-                      if (onSelectAlbum) {
-                        onSelectAlbum(track);
-                      } else {
-                        onPlayTrack(track);
-                      }
-                    }}
-                    title={`${track.title} — ${track.artist}`}
-                    className={`flex items-center p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-all ${isCompact ? 'justify-center' : 'space-x-3'}`}
-                  >
-                    <img
-                      src={track.coverUrl}
-                      alt={track.title}
-                      referrerPolicy="no-referrer"
-                      className="w-10 h-10 rounded-md object-cover flex-shrink-0 shadow-md"
-                    />
-                    <div className={isCompact ? 'hidden' : 'min-w-0 flex-1'}>
-                      <h5 className="text-xs font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
-                        {track.title}
-                      </h5>
-                      <p className="text-[10px] text-zinc-400 truncate">
-                        {track.artist}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          </div>}
 
           {/* Playlists */}
           {(libraryFilter === 'all' || libraryFilter === 'playlists') &&
@@ -342,6 +289,25 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
                   <p className="text-xs text-zinc-400 truncate">
                     Playlist • {playlist.trackCount} tracks
                   </p>
+                </div>
+              </div>
+            ))}
+
+          {/* Followed artists always come after playlists in Your Library. */}
+          {(libraryFilter === 'all' || libraryFilter === 'artists') &&
+            filteredArtists.map((artist) => (
+              <div
+                key={artist.id}
+                data-artist-id={artist.id}
+                data-context-type="artist"
+                onClick={() => onSelectArtist?.(artist)}
+                title={artist.name}
+                className={`flex items-center rounded-lg p-2 transition-colors hover:bg-[#1f1f1f] cursor-pointer group ${isCompact ? 'justify-center' : 'space-x-3'}`}
+              >
+                <img src={artist.avatarUrl} alt={artist.name} referrerPolicy="no-referrer" className="h-12 w-12 flex-shrink-0 rounded-full border border-white/10 object-cover shadow-md" />
+                <div className={isCompact ? 'hidden' : 'min-w-0 flex-1'}>
+                  <h4 className="truncate text-sm font-bold text-white transition-colors group-hover:text-[#D946EF]">{artist.name}</h4>
+                  <p className="truncate text-xs text-zinc-400">Artist</p>
                 </div>
               </div>
             ))}

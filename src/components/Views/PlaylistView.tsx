@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Clock,
   Copy,
@@ -89,6 +90,15 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
     setShowAddSection(false);
     setPendingTrackIds(new Set());
   }, [playlist?.id]);
+
+  useEffect(() => {
+    if (!showAddSection) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowAddSection(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showAddSection]);
 
   if (!playlist) {
     return (
@@ -188,7 +198,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             <Shuffle className="h-4 w-4" /> <span className="hidden sm:inline">{isCurrentPlaylistShuffled ? 'Shuffling' : 'Shuffle'}</span>
           </button>
           {canManage && <button type="button" onClick={onOpenEditModal} className="control-press flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"><Edit3 className="h-4 w-4 text-[#D946EF]" /> Edit</button>}
-          {canManage && <button type="button" onClick={() => setShowAddSection((visible) => !visible)} className={`control-press flex h-11 items-center gap-2 rounded-2xl border px-4 text-xs font-black ${showAddSection ? 'border-[#D946EF]/50 bg-[#D946EF]/15 text-[#F0ABFC]' : 'border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white'}`}>{showAddSection ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />} {showAddSection ? 'Close songs' : 'Add songs'}</button>}
+          {canManage && <button type="button" onClick={() => setShowAddSection(true)} className="control-press flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"><Plus className="h-4 w-4" /> Add songs</button>}
           <button type="button" onClick={handleCopyLink} className="control-press flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"><Copy className="h-4 w-4" /><span className="hidden sm:inline">Copy link</span></button>
         </div>
 
@@ -244,17 +254,19 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
         )}
       </section>
 
-      {canManage && showAddSection && (
-        <section className="workspace-card section-reveal rounded-3xl border border-[#D946EF]/20 bg-gradient-to-b from-[#211526] to-[#181818] p-5 shadow-xl sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      {canManage && showAddSection && createPortal(
+        <div className="fixed inset-0 z-[950] flex items-center justify-center bg-black/80 p-3 text-white sm:p-6" onMouseDown={(event) => { if (event.currentTarget === event.target) setShowAddSection(false); }}>
+        <section role="dialog" aria-modal="true" aria-label={`Add songs to ${playlist.title}`} className="workspace-card section-reveal flex max-h-[min(82dvh,760px)] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-[#D946EF]/20 bg-gradient-to-b from-[#211526] to-[#181818] shadow-[0_32px_100px_rgba(0,0,0,0.9)]">
+          <header className="flex flex-col gap-4 border-b border-white/10 p-5 sm:flex-row sm:items-end sm:justify-between sm:p-6">
             <div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#D8B4FE]">Build your mix</p><h2 className="mt-1 text-xl font-black">Add songs to {playlist.title}</h2><p className="mt-1 text-xs text-zinc-500">Search the catalog, preview a track or add it directly.</p></div>
-            <div className="relative w-full sm:w-72"><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input value={songSearchQuery} onChange={(event) => setSongSearchQuery(event.target.value)} placeholder="Search songs, artists, albums..." className="w-full rounded-2xl border border-white/10 bg-black/25 py-3 pl-11 pr-4 text-xs text-white outline-none placeholder:text-zinc-600 focus:border-[#C084FC]/60 focus:ring-4 focus:ring-[#A855F7]/10" /></div>
-          </div>
+            <div className="flex items-center gap-2"><div className="relative min-w-0 flex-1 sm:w-72"><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input autoFocus value={songSearchQuery} onChange={(event) => setSongSearchQuery(event.target.value)} placeholder="Search songs, artists, albums..." className="w-full rounded-2xl border border-white/10 bg-black/25 py-3 pl-11 pr-4 text-xs text-white outline-none placeholder:text-zinc-600 focus:border-[#C084FC]/60 focus:ring-4 focus:ring-[#A855F7]/10" /></div><button type="button" onClick={() => setShowAddSection(false)} className="control-press flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white" aria-label="Close add songs"><X className="h-5 w-5" /></button></div>
+          </header>
 
+          <div className="min-h-0 overflow-y-auto p-5 sm:p-6">
           {availableTracks.length === 0 ? (
-            <div className="mt-5 rounded-2xl border border-white/[0.06] bg-black/15 p-6 text-center text-xs text-zinc-500">{normalizedQuery ? 'No available tracks match this search.' : 'Every catalog track is already in this playlist.'}</div>
+            <div className="rounded-2xl border border-white/[0.06] bg-black/15 p-8 text-center text-xs text-zinc-500">{normalizedQuery ? 'No available tracks match this search.' : 'Every catalog track is already in this playlist.'}</div>
           ) : (
-            <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+            <div className="grid gap-2.5 sm:grid-cols-2">
               {availableTracks.map((track, index) => {
                 const pending = pendingTrackIds.has(track.id);
                 return (
@@ -267,7 +279,10 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
               })}
             </div>
           )}
+          </div>
         </section>
+        </div>,
+        document.body
       )}
     </div>
   );
