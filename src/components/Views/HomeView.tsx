@@ -23,9 +23,9 @@ interface HomeViewProps {
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
-  tracks,
-  playlists,
-  albums,
+  tracks = [],
+  playlists = [],
+  albums = [],
   currentTrackId,
   isPlaying,
   onPlayTrack,

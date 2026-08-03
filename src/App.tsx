@@ -1811,6 +1811,7 @@ export default function App() {
               <div key={activeTab} className="view-transition">
                 {activeTab === 'home' && (
               <HomeView
+                tracks={tracks}
                 playlists={playlists}
                 albums={[]}
                 currentTrackId={currentTrack?.id}
@@ -1830,6 +1831,7 @@ export default function App() {
 
             {activeTab === 'browse' && (
               <BrowseView
+                tracks={tracks}
                 playlists={playlists}
                 artists={artists}
                 onPlayTrack={handlePlayTrack}
@@ -1841,6 +1843,7 @@ export default function App() {
 
             {activeTab === 'search' && (
               <SearchView
+                tracks={tracks}
                 playlists={playlists}
                 artists={artists}
                 userProfile={userProfile}
@@ -1903,6 +1906,7 @@ export default function App() {
               <ProfileView
                 userProfile={userProfile}
                 onUpdateProfile={handleUpdateUserProfile}
+                tracks={tracks}
                 playlists={playlists}
                 recentlyPlayed={recentlyPlayed}
                 onPlayTrack={handlePlayTrack}

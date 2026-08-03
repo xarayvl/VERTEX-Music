@@ -85,7 +85,7 @@ const ReliableArtistImage: React.FC<ReliableArtistImageProps> = ({ src, fallback
 export const ProfileView: React.FC<ProfileViewProps> = ({
   userProfile,
   onUpdateProfile,
-  tracks,
+  tracks = [],
   playlists = [],
   recentlyPlayed = [],
   onPlayTrack,

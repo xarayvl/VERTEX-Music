@@ -31,9 +31,9 @@ interface SearchArtistItem extends Partial<Artist>, Partial<UserProfile> {
 }
 
 export const SearchView: React.FC<SearchViewProps> = ({
-  tracks: initialTracks,
-  playlists: initialPlaylists,
-  artists: initialArtists,
+  tracks: initialTracks = [],
+  playlists: initialPlaylists = [],
+  artists: initialArtists = [],
   userProfile,
   onPlayTrack,
   onSelectPlaylist,

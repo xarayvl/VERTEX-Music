@@ -10,7 +10,7 @@ interface LibraryViewProps {
   onPlayPlaylist: (playlist: Playlist) => void;
   onSelectPlaylist: (playlist: Playlist) => void;
   onSelectAlbum?: (track: Track) => void;
-  onSelectArtist?: (artistName: string) => void;
+  onSelectArtist?: (artist: Artist | string) => void;
   onOpenNewPlaylistModal: () => void;
   onOpenAddTrackModal?: () => void;
   onWipeAllTracks?: () => void;

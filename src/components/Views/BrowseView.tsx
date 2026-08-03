@@ -15,9 +15,9 @@ interface BrowseViewProps {
 }
 
 export const BrowseView: React.FC<BrowseViewProps> = ({
-  tracks,
-  playlists,
-  artists,
+  tracks = [],
+  playlists = [],
+  artists = [],
   onPlayTrack,
   onSelectPlaylist,
   onSelectAlbum,
