@@ -77,7 +77,7 @@ You'll need a `GEMINI_API_KEY` for the AI chat and music generation features (se
 
 ## ⚖️ Disclaimer
 
-VERTEX Music is an independent portfolio project. It doesn't claim ownership of any third-party music, artwork, or branding used during development.
+VERTEX Music is an independent non-serious project. It doesn't claim ownership of any third-party music, artwork, or branding used during development.
 
 <br/>
 
