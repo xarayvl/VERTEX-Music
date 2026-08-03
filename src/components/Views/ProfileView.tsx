@@ -162,7 +162,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       displayName: displayName.trim() || userProfile.displayName,
       username: username.trim() || userProfile.username,
       bio: bio.trim(),
-      avatarUrl: avatarUrl || userProfile.avatarUrl,
+      avatarUrl,
       favoriteGenres,
     });
     setIsEditing(false);
@@ -303,15 +303,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
         {/* Action Bar */}
         <div className="flex items-center space-x-3 pt-8 flex-wrap gap-y-3">
-          <button
-            onClick={() => personalTopTracks[0] && onPlayTrack(personalTopTracks[0])}
-            disabled={personalTopTracks.length === 0}
-            className="w-14 h-14 disabled:opacity-40 disabled:cursor-not-allowed rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-transform"
-            title="Play your most recently played track"
-          >
-            <Play className="w-6 h-6 fill-white ml-0.5" />
-          </button>
-
           {onSelectArtist && (
             <button
               onClick={() => onSelectArtist(userProfile)}
@@ -453,10 +444,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setAvatarUrl(DEFAULT_AVATAR_URL)}
+                  onClick={() => setAvatarUrl('')}
                   className="text-[11px] text-zinc-500 hover:text-white transition-colors underline underline-offset-2"
                 >
-                  Reset to default icon
+                  Remove Profile Photo
                 </button>
               </div>
 

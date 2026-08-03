@@ -7,10 +7,28 @@ export interface ReleaseGroup {
   representative: Track;
   /** All tracks that belong to this release, in track-number order */
   tracks: Track[];
-  releaseType: string;
+  releaseType: 'Single' | 'EP' | 'Album';
   title: string;
   coverUrl: string;
   isMultiTrack: boolean;
+}
+
+/**
+ * The API persists release types as SINGLE/EP/ALBUM, while some older client
+ * records used Single/Ep/Album. Keep that storage detail out of the views by
+ * normalizing every variant in one place.
+ */
+function normalizeReleaseType(track: Track, isMultiTrack: boolean): ReleaseGroup['releaseType'] {
+  const storedType = String(track.releaseType || '').trim().toUpperCase();
+  if (storedType === 'SINGLE') return 'Single';
+  if (storedType === 'EP') return 'EP';
+  if (storedType === 'ALBUM') return 'Album';
+
+  return isMultiTrack
+    ? 'Album'
+    : track.album === 'Single' || !track.album
+      ? 'Single'
+      : 'Album';
 }
 
 /**
@@ -45,9 +63,7 @@ export function groupTracksByRelease(tracks: Track[]): ReleaseGroup[] {
     );
     const representative = groupTracks[0];
     const isMultiTrack = groupTracks.length > 1;
-    const releaseType =
-      representative.releaseType ||
-      (isMultiTrack ? 'Album' : representative.album === 'Single' || !representative.album ? 'Single' : 'Album');
+    const releaseType = normalizeReleaseType(representative, isMultiTrack);
 
     return {
       key,

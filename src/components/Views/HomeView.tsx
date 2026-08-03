@@ -155,8 +155,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </span>
 
               {/* Hover Floating VERTEX Music Purple/Pink Play Button */}
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-200 flex-shrink-0 ml-2">
-                <Play className="w-5 h-5 fill-white ml-0.5" />
+              <div className={`w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-xl transform transition-all duration-200 flex-shrink-0 ml-2 ${
+                item.type === 'track' && 'trackId' in item && item.trackId === currentTrackId && isPlaying
+                  ? 'opacity-100 translate-y-0'
+                  : 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0'
+              }`}>
+                {item.type === 'track' && 'trackId' in item && item.trackId === currentTrackId && isPlaying ? (
+                  <Pause className="w-5 h-5 fill-white" />
+                ) : (
+                  <Play className="w-5 h-5 fill-white ml-0.5" />
+                )}
               </div>
             </div>
           ))}
@@ -365,7 +373,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     }`}
                   >
                     {/* # Index or Play Icon — same render pattern as ArtistView's track rows */}
-                    <div className="col-span-1 flex items-center justify-center">
+                    <div className="col-span-1 flex items-center justify-center gap-2">
                       <span
                         className={`w-6 text-center text-xs font-mono ${
                           isSelected ? 'text-[#D946EF] font-bold' : 'text-zinc-400 group-hover:hidden'

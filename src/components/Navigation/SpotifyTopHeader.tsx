@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Search, SlidersHorizontal, Bot, Crown, User, ExternalLink, LogOut, Check, ChevronDown, Sparkles, Music } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Crown, User, ExternalLink, LogOut, Check, ChevronDown, Sparkles, Music } from 'lucide-react';
 import { TabType, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
@@ -8,7 +8,6 @@ interface SpotifyTopHeaderProps {
   onSelectTab: (tab: TabType) => void;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
-  onOpenEQ: () => void;
   onOpenDeviceSelector: () => void;
   activeDeviceName?: string;
   selectedCategory?: string;
@@ -29,7 +28,6 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
   onSelectTab,
   searchQuery = '',
   onSearchChange,
-  onOpenEQ,
   onOpenDeviceSelector,
   activeDeviceName = 'Web Player',
   selectedCategory = 'All',
@@ -154,28 +152,6 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
           </button>
         )}
 
-        {/* AI DJ Chat Button — hidden on mobile, already reachable via the bottom tab bar */}
-        <button
-          onClick={() => onSelectTab('chat')}
-          title="VERTEX Music AI DJ Chat"
-          className={`hidden sm:flex p-2 rounded-full transition-all active:scale-95 items-center justify-center ${
-            activeTab === 'chat'
-              ? 'bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white shadow-lg shadow-[#A855F7]/30'
-              : 'bg-white/5 hover:bg-[#A855F7]/20 text-[#D946EF] border border-[#A855F7]/30'
-          }`}
-        >
-          <Bot className="w-4 h-4" />
-        </button>
-
-        {/* Audio EQ Button — hidden on mobile, still reachable from the profile menu */}
-        <button
-          onClick={onOpenEQ}
-          title="Audio Equalizer"
-          className="hidden sm:flex p-2 rounded-full bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white transition-all active:scale-95"
-        >
-          <SlidersHorizontal className="w-4 h-4" />
-        </button>
-
         {/* Spotify User Profile Dropdown Pill or Auth Buttons */}
         {userProfile ? (
           <div className="relative" ref={menuRef}>
@@ -226,19 +202,6 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                   </div>
                 </button>
 
-                <button
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    onOpenEQ();
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-zinc-200 hover:text-white hover:bg-white/10 rounded-md transition-colors"
-                >
-                  <div className="flex items-center space-x-2.5">
-                    <SlidersHorizontal className="w-4 h-4 text-[#D946EF]" />
-                    <span>Audio Equalizer</span>
-                  </div>
-                </button>
-
                 <div className="my-1 border-t border-white/10" />
 
                 <button
@@ -285,4 +248,3 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
     </header>
   );
 };
-

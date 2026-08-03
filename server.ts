@@ -976,6 +976,7 @@ async function startServer() {
       }
 
       const current = db.users[index];
+      const previousAvatarUrl = current.avatarUrl || "";
       const nextUsername = typeof updates.username === "string" && updates.username.trim()
         ? updates.username.trim()
         : current.username;
@@ -989,10 +990,18 @@ async function startServer() {
         return res.status(409).json({ error: "Username is already in use." });
       }
 
-      let avatarUrl = typeof updates.avatarUrl === "string" ? updates.avatarUrl.trim() : current.avatarUrl;
+      const hasAvatarUpdate = Object.prototype.hasOwnProperty.call(updates, "avatarUrl");
+      let avatarUrl = hasAvatarUpdate && typeof updates.avatarUrl === "string"
+        ? updates.avatarUrl.trim()
+        : current.avatarUrl;
       let bannerUrl = typeof updates.bannerUrl === "string" ? updates.bannerUrl.trim() : current.bannerUrl || "";
 
-      if (avatarUrl.startsWith("data:")) {
+      // An explicitly empty avatar means "remove the uploaded profile photo".
+      // Keep the built-in SVG as a UI fallback instead of trying to decode it
+      // as a base64 upload.
+      if (hasAvatarUpdate && !avatarUrl) avatarUrl = DEFAULT_AVATAR_URL;
+
+      if (avatarUrl !== DEFAULT_AVATAR_URL && avatarUrl.startsWith("data:")) {
         const mimeMatch = avatarUrl.match(/^data:(image\/[^;]+);base64,/);
         const b64 = avatarUrl.includes(",") ? avatarUrl.split(",")[1] : "";
         if (!mimeMatch || !b64) return res.status(400).json({ error: "Invalid avatar image." });
@@ -1004,7 +1013,7 @@ async function startServer() {
         if (!mimeMatch || !b64) return res.status(400).json({ error: "Invalid banner image." });
         bannerUrl = await saveUploadedFile(b64, mimeMatch?.[1] || "image/jpeg", userId, "banner");
       }
-      if (avatarUrl && !isStoredMediaUrl(avatarUrl)) return res.status(400).json({ error: "Avatar URL must use HTTP(S) or an uploaded file." });
+      if (avatarUrl && avatarUrl !== DEFAULT_AVATAR_URL && !isStoredMediaUrl(avatarUrl)) return res.status(400).json({ error: "Avatar URL must use HTTP(S) or an uploaded file." });
       if (bannerUrl && !isStoredMediaUrl(bannerUrl)) return res.status(400).json({ error: "Banner URL must use HTTP(S) or an uploaded file." });
 
       const hasPickUpdate = Object.prototype.hasOwnProperty.call(updates, "artistPickTrackId");
@@ -1097,6 +1106,10 @@ async function startServer() {
       );
 
       await writeDBAsync(db);
+      if (previousAvatarUrl && previousAvatarUrl !== db.users[index].avatarUrl) {
+        const referencedMedia = collectReferencedMediaUrls(db);
+        if (!referencedMedia.has(previousAvatarUrl)) await deleteManagedFile(previousAvatarUrl);
+      }
       const { password: _, ...updatedUser } = db.users[index];
       return res.json({ success: true, user: updatedUser });
     } catch (error: any) {

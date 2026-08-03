@@ -73,7 +73,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   isLoading = false,
   loadError = null,
 }) => {
-  const [discographyFilter, setDiscographyFilter] = useState<'popular' | 'albums' | 'singles'>('popular');
+  const [discographyFilter, setDiscographyFilter] = useState<'popular' | 'singles'>('popular');
   const [showAllPopular, setShowAllPopular] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -547,7 +547,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                 <div
                   key={group.key}
                   onClick={() => {
-                    if (group.isMultiTrack && onSelectAlbum) {
+                    if (onSelectAlbum) {
                       onSelectAlbum(group.representative);
                     } else {
                       onPlayTrack(group.representative);

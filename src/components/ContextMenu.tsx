@@ -371,16 +371,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       {activeArtist && (
         <div className="space-y-0.5">
           <button
-            onClick={() => {
-              onNavigate('browse');
-              onClose();
-            }}
-            className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
-          >
-            <User className="w-4 h-4 text-[#C084FC]" />
-            <span>View Artist Page</span>
-          </button>
-          <button
             onClick={() => handleCopyLink(`${window.location.origin}/artist/${activeArtist.id}`, 'Artist')}
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >

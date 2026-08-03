@@ -15,6 +15,7 @@ interface NowPlayingSidebarProps {
   onClose: () => void;
   onToggleLike: (trackId: string) => void;
   onSelectArtist: (artist: Artist | UserProfile | string) => void;
+  onSelectAlbum: (track: Track) => void;
   onAddToPlaylist: (playlistId: string, trackId: string) => void;
   onOpenNewPlaylistModal: () => void;
   showToast?: (msg: string) => void;
@@ -30,6 +31,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
   onClose,
   onToggleLike,
   onSelectArtist,
+  onSelectAlbum,
   onAddToPlaylist,
   onOpenNewPlaylistModal,
   showToast,
@@ -107,7 +109,11 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
         <div className="flex items-center justify-between p-4 border-b border-white/5">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider truncate" title={releaseContextText}>{releaseContextText}</p>
-            <h3 className="text-xs font-bold text-white truncate hover:underline cursor-pointer" title={releaseName}>
+            <h3
+              className="text-xs font-bold text-white truncate hover:underline cursor-pointer"
+              title={releaseName}
+              onClick={() => onSelectAlbum(currentTrack)}
+            >
               {releaseName}
             </h3>
           </div>
@@ -123,7 +129,10 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
         {/* Main Scrollable View */}
         <div className="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar pb-24">
           {/* Large Cover Art */}
-          <div className="relative aspect-square w-full rounded-xl overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.6)] group">
+          <div
+            className="relative aspect-square w-full rounded-xl overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.6)] group cursor-pointer"
+            onClick={() => onSelectAlbum(currentTrack)}
+          >
             <img
               src={currentTrack.coverUrl}
               alt={currentTrack.title}
@@ -141,7 +150,10 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
           {/* Track Title and Artist Details */}
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-extrabold text-white truncate leading-tight tracking-tight hover:text-[#D946EF] cursor-pointer" onClick={() => onSelectArtist(displayObj || currentTrack.userId || '')}>
+              <h2
+                className="text-lg font-extrabold text-white truncate leading-tight tracking-tight hover:text-[#D946EF] cursor-pointer"
+                onClick={() => onSelectAlbum(currentTrack)}
+              >
                 {currentTrack.title}
               </h2>
               <p className="text-sm text-zinc-400 truncate mt-1 hover:text-[#D946EF] hover:underline cursor-pointer" onClick={() => onSelectArtist(displayObj || currentTrack.userId || '')}>

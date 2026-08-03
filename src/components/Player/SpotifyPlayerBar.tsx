@@ -121,16 +121,16 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
 
         <div
           onClick={onOpenSongScreen}
-          className="min-w-0 flex-1 cursor-pointer group flex flex-col justify-center"
+          className="min-w-0 flex-1 cursor-pointer flex flex-col justify-center"
           title="Click to expand Song Screen"
         >
-          <h4 className="text-sm font-bold text-white truncate tracking-tight group-hover:text-[#C084FC] transition-colors leading-tight">
+          <h4 className="text-sm font-bold text-white truncate tracking-tight hover:text-[#C084FC] transition-colors leading-tight">
             {currentTrack?.title || 'No Track Playing'}
           </h4>
           <p
             onClick={(e) => {
+              e.stopPropagation();
               if (onSelectArtist && currentTrack) {
-                e.stopPropagation();
                 onSelectArtist(currentTrack.userId || '');
               }
             }}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Disc, Play, Heart } from 'lucide-react';
+import { Disc, Play, Pause, Heart } from 'lucide-react';
 import { Track, Playlist, Artist } from '../../types';
 import { BROWSE_CATEGORIES } from '../../data/browseCategories';
 
@@ -7,6 +7,8 @@ interface BrowseViewProps {
   tracks: Track[];
   playlists: Playlist[];
   artists: Artist[];
+  currentTrackId?: string;
+  isPlaying?: boolean;
   onPlayTrack: (track: Track) => void;
   onSelectPlaylist: (playlist: Playlist) => void;
   onSelectAlbum?: (track: Track) => void;
@@ -18,6 +20,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   tracks = [],
   playlists = [],
   artists = [],
+  currentTrackId,
+  isPlaying = false,
   onPlayTrack,
   onSelectPlaylist,
   onSelectAlbum,
@@ -103,14 +107,16 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           </div>
         ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {filteredTracks.map((track) => (
+          {filteredTracks.map((track) => {
+            const isThisTrackPlaying = currentTrackId === track.id && isPlaying;
+            return (
             <div
               key={track.id}
               data-track-id={track.id}
               data-context-type="track"
               onClick={() => {
-                onPlayTrack(track);
                 if (onSelectAlbum) onSelectAlbum(track);
+                else onPlayTrack(track);
               }}
               className="group cursor-pointer rounded-lg p-3 bg-[#181818] hover:bg-[#282828] transition-all flex items-center justify-between shadow"
             >
@@ -143,12 +149,24 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                     }`}
                   />
                 </button>
-                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center hover:scale-105 transition-transform shadow">
-                  <Play className="w-4 h-4 fill-white ml-0.5" />
-                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlayTrack(track);
+                  }}
+                  className="w-8 h-8 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center hover:scale-105 transition-transform shadow"
+                  title={isThisTrackPlaying ? 'Pause' : 'Play'}
+                >
+                  {isThisTrackPlaying ? (
+                    <Pause className="w-4 h-4 fill-white" />
+                  ) : (
+                    <Play className="w-4 h-4 fill-white ml-0.5" />
+                  )}
+                </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         )}
       </div>

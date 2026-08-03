@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, X, Play, Heart, ShieldCheck, User as UserIcon, Disc, ArrowRight } from 'lucide-react';
+import { Search, X, Play, Pause, Heart, ShieldCheck, User as UserIcon, Disc, ArrowRight } from 'lucide-react';
 import { Track, Playlist, Artist, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
@@ -8,6 +8,8 @@ interface SearchViewProps {
   playlists: Playlist[];
   artists: Artist[];
   userProfile?: UserProfile | null;
+  currentTrackId?: string;
+  isPlaying?: boolean;
   onPlayTrack: (track: Track) => void;
   onSelectPlaylist: (playlist: Playlist) => void;
   onSelectArtist?: (artist: Artist | UserProfile | string) => void;
@@ -35,6 +37,8 @@ export const SearchView: React.FC<SearchViewProps> = ({
   playlists: initialPlaylists = [],
   artists: initialArtists = [],
   userProfile,
+  currentTrackId,
+  isPlaying = false,
   onPlayTrack,
   onSelectPlaylist,
   onSelectArtist,
@@ -181,6 +185,9 @@ export const SearchView: React.FC<SearchViewProps> = ({
       : matchedPlaylists.length > 0
       ? { type: 'playlist' as const, item: matchedPlaylists[0] }
       : null);
+  const isTopResultPlaying = Boolean(
+    topResult?.type === 'track' && topResult.item?.id === currentTrackId && isPlaying
+  );
 
   const handleArtistClick = (art: SearchArtistItem) => {
     if (!onSelectArtist) return;
@@ -403,9 +410,17 @@ export const SearchView: React.FC<SearchViewProps> = ({
                         e.stopPropagation();
                         onPlayTrack(topResult.item);
                       }}
-                      className="absolute right-5 bottom-5 w-12 h-12 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-200 cursor-pointer"
+                      className={`absolute right-5 bottom-5 w-12 h-12 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl transform transition-all duration-200 cursor-pointer ${
+                        isTopResultPlaying
+                          ? 'opacity-100 translate-y-0'
+                          : 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0'
+                      }`}
                     >
-                      <Play className="w-6 h-6 fill-white ml-0.5" />
+                      {isTopResultPlaying ? (
+                        <Pause className="w-6 h-6 fill-white" />
+                      ) : (
+                        <Play className="w-6 h-6 fill-white ml-0.5" />
+                      )}
                     </div>
                   )}
 
@@ -440,7 +455,9 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   <p className="text-xs text-zinc-400 italic py-4">No matching songs found.</p>
                 ) : (
                   <div className="space-y-1">
-                    {matchedTracks.slice(0, filterType === 'all' ? 5 : 15).map((track) => (
+                    {matchedTracks.slice(0, filterType === 'all' ? 5 : 15).map((track) => {
+                      const isThisTrackPlaying = currentTrackId === track.id && isPlaying;
+                      return (
                       <div
                         key={track.id}
                         data-track-id={track.id}
@@ -463,9 +480,16 @@ export const SearchView: React.FC<SearchViewProps> = ({
                                 e.stopPropagation();
                                 onPlayTrack(track);
                               }}
-                              className="absolute inset-0 bg-black/60 items-center justify-center rounded-lg hidden group-hover:flex"
+                              className={`absolute inset-0 bg-black/60 items-center justify-center rounded-lg ${
+                                isThisTrackPlaying ? 'flex' : 'hidden group-hover:flex'
+                              }`}
+                              title={isThisTrackPlaying ? 'Pause' : 'Play'}
                             >
-                              <Play className="w-4 h-4 fill-white ml-0.5" />
+                              {isThisTrackPlaying ? (
+                                <Pause className="w-4 h-4 fill-white" />
+                              ) : (
+                                <Play className="w-4 h-4 fill-white ml-0.5" />
+                              )}
                             </button>
                           </div>
                           <div className="min-w-0">
@@ -505,7 +529,8 @@ export const SearchView: React.FC<SearchViewProps> = ({
                           </span>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

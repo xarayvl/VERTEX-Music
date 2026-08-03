@@ -1752,7 +1752,6 @@ export default function App() {
             onSelectTab={handleSelectTab}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
-            onOpenEQ={() => openWorkspacePanel('eq')}
             onOpenDeviceSelector={() => setIsDeviceSelectorOpen(true)}
             activeDeviceName={activeDeviceName}
             selectedCategory={selectedCategory}
@@ -1834,8 +1833,11 @@ export default function App() {
                 tracks={tracks}
                 playlists={playlists}
                 artists={artists}
+                currentTrackId={currentTrack?.id}
+                isPlaying={isPlaying}
                 onPlayTrack={handlePlayTrack}
                 onSelectPlaylist={handleSelectPlaylist}
+                onSelectAlbum={handleSelectAlbum}
                 onToggleLike={handleToggleLike}
                 onSelectArtist={handleSelectArtist}
               />
@@ -1847,9 +1849,12 @@ export default function App() {
                 playlists={playlists}
                 artists={artists}
                 userProfile={userProfile}
+                currentTrackId={currentTrack?.id}
+                isPlaying={isPlaying}
                 onPlayTrack={handlePlayTrack}
                 onSelectPlaylist={handleSelectPlaylist}
                 onSelectArtist={handleSelectArtist}
+                onSelectAlbum={handleSelectAlbum}
                 onToggleLike={handleToggleLike}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
@@ -2011,6 +2016,7 @@ export default function App() {
               onClose={() => setIsRightSidebarOpen(false)}
               onToggleLike={handleToggleLike}
               onSelectArtist={handleSelectArtist}
+              onSelectAlbum={handleSelectAlbum}
               onAddToPlaylist={handleAddTrackToPlaylist}
               onOpenNewPlaylistModal={() => openWorkspacePanel('playlist')}
               showToast={showToast}
@@ -2069,6 +2075,7 @@ export default function App() {
         onOpenEQ={() => openWorkspacePanel('eq')}
         onOpenDeviceSelector={() => setIsDeviceSelectorOpen(true)}
         onOpenSongScreen={() => setIsSongScreenOpen((prev) => !prev)}
+        onSelectArtist={handleSelectArtist}
         activeDeviceName={activeDeviceName}
         isRightSidebarOpen={isRightSidebarOpen}
         onToggleRightSidebar={handleToggleRightSidebar}

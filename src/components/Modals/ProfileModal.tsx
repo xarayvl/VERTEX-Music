@@ -64,7 +64,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       displayName: displayName.trim() || userProfile.displayName,
       username: username.trim() || userProfile.username,
       bio: bio.trim(),
-      avatarUrl: avatarUrl || DEFAULT_AVATAR_URL,
+      avatarUrl,
     });
     setIsEditing(false);
   };
@@ -118,7 +118,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
               <label className="block space-y-1"><span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Bio</span><textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={500} rows={3} className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-[#D946EF]" /></label>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div><button type="button" onClick={() => avatarFileInputRef.current?.click()} disabled={isReadingAvatarFile} className="rounded-full bg-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/20 disabled:opacity-50 flex items-center gap-2"><Upload className="w-3.5 h-3.5" />{isReadingAvatarFile ? 'Reading…' : 'Upload photo'}</button><input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarFileUpload} className="hidden" /></div>
+                <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => avatarFileInputRef.current?.click()} disabled={isReadingAvatarFile} className="rounded-full bg-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/20 disabled:opacity-50 flex items-center gap-2"><Upload className="w-3.5 h-3.5" />{isReadingAvatarFile ? 'Reading…' : 'Upload photo'}</button><button type="button" onClick={() => setAvatarUrl('')} className="rounded-full px-3 py-2 text-xs font-bold text-zinc-400 hover:bg-white/10 hover:text-white transition-colors">Remove Profile Photo</button><input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarFileUpload} className="hidden" /></div>
                 <button type="submit" className="rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-2 text-xs font-bold text-white">Save Changes</button>
               </div>
             </form>
