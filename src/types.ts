@@ -109,12 +109,20 @@ export interface Artist {
   artistPickComment?: string;
 }
 
+export interface ChatSource {
+  title: string;
+  uri: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'ai';
   text: string;
   timestamp: string;
   matchedTracks?: Track[];
+  webSearchUsed?: boolean;
+  searchQueries?: string[];
+  sources?: ChatSource[];
 }
 
 export interface AudioEQ {

@@ -1428,9 +1428,12 @@ async function startServer() {
     }
   });
 
-// Helper to parse clean user-friendly error messages from API exceptions
-function parseCleanErrorMessage(err: any): string {
-  if (!err) return "An unexpected error occurred.";
+// Helper to parse clean user-friendly error messages from API exceptions.
+// `context` lets us tailor the RESOURCE_EXHAUSTED (429) message to what
+// actually happened — the music endpoint synthesizes a fallback track, but
+// the chat endpoint does not, so it must never claim one was generated.
+function parseCleanErrorMessage(err: any, context: "chat" | "music" = "music"): { message: string; rateLimited: boolean } {
+  if (!err) return { message: "An unexpected error occurred.", rateLimited: false };
   let msg = typeof err === "string" ? err : err.message || String(err);
 
   if (msg.startsWith("{") || msg.includes('"error":')) {
@@ -1444,11 +1447,22 @@ function parseCleanErrorMessage(err: any): string {
     }
   }
 
-  if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429") || msg.includes("Quota exceeded")) {
-    return "The Lyria AI Music generation free quota is currently rate limited. A fallback audio track was generated for your request.";
+  const isRateLimited = msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429") || msg.includes("Quota exceeded");
+
+  if (isRateLimited) {
+    if (context === "music") {
+      return {
+        message: "The Lyria AI Music generation free quota is currently rate limited. A fallback audio track was generated for your request.",
+        rateLimited: true,
+      };
+    }
+    return {
+      message: "VERTEX Music AI is experiencing high demand right now. Please wait a moment and try again shortly.",
+      rateLimited: true,
+    };
   }
 
-  return msg;
+  return { message: msg, rateLimited: false };
 }
 
 // Procedural WAV audio generator fallback when Lyria rate limits or offline
@@ -1626,9 +1640,10 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
       });
     } catch (error: any) {
       console.error("Lyria AI Music Generation Error:", error);
-      const cleanMsg = parseCleanErrorMessage(error);
-      return res.status(500).json({
+      const { message: cleanMsg, rateLimited } = parseCleanErrorMessage(error, "music");
+      return res.status(rateLimited ? 429 : 500).json({
         error: cleanMsg,
+        rateLimited,
       });
     }
   });
@@ -1759,13 +1774,42 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
             "You give music recommendations, curate playlist ideas, explain musical genres and instruments, " +
             "and assist with generating AI music using Lyria models (`lyria-3-clip-preview` or `lyria-3-pro-preview`). " +
             "Keep responses friendly, engaging, and cleanly formatted with markdown bullet points or bold text. " +
-            "When mentioning song titles or artists, bold them clearly.",
+            "When mentioning song titles or artists, bold them clearly. " +
+            "You have live Google Search access: use it whenever the user asks about current events, recent " +
+            "releases, chart rankings, tour dates, news, or anything else that could have changed recently, " +
+            "instead of relying only on what you already know.",
+          tools: [{ googleSearch: {} }],
         },
         history: formattedHistory,
       });
 
       const response = await chat.sendMessage({ message });
       let replyText = response.text || "I'm listening, but couldn't generate a text response.";
+
+      // Surface the web sources Gemini actually grounded on (if any) as
+      // structured data, so the client can render a proper "searched the
+      // web" indicator (Gemini-app style) instead of inline markdown links.
+      const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+      const groundingChunks = groundingMetadata?.groundingChunks;
+      const webSearchQueries: string[] = Array.isArray(groundingMetadata?.webSearchQueries)
+        ? groundingMetadata!.webSearchQueries
+        : [];
+
+      let sources: { title: string; uri: string }[] = [];
+      if (Array.isArray(groundingChunks) && groundingChunks.length > 0) {
+        const seen = new Set<string>();
+        for (const c of groundingChunks as any[]) {
+          const uri = c?.web?.uri;
+          const title = c?.web?.title;
+          if (uri && title && !seen.has(uri)) {
+            seen.add(uri);
+            sources.push({ title, uri });
+          }
+        }
+        sources = sources.slice(0, 5);
+      }
+
+      const webSearchUsed = webSearchQueries.length > 0 || sources.length > 0;
 
       if (generatedTrack) {
         replyText += `\n\n✨ **I've composed a custom AI track for you:** **${generatedTrack.title}**! You can play it directly below or save it to your library.`;
@@ -1789,6 +1833,9 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
             text: replyText,
             timestamp: new Date().toISOString(),
             matchedTracks: generatedTrack ? [generatedTrack] : undefined,
+            webSearchUsed,
+            searchQueries: webSearchQueries,
+            sources,
           };
           db.chatHistories[userId].push(userMsg, aiMsg);
           writeDB(db);
@@ -1797,12 +1844,13 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
         }
       }
 
-      return res.json({ reply: replyText, generatedTrack });
+      return res.json({ reply: replyText, generatedTrack, webSearchUsed, searchQueries: webSearchQueries, sources });
     } catch (error: any) {
       console.error("Gemini API Chat Error:", error);
-      const cleanMsg = parseCleanErrorMessage(error);
-      return res.status(500).json({
+      const { message: cleanMsg, rateLimited } = parseCleanErrorMessage(error, "chat");
+      return res.status(rateLimited ? 429 : 500).json({
         error: cleanMsg,
+        rateLimited,
       });
     }
   });
