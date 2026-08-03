@@ -26,6 +26,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { UserProfile, Track, Playlist, Artist } from '../../types';
+import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
 interface ProfileViewProps {
   userProfile: UserProfile | null;
@@ -88,25 +89,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     audioNormalization: userProfile?.settings?.audioNormalization ?? true,
     offlineDownloads: userProfile?.settings?.offlineDownloads ?? true,
   });
-
-  const presetAvatars = [
-    {
-      name: 'Violet Glow',
-      url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      name: 'Neon DJ',
-      url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      name: 'Cyberpunk Girl',
-      url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      name: 'Synth Producer',
-      url: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=800&q=80',
-    },
-  ];
 
   const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -438,29 +420,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     className="hidden"
                   />
                 </div>
-                <label className="block text-[11px] text-zinc-500 mb-2">
-                  Or choose a preset:
-                </label>
-                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
-                  {presetAvatars.map((av, i) => (
-                    <div
-                      key={i}
-                      onClick={() => setAvatarUrl(av.url)}
-                      className={`aspect-square rounded-full overflow-hidden cursor-pointer border-2 transition-all ${
-                        avatarUrl === av.url
-                          ? 'border-[#D946EF] ring-2 ring-[#D946EF]/50 scale-105'
-                          : 'border-transparent opacity-60 hover:opacity-100'
-                      }`}
-                    >
-                      <img
-                        src={av.url}
-                        alt={av.name}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setAvatarUrl(DEFAULT_AVATAR_URL)}
+                  className="text-[11px] text-zinc-500 hover:text-white transition-colors underline underline-offset-2"
+                >
+                  Reset to default icon
+                </button>
               </div>
 
               <div className="flex justify-end space-x-3 pt-2">
@@ -759,40 +725,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             })()}
           </div>
 
-          {/* Favorite Genres Manager */}
-          <div className="space-y-3">
-            <h2 className="text-xl font-bold text-white">Favorite Genres</h2>
-            <div className="flex flex-wrap items-center gap-2 p-4 rounded-2xl bg-[#181818] border border-white/5">
-              {favoriteGenres.map((genre) => (
-                <span
-                  key={genre}
-                  className="px-3.5 py-1.5 rounded-full bg-white/10 border border-white/10 text-xs font-bold text-white flex items-center gap-2"
-                >
-                  <span>{genre}</span>
-                  <button
-                    onClick={() => handleRemoveGenre(genre)}
-                    className="text-zinc-400 hover:text-red-400 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </span>
-              ))}
-
-              <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1">
-                <input
-                  type="text"
-                  value={newGenre}
-                  onChange={(e) => setNewGenre(e.target.value)}
-                  placeholder="Add genre..."
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddGenre())}
-                  className="w-28 bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none"
-                />
-                <button onClick={handleAddGenre} className="text-[#D946EF] hover:text-white">
-                  <Plus className="w-4 h-4 stroke-[3]" />
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 

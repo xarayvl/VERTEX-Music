@@ -109,13 +109,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         {/* 2x3 VERTEX Music Quick Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {quickItems.map((item) => (
+          {quickItems.map((item, idx) => (
             <div
               key={item.id}
               data-playlist-id={item.id.startsWith('pl-') ? item.id : undefined}
               data-context-type="playlist"
               onClick={item.action}
-              className="group relative flex items-center bg-white/5 hover:bg-white/10 transition-all duration-200 rounded-md overflow-hidden cursor-pointer shadow-md pr-4"
+              style={{ '--stagger-index': idx } as React.CSSProperties}
+              className="stagger-item card-interactive group relative flex items-center bg-white/5 hover:bg-white/10 transition-all duration-200 rounded-md overflow-hidden cursor-pointer shadow-md pr-4"
             >
               <div className="w-16 h-16 flex-shrink-0 relative overflow-hidden">
                 <img
@@ -171,13 +172,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {filteredPlaylists.map((playlist) => (
+            {filteredPlaylists.map((playlist, idx) => (
               <div
                 key={playlist.id}
                 data-playlist-id={playlist.id}
                 data-context-type="playlist"
                 onClick={() => onSelectPlaylist(playlist)}
-                className="group relative bg-[#181818] hover:bg-[#282828] p-4 rounded-lg transition-all duration-300 cursor-pointer shadow-md flex flex-col justify-between"
+                style={{ '--stagger-index': idx } as React.CSSProperties}
+                className="stagger-item card-interactive group relative bg-[#181818] hover:bg-[#282828] p-4 rounded-lg transition-all duration-300 cursor-pointer shadow-md flex flex-col justify-between"
               >
                 <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 shadow-md">
                   <img
@@ -218,7 +220,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {recentReleaseGroups.map((group) => {
+          {recentReleaseGroups.map((group, idx) => {
             const track = group.representative;
             const isThisTrackPlaying = group.tracks.some((t) => t.id === currentTrackId) && isPlaying;
 
@@ -230,7 +232,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 onClick={() => {
                   if (onSelectAlbum) onSelectAlbum(track);
                 }}
-                className="group relative bg-[#181818] hover:bg-[#282828] p-4 rounded-lg transition-all duration-300 cursor-pointer shadow-md flex flex-col justify-between"
+                style={{ '--stagger-index': idx } as React.CSSProperties}
+                className="stagger-item card-interactive group relative bg-[#181818] hover:bg-[#282828] p-4 rounded-lg transition-all duration-300 cursor-pointer shadow-md flex flex-col justify-between"
               >
                 <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 shadow-md">
                   <img

@@ -2028,7 +2028,7 @@ export default function App() {
                 userProfile={userProfile}
               />
             ) : (
-              <>
+              <div key={activeTab} className="view-transition">
                 {activeTab === 'home' && (
               <HomeView
                 tracks={tracks}
@@ -2178,7 +2178,7 @@ export default function App() {
                 showToast={showToast}
               />
             )}
-              </>
+              </div>
             )}
           </div>
         </main>

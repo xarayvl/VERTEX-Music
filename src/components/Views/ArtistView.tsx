@@ -144,8 +144,6 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
     : (artist as Artist).verified === true;
 
   const profileStats = artist.stats;
-  const followersCount = profileStats?.followersCount || 0;
-  const followingCount = profileStats?.followingCount || 0;
   const isSyntheticArtist = !isUserProfile && (artist as Artist).isSynthetic === true;
 
   // NOTE: ownership must be decided by id only. An earlier version also
@@ -236,14 +234,13 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
           {/* Monthly Listeners Counter */}
           <p className="text-xs sm:text-sm font-semibold text-zinc-200 drop-shadow flex flex-wrap items-center gap-2">
             <span>{monthlyListeners}</span>
-            <span className="text-zinc-400">•</span>
-            <span>{followersCount.toLocaleString()} followers</span>
-            <span className="text-zinc-400">•</span>
-            <span>{followingCount.toLocaleString()} following</span>
             {isUserProfile && (
-              <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white text-[10px] font-mono uppercase font-bold">
-                User & Artist Profile
-              </span>
+              <>
+                <span className="text-zinc-400">•</span>
+                <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white text-[10px] font-mono uppercase font-bold">
+                  User & Artist Profile
+                </span>
+              </>
             )}
           </p>
         </div>

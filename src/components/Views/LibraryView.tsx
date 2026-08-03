@@ -148,7 +148,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   data-playlist-id={pl.id}
                   data-context-type="playlist"
                   onClick={() => onSelectPlaylist(pl)}
-                  className="bg-[#181818] hover:bg-[#282828] p-4 rounded-xl flex flex-col justify-between group cursor-pointer transition-all shadow relative"
+                  className="card-interactive bg-[#181818] hover:bg-[#282828] p-4 rounded-xl flex flex-col justify-between group cursor-pointer transition-all shadow relative"
                 >
                   <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 shadow">
                     <img

@@ -79,25 +79,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
   if (!isOpen) return null;
 
-  const presetAvatars = [
-    {
-      name: 'Violet Glow',
-      url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      name: 'Neon DJ',
-      url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      name: 'Cyberpunk Girl',
-      url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      name: 'Synth Producer',
-      url: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=800&q=80',
-    },
-  ];
-
   const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -288,21 +269,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                         className="hidden"
                       />
                     </div>
-                    <span className="block text-[11px] text-zinc-500 mb-2">Or pick a preset:</span>
-                    <div className="flex gap-2">
-                      {presetAvatars.map((av, idx) => (
-                        <img
-                          key={idx}
-                          src={av.url}
-                          alt={av.name}
-                          onClick={() => setAvatarUrl(av.url)}
-                          referrerPolicy="no-referrer"
-                          className={`w-10 h-10 rounded-full cursor-pointer object-cover border-2 transition-all ${
-                            avatarUrl === av.url ? 'border-[#D946EF] scale-110' : 'border-transparent opacity-60'
-                          }`}
-                        />
-                      ))}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAvatarUrl(DEFAULT_AVATAR_URL)}
+                      className="text-[11px] text-zinc-500 hover:text-white transition-colors underline underline-offset-2"
+                    >
+                      Reset to default icon
+                    </button>
                   </div>
 
                   <div className="flex justify-end pt-2">
@@ -336,23 +309,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 </div>
               )}
 
-              {/* Genres */}
-              <div>
-                <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Favorite Genres</h4>
-                <div className="flex flex-wrap gap-1.5">
-                  {favoriteGenres.map((genre) => (
-                    <span
-                      key={genre}
-                      className="px-3 py-1 rounded-full bg-white/10 text-xs font-semibold text-white flex items-center gap-1.5"
-                    >
-                      {genre}
-                      <button onClick={() => handleRemoveGenre(genre)} className="hover:text-red-400">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 
