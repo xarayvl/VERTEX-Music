@@ -1,8 +1,70 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Play, Pause, Heart, Clock, ArrowLeft, ListMusic, History } from 'lucide-react';
 import { Track, Playlist, Album, TabType } from '../../types';
 import { groupTracksByRelease } from '../../utils/artistUtils';
 import { LIKED_SONGS_COVER_URL } from '../../utils/profilePlaceholders';
+
+const DEFAULT_GREETING_ACCENT = '#A855F7';
+
+function colorWithAlpha(color: string, alpha: number): string {
+  const match = color.trim().match(/^#([\da-f]{6})$/i);
+  if (!match) return `rgba(168, 85, 247, ${alpha})`;
+  const value = Number.parseInt(match[1], 16);
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+}
+
+function extractDominantCoverColor(source: string): Promise<string> {
+  return new Promise((resolve) => {
+    if (!source) return resolve(DEFAULT_GREETING_ACCENT);
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.referrerPolicy = 'no-referrer';
+    image.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 32;
+        canvas.height = 32;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) return resolve(DEFAULT_GREETING_ACCENT);
+        context.drawImage(image, 0, 0, 32, 32);
+        const pixels = context.getImageData(0, 0, 32, 32).data;
+        const buckets = new Map<string, { count: number; red: number; green: number; blue: number; score: number }>();
+
+        for (let index = 0; index < pixels.length; index += 16) {
+          const red = pixels[index];
+          const green = pixels[index + 1];
+          const blue = pixels[index + 2];
+          const alpha = pixels[index + 3];
+          if (alpha < 180) continue;
+          const max = Math.max(red, green, blue);
+          const min = Math.min(red, green, blue);
+          const brightness = (max + min) / 2;
+          const saturation = max === 0 ? 0 : (max - min) / max;
+          if (brightness < 24 || brightness > 238 || saturation < 0.12) continue;
+          const key = `${Math.round(red / 32)}-${Math.round(green / 32)}-${Math.round(blue / 32)}`;
+          const bucket = buckets.get(key) || { count: 0, red: 0, green: 0, blue: 0, score: 0 };
+          bucket.count += 1;
+          bucket.red += red;
+          bucket.green += green;
+          bucket.blue += blue;
+          bucket.score += 1 + saturation * 1.8;
+          buckets.set(key, bucket);
+        }
+
+        const winner = [...buckets.values()].sort((left, right) => right.score - left.score)[0];
+        if (!winner) return resolve(DEFAULT_GREETING_ACCENT);
+        const red = Math.round(winner.red / winner.count);
+        const green = Math.round(winner.green / winner.count);
+        const blue = Math.round(winner.blue / winner.count);
+        resolve(`#${[red, green, blue].map((channel) => channel.toString(16).padStart(2, '0')).join('')}`);
+      } catch {
+        resolve(DEFAULT_GREETING_ACCENT);
+      }
+    };
+    image.onerror = () => resolve(DEFAULT_GREETING_ACCENT);
+    image.src = source;
+  });
+}
 
 interface HomeViewProps {
   tracks: Track[];
@@ -40,6 +102,31 @@ export const HomeView: React.FC<HomeViewProps> = ({
   recentlyPlayed = [],
 }) => {
   const [activeHomeSection, setActiveHomeSection] = useState<'overview' | 'playlists' | 'recent'>('overview');
+  const [greetingAccent, setGreetingAccent] = useState(DEFAULT_GREETING_ACCENT);
+  const coverColorCache = useRef(new Map<string, string>());
+  const hoverRequestId = useRef(0);
+
+  const handleQuickItemEnter = (coverUrl: string, knownAccent?: string) => {
+    const requestId = ++hoverRequestId.current;
+    if (knownAccent) {
+      setGreetingAccent(knownAccent);
+      return;
+    }
+    const cachedColor = coverColorCache.current.get(coverUrl);
+    if (cachedColor) {
+      setGreetingAccent(cachedColor);
+      return;
+    }
+    void extractDominantCoverColor(coverUrl).then((color) => {
+      coverColorCache.current.set(coverUrl, color);
+      if (hoverRequestId.current === requestId) setGreetingAccent(color);
+    });
+  };
+
+  const handleQuickItemLeave = () => {
+    hoverRequestId.current += 1;
+    setGreetingAccent(DEFAULT_GREETING_ACCENT);
+  };
 
   const getGreeting = () => {
     const hrs = new Date().getHours();
@@ -86,6 +173,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     coverUrl: track.coverUrl,
     type: 'track' as const,
     trackId: track.id,
+    hoverColor: track.accentColor,
     action: () => onPlayTrack(track),
   }));
 
@@ -95,6 +183,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     coverUrl: playlist.coverUrl,
     type: 'playlist' as const,
     playlistId: playlist.id,
+    hoverColor: undefined as string | undefined,
     action: () => onSelectPlaylist(playlist),
   }));
 
@@ -104,6 +193,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       title: `Liked Songs${likedTracks.length ? ` · ${likedTracks.length}` : ''}`,
       coverUrl: LIKED_SONGS_COVER_URL,
       type: 'library' as const,
+      hoverColor: DEFAULT_GREETING_ACCENT,
       action: () => onSelectTab?.('library'),
     },
     ...recentQuickItems,
@@ -233,8 +323,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
   return (
     <div className="space-y-8 pb-12 select-none">
       {/* Top Gradient Banner Header */}
-      <div className="relative rounded-2xl overflow-hidden p-6 sm:p-8 bg-gradient-to-b from-[#A855F7]/30 via-[#181818]/70 to-[#121212] border border-white/[0.05]">
-        <div className="flex items-center justify-between mb-6">
+      <div className="relative overflow-hidden rounded-2xl border border-white/[0.05] bg-gradient-to-b from-[#A855F7]/30 via-[#181818]/70 to-[#121212] p-6 sm:p-8">
+        <div
+          className="pointer-events-none absolute inset-0 transition-opacity duration-500"
+          style={{
+            background: `linear-gradient(to bottom, ${colorWithAlpha(greetingAccent, 0.44)}, rgba(24, 24, 24, 0.72), #121212)`,
+            opacity: greetingAccent === DEFAULT_GREETING_ACCENT ? 0 : 1,
+          }}
+        />
+        <div className="relative mb-6 flex items-center justify-between">
           <div>
             <span className="text-xs font-mono uppercase tracking-widest text-[#D946EF] font-bold flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#D946EF] animate-ping" />
@@ -252,7 +349,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         {/* 2x3 VERTEX Music Quick Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="relative grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
           {quickItems.map((item, idx) => (
             <div
               key={item.id}
@@ -260,6 +357,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
               data-track-id={'trackId' in item ? item.trackId : undefined}
               data-context-type={item.type === 'track' ? 'track' : item.type === 'playlist' ? 'playlist' : undefined}
               onClick={item.action}
+              onMouseEnter={() => handleQuickItemEnter(item.coverUrl, item.hoverColor)}
+              onMouseLeave={handleQuickItemLeave}
               style={{ '--stagger-index': idx } as React.CSSProperties}
               className="stagger-item card-interactive group relative flex items-center overflow-hidden rounded-xl border border-white/[0.06] bg-white/5 pr-4 shadow-md transition-all duration-300 hover:bg-white/10"
             >

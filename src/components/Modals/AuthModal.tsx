@@ -1,5 +1,22 @@
 import React, { useState } from 'react';
-import { X, LogIn, UserPlus, Music2, AlertCircle, Lock, Mail, User } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Headphones,
+  Library,
+  Lock,
+  LogIn,
+  Mail,
+  Music2,
+  ShieldCheck,
+  Sparkles,
+  User,
+  UserPlus,
+  X,
+} from 'lucide-react';
 import { UserProfile } from '../../types';
 
 interface AuthModalProps {
@@ -16,60 +33,57 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   canClose = true,
 }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  
-  // Login State
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  
-  // Register State
   const [regUsername, setRegUsername] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regDisplayName, setRegDisplayName] = useState('');
   const [regPassword, setRegPassword] = useState('');
-  
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const switchMode = (nextMode: 'login' | 'register') => {
+    if (loading) return;
+    setMode(nextMode);
+    setShowPassword(false);
+    setError(null);
+  };
+
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          usernameOrEmail: loginIdentifier,
-          password: loginPassword,
-        }),
+        body: JSON.stringify({ usernameOrEmail: loginIdentifier, password: loginPassword }),
       });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
+      const data = await response.json();
+      if (!response.ok || !data.success) {
         setError(data.error || 'Login failed. Please check your credentials.');
-        setLoading(false);
         return;
       }
-
       onLoginSuccess(data.user, data.token);
       onClose();
-    } catch (err: any) {
+    } catch {
       setError('Server connection error. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRegister = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/register', {
+      const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -79,211 +93,111 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           password: regPassword,
         }),
       });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
+      const data = await response.json();
+      if (!response.ok || !data.success) {
         setError(data.error || 'Registration failed.');
-        setLoading(false);
         return;
       }
-
       onLoginSuccess(data.user, data.token);
       onClose();
-    } catch (err: any) {
+    } catch {
       setError('Server connection error. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-
+  const inputClass = 'w-full rounded-2xl border border-white/10 bg-white/[0.045] py-3.5 pl-11 pr-4 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10';
+  const labelClass = 'mb-2 block text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md bg-[#181818] border border-white/10 rounded-2xl shadow-2xl overflow-hidden text-white">
-        
-        {/* Header Graphic */}
-        <div className="relative p-6 bg-gradient-to-r from-[#A855F7] via-[#D946EF] to-purple-600 flex flex-col items-center justify-center text-center">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/90 p-2 text-white animate-in fade-in duration-200 sm:p-5">
+      <div className="mx-auto flex min-h-full max-w-5xl items-center justify-center">
+        <section className="relative grid w-full overflow-hidden rounded-[2rem] border border-white/10 bg-[#121212] shadow-[0_30px_100px_rgba(0,0,0,0.65)] animate-in zoom-in-95 duration-300 md:grid-cols-[0.92fr_1.08fr]">
           {canClose && (
-            <button
-              onClick={onClose}
-              className="absolute top-4 right-4 p-1.5 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
+            <button type="button" onClick={onClose} disabled={loading} className="control-press absolute right-4 top-4 z-30 rounded-full border border-white/10 bg-black/30 p-2.5 text-zinc-300 hover:bg-black/60 hover:text-white disabled:opacity-40" aria-label="Close authentication">
+              <X className="h-4 w-4" />
             </button>
           )}
 
-          <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center mb-3 shadow-lg border border-white/20">
-            <Music2 className="w-8 h-8 text-white" />
-          </div>
+          <aside className="relative hidden min-h-[640px] overflow-hidden border-r border-white/10 bg-gradient-to-br from-[#2b1738] via-[#17111d] to-[#0d0d0f] p-9 md:flex md:flex-col md:justify-between">
+            <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-[#A855F7]/25 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-[#D946EF]/15 blur-3xl" />
+            <div className="absolute inset-0 opacity-[0.035]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
 
-          <h2 className="text-2xl font-black tracking-tight text-white">VERTEX Music</h2>
-          <p className="text-xs text-white/90 font-medium mt-1">
-            {mode === 'login' ? 'Sign in to access your library & playlists' : 'Create your VERTEX account to start saving music'}
-          </p>
-        </div>
+            <div className="relative">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_14px_38px_rgba(168,85,247,0.35)]"><Music2 className="h-6 w-6" /></div>
+                <div><p className="text-[9px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">Your sound. Your space.</p><h1 className="text-xl font-black tracking-tight">VERTEX Music</h1></div>
+              </div>
 
-        {/* Tab Switcher */}
-        <div className="flex border-b border-white/10 bg-[#121212]">
-          <button
-            onClick={() => {
-              setMode('login');
-              setError(null);
-            }}
-            className={`flex-1 py-3 text-xs font-extrabold flex items-center justify-center space-x-2 transition-colors border-b-2 ${
-              mode === 'login'
-                ? 'border-[#D946EF] text-[#D946EF] bg-white/5'
-                : 'border-transparent text-zinc-400 hover:text-white'
-            }`}
-          >
-            <LogIn className="w-4 h-4" />
-            <span>Sign In</span>
-          </button>
-          <button
-            onClick={() => {
-              setMode('register');
-              setError(null);
-            }}
-            className={`flex-1 py-3 text-xs font-extrabold flex items-center justify-center space-x-2 transition-colors border-b-2 ${
-              mode === 'register'
-                ? 'border-[#D946EF] text-[#D946EF] bg-white/5'
-                : 'border-transparent text-zinc-400 hover:text-white'
-            }`}
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Register</span>
-          </button>
-        </div>
-
-        <div className="p-6">
-          {error && (
-            <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{error}</span>
+              <div className="mt-16">
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-[#F0ABFC]"><Sparkles className="h-3.5 w-3.5" /> Artist-powered listening</span>
+                <h2 className="mt-5 max-w-sm text-4xl font-black leading-[1.05] tracking-[-0.04em]">Everything you listen to, create and share in one place.</h2>
+                <p className="mt-5 max-w-sm text-sm leading-6 text-zinc-400">Return to your library or create an account to publish music, build playlists and keep listening history synced.</p>
+              </div>
             </div>
-          )}
 
-          {mode === 'login' ? (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
-                  Username or Email
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-2.5 w-4 h-4 text-zinc-500" />
-                  <input
-                    type="text"
-                    required
-                    value={loginIdentifier}
-                    onChange={(e) => setLoginIdentifier(e.target.value)}
-                    placeholder="Enter your username or email"
-                    className="w-full pl-9 pr-4 py-2 bg-[#282828] border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-                  />
+            <div className="relative grid gap-2.5">
+              {[
+                { icon: Headphones, text: 'Continue your listening history' },
+                { icon: Library, text: 'Keep releases and playlists together' },
+                { icon: ShieldCheck, text: 'Secure account-backed ownership' },
+              ].map(({ icon: Icon, text }, index) => (
+                <div key={text} style={{ '--stagger-index': index } as React.CSSProperties} className="stagger-item flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 text-xs font-bold text-zinc-300">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#A855F7]/12 text-[#E9D5FF]"><Icon className="h-4 w-4" /></span>{text}
                 </div>
+              ))}
+            </div>
+          </aside>
+
+          <main className="relative flex min-h-[560px] flex-col justify-center p-5 sm:p-8 md:min-h-[640px] md:p-10">
+            <div className="mx-auto w-full max-w-md">
+              <div className="mb-7 flex items-center gap-3 md:hidden">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF]"><Music2 className="h-5 w-5" /></div>
+                <div><p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">Welcome to</p><p className="text-lg font-black">VERTEX Music</p></div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-2.5 w-4 h-4 text-zinc-500" />
-                  <input
-                    type="password"
-                    required
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="w-full pl-9 pr-4 py-2 bg-[#282828] border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-                  />
+              <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-white/[0.08] bg-black/25 p-1.5">
+                <button type="button" onClick={() => switchMode('login')} className={`control-press flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition-all ${mode === 'login' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`}><LogIn className="h-4 w-4" /> Sign in</button>
+                <button type="button" onClick={() => switchMode('register')} className={`control-press flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition-all ${mode === 'register' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`}><UserPlus className="h-4 w-4" /> Sign up</button>
+              </div>
+
+              <div key={mode} className="mt-7 animate-in fade-in slide-in-from-right-2 duration-300">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">{mode === 'login' ? 'Welcome back' : 'New listener'}</p>
+                <h2 className="mt-1 text-3xl font-black tracking-tight">{mode === 'login' ? 'Sign in to continue' : 'Create your account'}</h2>
+                <p className="mt-2 text-xs leading-5 text-zinc-500">{mode === 'login' ? 'Your library, playlists and artist tools are waiting.' : 'Set up your profile and start building your music space.'}</p>
+              </div>
+
+              {error && (
+                <div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3.5 text-xs font-semibold text-red-200 animate-in fade-in slide-in-from-top-1">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
                 </div>
-              </div>
+              )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white font-extrabold text-sm shadow-lg transition-all active:scale-[0.99] disabled:opacity-50 mt-2"
-              >
-                {loading ? 'Signing in...' : 'Sign In'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
-                  Username
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-2.5 w-4 h-4 text-zinc-500" />
-                  <input
-                    type="text"
-                    required
-                    value={regUsername}
-                    onChange={(e) => setRegUsername(e.target.value)}
-                    placeholder="Choose a username"
-                    className="w-full pl-9 pr-4 py-2 bg-[#282828] border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-                  />
-                </div>
-              </div>
+              {mode === 'login' ? (
+                <form onSubmit={handleLogin} className="mt-6 space-y-4">
+                  <div><label className={labelClass}>Username or email</label><div className="relative"><User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="username" required value={loginIdentifier} onChange={(event) => setLoginIdentifier(event.target.value)} placeholder="Enter username or email" className={inputClass} /></div></div>
+                  <div><label className={labelClass}>Password</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} placeholder="Enter your password" className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+                  <button type="submit" disabled={loading} className="control-press mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3.5 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Signing in...</> : <>Sign in <ArrowRight className="h-4 w-4" /></>}</button>
+                </form>
+              ) : (
+                <form onSubmit={handleRegister} className="mt-6 space-y-3.5">
+                  <div className="grid gap-3.5 sm:grid-cols-2">
+                    <div><label className={labelClass}>Username</label><div className="relative"><User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="username" required minLength={3} maxLength={32} value={regUsername} onChange={(event) => setRegUsername(event.target.value)} placeholder="username" className={inputClass} /></div></div>
+                    <div><label className={labelClass}>Display name</label><div className="relative"><Sparkles className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="name" maxLength={80} value={regDisplayName} onChange={(event) => setRegDisplayName(event.target.value)} placeholder="Public name" className={inputClass} /></div></div>
+                  </div>
+                  <div><label className={labelClass}>Email address</label><div className="relative"><Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="email" autoComplete="email" required value={regEmail} onChange={(event) => setRegEmail(event.target.value)} placeholder="yourname@example.com" className={inputClass} /></div></div>
+                  <div><label className={labelClass}>Password</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={8} maxLength={128} value={regPassword} onChange={(event) => setRegPassword(event.target.value)} placeholder="At least 8 characters" className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+                  <div className="flex items-center gap-2 px-1 text-[10px] font-semibold text-zinc-500"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Your library remains tied to this account.</div>
+                  <button type="submit" disabled={loading} className="control-press flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3.5 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Creating account...</> : <>Create account <ArrowRight className="h-4 w-4" /></>}</button>
+                </form>
+              )}
 
-              <div>
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-zinc-500" />
-                  <input
-                    type="email"
-                    required
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="yourname@example.com"
-                    className="w-full pl-9 pr-4 py-2 bg-[#282828] border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
-                  Display Name
-                </label>
-                <input
-                  type="text"
-                  value={regDisplayName}
-                  onChange={(e) => setRegDisplayName(e.target.value)}
-                  placeholder="Your public profile name"
-                  className="w-full px-4 py-2 bg-[#282828] border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-2.5 w-4 h-4 text-zinc-500" />
-                  <input
-                    type="password"
-                    required
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Create a password"
-                    className="w-full pl-9 pr-4 py-2 bg-[#282828] border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white font-extrabold text-sm shadow-lg transition-all active:scale-[0.99] disabled:opacity-50 mt-2"
-              >
-                {loading ? 'Creating Account...' : 'Create Account'}
-              </button>
-            </form>
-          )}
-
-        </div>
+              <p className="mt-6 text-center text-[10px] leading-4 text-zinc-600">By continuing, you confirm that this account belongs to you and that uploaded music follows the platform rules.</p>
+            </div>
+          </main>
+        </section>
       </div>
     </div>
   );

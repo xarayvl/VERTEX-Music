@@ -267,9 +267,9 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/90 p-2 text-white animate-in fade-in duration-200 sm:p-4">
-      <div className="mx-auto min-h-full w-full max-w-6xl rounded-[1.75rem] border border-white/10 bg-[#121212] shadow-2xl animate-in zoom-in-95 duration-300 sm:min-h-0">
-        <header className="sticky top-0 z-20 flex items-start justify-between gap-4 rounded-t-[1.75rem] border-b border-white/10 bg-[#121212]/95 px-5 py-5 sm:px-7">
+    <div className="fixed inset-0 z-50 flex items-center overflow-hidden bg-black/90 p-2 text-white animate-in fade-in duration-200 sm:p-4">
+      <div className="mx-auto flex h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#121212] shadow-2xl animate-in zoom-in-95 duration-300 sm:h-[calc(100dvh-2rem)]">
+        <header className="z-20 flex shrink-0 items-start justify-between gap-4 rounded-t-[1.75rem] border-b border-white/10 bg-[#121212] px-5 py-5 sm:px-7">
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
               <Edit3 className="h-6 w-6" />
@@ -287,14 +287,15 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
           </button>
         </header>
 
-        {!isOwner ? (
-          <div className="p-10 text-center">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          {!isOwner ? (
+            <div className="p-10 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 text-red-300"><ShieldAlert className="h-7 w-7" /></div>
             <h2 className="mt-4 text-lg font-black">Ownership required</h2>
             <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">Only the original uploader can edit this track or release.</p>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-7">
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-7">
             {error && (
               <div className="section-reveal flex items-start gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3.5 text-sm text-red-200">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
@@ -388,8 +389,9 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                 </section>
               </aside>
             </div>
-          </form>
-        )}
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );
