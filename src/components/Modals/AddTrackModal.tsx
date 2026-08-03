@@ -440,7 +440,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
           releaseType,
           releaseTitle: releaseType === 'Single' ? title.trim() : finalAlbumName.trim() || 'Single',
           releaseId: crypto.randomUUID(),
-          copyright: formatCopyright(copyright),
+          copyright: formatCopyright(copyright, releaseYear),
           releaseYear: Number(releaseYear) || new Date().getFullYear(),
           genre,
           duration,
@@ -518,7 +518,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
             releaseType,
             releaseTitle: finalAlbumName,
             releaseId: sharedReleaseId,
-            copyright: formatCopyright(copyright),
+            copyright: formatCopyright(copyright, releaseYear),
             releaseYear: Number(releaseYear) || new Date().getFullYear(),
             genre,
             duration: item.duration,
@@ -1048,12 +1048,12 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                 <div className="mt-5">
                   <label className={labelClass}>Copyright / label</label>
                   <div className="flex overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] transition-all focus-within:border-[#C084FC]/70 focus-within:bg-white/[0.07] focus-within:ring-4 focus-within:ring-[#A855F7]/10">
-                    <span aria-hidden="true" className="flex shrink-0 select-none items-center border-r border-white/10 px-4 text-sm font-black text-white">©</span>
+                    <span aria-hidden="true" className="flex shrink-0 select-none items-center border-r border-white/10 px-4 text-sm font-black text-white">© {releaseYear}</span>
                     <input
                       type="text"
                       value={copyright}
                       onChange={(event) => setCopyright(stripCopyrightPrefix(event.target.value))}
-                      placeholder="2026 Your Label"
+                      placeholder="Your Label"
                       aria-label="Copyright owner and year"
                       className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-sm text-white outline-none placeholder:text-zinc-600"
                     />

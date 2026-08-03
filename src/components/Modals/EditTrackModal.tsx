@@ -99,8 +99,9 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
         : 'Single';
     setReleaseType(normalizedType);
     setReleaseTitle(normalizedType === 'Single' ? track.title : (track.releaseTitle || track.album || track.title));
+    const initialReleaseYear = track.releaseYear || (track.createdAt ? new Date(track.createdAt).getFullYear() : new Date().getFullYear());
     setCopyright(stripCopyrightPrefix(track.copyright || ''));
-    setReleaseYear(track.releaseYear || (track.createdAt ? new Date(track.createdAt).getFullYear() : new Date().getFullYear()));
+    setReleaseYear(initialReleaseYear);
     setCoverUrl(track.coverUrl || '');
     setTrackDrafts(releaseTracks.map((item) => ({ id: item.id, title: item.title || '', genre: item.genre || '' })));
     setAudioUrl('');
@@ -211,7 +212,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
             releaseType: releaseType.toUpperCase(),
             releaseTitle: finalAlbum,
             coverUrl: coverUrl.trim() || track.coverUrl,
-            copyright: formatCopyright(copyright),
+            copyright: formatCopyright(copyright, releaseYear),
             releaseYear: Number(releaseYear) || new Date().getFullYear(),
             tracks: trackDrafts.map((draft) => ({ id: draft.id, title: draft.title.trim(), genre: draft.genre.trim() })),
           }),
@@ -240,7 +241,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
             audioUrl: audioUrl || undefined,
             audioFileName: audioUrl ? newFileName : undefined,
             duration: audioUrl ? duration ?? undefined : undefined,
-            copyright: formatCopyright(copyright),
+            copyright: formatCopyright(copyright, releaseYear),
             releaseYear: Number(releaseYear) || new Date().getFullYear(),
             trackNumber: track.trackNumber,
           }),
@@ -379,7 +380,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                   <div className="mb-5"><p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Release details</p><h2 className="mt-1 text-xl font-black">Metadata and artwork</h2></div>
                   {releaseType !== 'Single' && <div><label className={labelClass}>Album / EP title *</label><input value={releaseTitle} onChange={(event) => setReleaseTitle(event.target.value)} placeholder="Release title" className={fieldClass} /></div>}
                   <div className={releaseType !== 'Single' ? 'mt-5' : ''}><label className={labelClass}>Release year</label><input type="number" min="1900" max={new Date().getFullYear() + 1} value={releaseYear} onChange={(event) => setReleaseYear(parseInt(event.target.value, 10) || new Date().getFullYear())} className={fieldClass} /></div>
-                  <div className="mt-5"><label className={labelClass}>Copyright / label</label><div className="flex overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] focus-within:border-[#C084FC]/70 focus-within:ring-4 focus-within:ring-[#A855F7]/10"><span className="flex shrink-0 select-none items-center border-r border-white/10 px-4 text-sm font-black">©</span><input value={copyright} onChange={(event) => setCopyright(stripCopyrightPrefix(event.target.value))} placeholder="2026 Your Label" className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-sm text-white outline-none placeholder:text-zinc-600" /></div></div>
+                  <div className="mt-5"><label className={labelClass}>Copyright / label</label><div className="flex overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] focus-within:border-[#C084FC]/70 focus-within:ring-4 focus-within:ring-[#A855F7]/10"><span className="flex shrink-0 select-none items-center border-r border-white/10 px-4 text-sm font-black">© {releaseYear}</span><input value={copyright} onChange={(event) => setCopyright(stripCopyrightPrefix(event.target.value))} placeholder="Your Label" className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-sm text-white outline-none placeholder:text-zinc-600" /></div></div>
                   <div className="mt-5"><label className={labelClass}>Cover artwork</label><div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row"><input value={coverUrl} onChange={(event) => setCoverUrl(event.target.value)} placeholder="Image URL or upload a file" className={`${fieldClass} min-w-0 flex-1`} /><label className="control-press flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-xs font-black text-zinc-300 hover:bg-white/10"><Upload className="h-4 w-4" /> Upload<input type="file" accept="image/*" onChange={handleCoverFileUpload} className="hidden" /></label></div></div>
                 </section>
 

@@ -127,8 +127,11 @@ function normalizedIsoDate(value: unknown): string {
 
 function normalizeCopyright(value: unknown, fallback: string): string {
   const raw = typeof value === 'string' ? value.trim() : '';
-  const body = raw.replace(/^(?:©|\(c\))\s*/i, '').trim() || fallback.trim();
-  return `©${body ? ` ${body}` : ''}`.slice(0, 300).trimEnd();
+  const fallbackMatch = fallback.trim().match(/^(\d{4})(?:\s+(.*))?$/);
+  const year = fallbackMatch?.[1] || String(new Date().getFullYear());
+  const fallbackOwner = fallbackMatch?.[2]?.trim() || '';
+  const owner = raw.replace(/^(?:©|\(c\))\s*/i, '').replace(/^\d{4}\b\s*/, '').trim() || fallbackOwner;
+  return `© ${year}${owner ? ` ${owner}` : ''}`.slice(0, 300).trimEnd();
 }
 
 /**
