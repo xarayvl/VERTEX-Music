@@ -1758,7 +1758,7 @@ export default function App() {
               isWorkspacePanelOpen
                 ? 'overflow-y-auto p-0 pb-40 md:pb-24'
                 : isSongScreenOpen
-                  ? 'overflow-hidden p-0 md:overflow-y-auto md:px-6 md:pt-4 md:pb-24'
+                  ? 'overflow-hidden p-0'
                 : activeTab === 'chat'
                   ? `overflow-hidden p-0 ${currentTrack ? 'pb-[9.5rem]' : 'pb-[5.25rem]'} md:overflow-y-auto md:px-6 md:pt-4 md:pb-24`
                   : 'overflow-y-auto px-3 pt-4 pb-44 sm:px-6 md:pb-24'

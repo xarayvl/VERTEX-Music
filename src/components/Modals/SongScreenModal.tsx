@@ -81,9 +81,9 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
     : 0;
 
   return (
-    <section className="workspace-screen h-full min-h-0 w-full overflow-hidden bg-[#121212] text-white select-none md:h-auto md:min-h-full md:overflow-visible">
-      <div className="mx-auto flex h-full w-full max-w-6xl flex-col px-3 py-3 md:block md:h-auto md:px-7 md:py-7 lg:px-10 lg:py-9">
-        <header className="workspace-header flex flex-shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-3 md:items-start md:gap-5 md:pb-6">
+    <section className="workspace-screen h-full min-h-0 w-full overflow-hidden bg-[#121212] text-white select-none">
+      <div className="mx-auto flex h-full w-full max-w-6xl flex-col px-3 py-2 md:px-6 md:py-3 lg:px-8">
+        <header className="workspace-header flex flex-shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-2.5 md:gap-4 md:pb-3">
           <div className="flex min-w-0 items-center gap-3 md:gap-4">
             <div
               className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] shadow-[0_12px_34px_rgba(168,85,247,0.28)] md:h-12 md:w-12 md:rounded-2xl"
@@ -111,9 +111,9 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
           </button>
         </header>
 
-        <div className="mt-3 grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] gap-3 md:mt-7 md:block lg:grid lg:grid-rows-none lg:grid-cols-[0.92fr_1.08fr] lg:gap-6">
+        <div className="mt-2.5 grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] gap-3 md:grid-rows-none md:grid-cols-[0.92fr_1.08fr] md:gap-4">
           <article
-            className="workspace-card relative flex min-h-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 p-3 shadow-2xl md:block md:rounded-3xl md:p-7"
+            className="workspace-card relative flex min-h-0 flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/10 p-3 shadow-2xl md:rounded-3xl md:p-5"
             style={{
               background: `linear-gradient(145deg, ${palette.ambient}, #181818 62%, #111111)`,
             }}
@@ -123,7 +123,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               style={{ background: `radial-gradient(circle at 50% 0%, ${palette.accent}, transparent 68%)` }}
             />
 
-            <div data-track-id={currentTrack.id} data-context-type="track" className="relative mx-auto aspect-square w-[min(78vw,42dvh)] max-h-full max-w-full overflow-hidden rounded-[1.35rem] border border-white/15 bg-[#0f0f0f] shadow-[0_28px_70px_rgba(0,0,0,0.55)] md:w-full md:max-w-md md:rounded-[1.75rem]">
+            <div data-track-id={currentTrack.id} data-context-type="track" className="relative mx-auto aspect-square w-[min(78vw,42dvh)] max-h-full max-w-full flex-shrink overflow-hidden rounded-[1.35rem] border border-white/15 bg-[#0f0f0f] shadow-[0_28px_70px_rgba(0,0,0,0.55)] md:w-[min(100%,calc(100dvh-390px))] md:rounded-[1.75rem] xl:w-[min(100%,calc(100dvh-360px))]">
               <img
                 key={currentTrack.coverUrl}
                 src={currentTrack.coverUrl}
@@ -144,13 +144,13 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               </div>
             </div>
 
-            <div className="relative mt-5 hidden grid-cols-2 gap-3 md:grid">
+            <div className="relative mt-3 hidden w-full flex-shrink-0 grid-cols-2 gap-3 md:grid">
               <button
                 data-artist-id={currentTrack.userId}
                 data-context-type="artist"
                 onClick={() => onSelectArtist?.(currentTrack.userId)}
                 disabled={!onSelectArtist}
-                className="control-press flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left hover:bg-white/[0.07] disabled:cursor-default"
+                className="control-press flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-2.5 text-left hover:bg-white/[0.07] disabled:cursor-default"
               >
                 <UserRound className="h-4 w-4 flex-shrink-0 text-[#E879F9]" />
                 <span className="min-w-0">
@@ -163,7 +163,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                 data-context-type="track"
                 onClick={() => onSelectAlbum?.(currentTrack)}
                 disabled={!onSelectAlbum}
-                className="control-press flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left hover:bg-white/[0.07] disabled:cursor-default"
+                className="control-press flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-2.5 text-left hover:bg-white/[0.07] disabled:cursor-default"
               >
                 <Disc3 className="h-4 w-4 flex-shrink-0 text-[#C084FC]" />
                 <span className="min-w-0">
@@ -174,7 +174,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
             </div>
           </article>
 
-          <article className="workspace-card flex flex-shrink-0 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-[#211827] to-[#181818] p-3 shadow-2xl md:mt-6 md:rounded-3xl md:p-7 lg:mt-0">
+          <article className="workspace-card flex min-h-0 flex-shrink-0 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-[#211827] to-[#181818] p-3 shadow-2xl md:flex-shrink md:rounded-3xl md:p-5">
             <div className="flex items-center justify-between gap-3 md:items-start md:gap-4">
               <div className="min-w-0">
                 <p className="hidden text-[10px] font-black uppercase tracking-[0.22em] text-[#D8B4FE] md:block">Listening session</p>
@@ -190,7 +190,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               </div>
               <button
                 onClick={() => onToggleLike(currentTrack.id)}
-                className={`control-press flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border transition-colors md:h-11 md:w-11 ${
+                className={`control-press flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border transition-colors md:hidden ${
                   currentTrack.isLiked
                     ? 'border-[#D946EF]/40 bg-[#D946EF]/15 text-[#E879F9]'
                     : 'border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
@@ -201,7 +201,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               </button>
             </div>
 
-            <div className="mt-3 rounded-2xl border border-white/[0.08] bg-black/20 p-3 md:mt-8 md:rounded-3xl md:p-5">
+            <div className="mt-3 flex-shrink-0 rounded-2xl border border-white/[0.08] bg-black/20 p-3 md:hidden">
               <div className="flex items-center justify-center gap-6 md:gap-5">
                 <button
                   onClick={onPrev}
@@ -231,7 +231,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                 </button>
               </div>
 
-              <div className="mt-3 flex items-center gap-2 font-mono text-[10px] text-zinc-500 md:mt-6 md:gap-3">
+              <div className="mt-3 flex items-center gap-2 font-mono text-[10px] text-zinc-500 md:gap-3">
                 <span className="w-9 text-right">{formatTime(currentTimeSeconds)}</span>
                 <div className="group relative flex flex-1 items-center py-2">
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
@@ -262,7 +262,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               </div>
             </div>
 
-            <div className="mt-5 hidden flex-1 flex-col rounded-3xl border border-white/[0.08] bg-[#101010]/60 p-5 md:flex">
+            <div className="mt-3 hidden min-h-0 flex-1 flex-col rounded-3xl border border-white/[0.08] bg-[#101010]/60 p-4 md:flex">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
@@ -279,7 +279,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                   </button>
                 )}
               </div>
-              <div className="mt-5 flex min-h-40 flex-1 items-end justify-center overflow-hidden rounded-2xl border border-white/[0.06] bg-black/30 px-4 pb-3">
+              <div className="mt-3 flex min-h-0 flex-1 items-end justify-center overflow-hidden rounded-2xl border border-white/[0.06] bg-black/30 px-4 pb-3">
                 <AudioVisualizer
                   isPlaying={isPlaying}
                   accentColor={palette.accent}
