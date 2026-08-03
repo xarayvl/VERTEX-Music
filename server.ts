@@ -1752,7 +1752,7 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
         : [];
 
       const chat = ai.chats.create({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.5-flash-lite",
         config: {
           systemInstruction:
             "You are VERTEX Music AI, an expert, energetic VERTEX Music AI DJ, Producer, and Music Assistant. " +

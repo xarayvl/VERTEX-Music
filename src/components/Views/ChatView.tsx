@@ -242,9 +242,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-extrabold text-white tracking-tight">VERTEX Music AI DJ</h2>
+              <h2 className="text-lg font-extrabold text-white tracking-tight">VERTEX Music AI</h2>
               <span className="px-2 py-0.5 rounded-full bg-[#A855F7]/20 border border-[#A855F7]/40 text-[#C084FC] text-[10px] font-bold uppercase tracking-wider">
-                Gemini 3.6 + Lyria AI
+                Gemini 3.5 Flash Lite
               </span>
             </div>
             <p className="text-xs text-zinc-400">Ask for recommendations, playlist ideas & generate AI music</p>
