@@ -257,7 +257,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                 {/* Copy Link / Share */}
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(window.location.href);
+                    navigator.clipboard.writeText(`${window.location.origin}/track/${albumTrack.id}`);
                     showToast?.('Copied release link to clipboard!');
                     setIsMenuOpen(false);
                   }}

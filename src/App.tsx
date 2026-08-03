@@ -120,6 +120,11 @@ export default function App() {
   const [selectedArtist, setSelectedArtist] = useState<Artist | UserProfile | null>(null);
   const [isArtistLoading, setIsArtistLoading] = useState(false);
   const [artistLoadError, setArtistLoadError] = useState<string | null>(null);
+  // Captured once on first render so it survives later in-app navigation
+  // (which never touches the URL) — used to resolve a shared /track,
+  // /playlist, or /artist link into the right screen once data has loaded.
+  const initialSharedPathRef = useRef<string>(window.location.pathname);
+  const deepLinkResolvedRef = useRef<boolean>(false);
   const artistRequestIdRef = useRef(0);
   const [selectedAlbumTrack, setSelectedAlbumTrack] = useState<Track | null>(null);
 
@@ -1553,6 +1558,52 @@ export default function App() {
 
     setIsArtistLoading(false);
   };
+
+  // Resolve a shared link (Copy Song/Playlist/Artist Link) into the right
+  // screen. Runs once tracks/playlists have loaded from the server; until
+  // then a shared URL like /track/<id> would otherwise just fall through to
+  // the normal empty-path home screen since this app has no router.
+  useEffect(() => {
+    if (deepLinkResolvedRef.current) return;
+    const path = initialSharedPathRef.current;
+
+    const trackMatch = path.match(/^\/track\/([^/?#]+)/);
+    const playlistMatch = path.match(/^\/playlist\/([^/?#]+)/);
+    const artistMatch = path.match(/^\/artist\/([^/?#]+)/);
+
+    if (!trackMatch && !playlistMatch && !artistMatch) {
+      deepLinkResolvedRef.current = true;
+      return;
+    }
+
+    if (trackMatch) {
+      if (tracks.length === 0) return; // wait for tracks to load
+      deepLinkResolvedRef.current = true;
+      const track = tracks.find((t) => t.id === trackMatch[1]);
+      if (track) {
+        handlePlayTrack(track);
+        setIsSongScreenOpen(true);
+      } else {
+        showToast('That song link is invalid or the track was removed.');
+      }
+      window.history.replaceState({}, '', '/');
+    } else if (playlistMatch) {
+      if (playlists.length === 0) return; // wait for playlists to load
+      deepLinkResolvedRef.current = true;
+      const playlist = playlists.find((p) => p.id === playlistMatch[1]);
+      if (playlist) {
+        handleSelectPlaylist(playlist);
+      } else {
+        showToast('That playlist link is invalid or was removed.');
+      }
+      window.history.replaceState({}, '', '/');
+    } else if (artistMatch) {
+      deepLinkResolvedRef.current = true;
+      handleSelectArtist(artistMatch[1]);
+      window.history.replaceState({}, '', '/');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks, playlists]);
 
   const handleSelectAlbum = (track: Track) => {
     setSelectedAlbumTrack(track);

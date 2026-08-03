@@ -306,7 +306,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           </button>
 
           <button
-            onClick={() => handleCopyLink(`https://vertexmusic.app/track/${activeTrack.id}`, 'Song')}
+            onClick={() => handleCopyLink(`${window.location.origin}/track/${activeTrack.id}`, 'Song')}
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <Copy className="w-4 h-4 text-zinc-400" />
@@ -343,7 +343,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           </button>
 
           <button
-            onClick={() => handleCopyLink(`https://vertexmusic.app/playlist/${activePlaylist.id}`, 'Playlist')}
+            onClick={() => handleCopyLink(`${window.location.origin}/playlist/${activePlaylist.id}`, 'Playlist')}
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <Copy className="w-4 h-4 text-zinc-400" />
@@ -380,7 +380,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             <span>View Artist Page</span>
           </button>
           <button
-            onClick={() => handleCopyLink(`https://vertexmusic.app/artist/${activeArtist.id}`, 'Artist')}
+            onClick={() => handleCopyLink(`${window.location.origin}/artist/${activeArtist.id}`, 'Artist')}
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <Copy className="w-4 h-4 text-zinc-400" />
