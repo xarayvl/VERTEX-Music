@@ -210,7 +210,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     key={`artist-${artist.id}`}
                     data-artist-id={artist.id}
                     data-context-type="artist"
-                    onClick={() => onSelectArtist && onSelectArtist(artist.name)}
+                    onClick={() => onSelectArtist && onSelectArtist(artist)}
                     className="bg-[#181818] hover:bg-[#282828] p-4 rounded-xl flex flex-col justify-between group cursor-pointer transition-all shadow relative"
                   >
                     <div className="relative aspect-square w-full rounded-full overflow-hidden mb-3 shadow border border-white/5">
@@ -226,7 +226,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         {artist.name}
                       </h4>
                       <p className="text-xs text-zinc-400 truncate mt-1">
-                        Artist • {artist.monthlyListeners || '0 monthly listeners'}
+                        Artist • {artist.totalStreamsLabel || '0 total streams'}
                       </p>
                     </div>
                   </div>
@@ -279,7 +279,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     key={`artist-${artist.id}`}
                     data-artist-id={artist.id}
                     data-context-type="artist"
-                    onClick={() => onSelectArtist && onSelectArtist(artist.name)}
+                    onClick={() => onSelectArtist && onSelectArtist(artist)}
                     className="p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center space-x-4 min-w-0">
@@ -294,7 +294,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           {artist.name}
                         </h4>
                         <p className="text-xs text-zinc-400 truncate">
-                          {artist.monthlyListeners || '0 monthly listeners'}
+                          {artist.totalStreamsLabel || '0 total streams'}
                         </p>
                       </div>
                     </div>
@@ -352,7 +352,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     <p
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (onSelectArtist) onSelectArtist(track.artist);
+                        if (onSelectArtist) onSelectArtist(track.userId || '');
                       }}
                       className="text-xs text-zinc-400 truncate hover:underline hover:text-[#D946EF]"
                     >

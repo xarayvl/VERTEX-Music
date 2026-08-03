@@ -26,11 +26,22 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const filteredTracks = selectedCategory
-    ? tracks.filter((t) =>
-        t.genre.toLowerCase().includes(selectedCategory.toLowerCase().split(' ')[0])
-      )
-    : tracks;
+  const categoryGenres: Record<string, string[]> = {
+    'Synthwave & Retro': ['synthwave', 'retro'],
+    'Ambient & Atmospheric': ['ambient', 'atmospheric'],
+    'Cyberpunk & EDM': ['cyberpunk', 'edm', 'electronic'],
+    'Lofi & Chill Beats': ['lofi', 'lo-fi', 'chill', 'chillout'],
+    'Acoustic & Unplugged': ['acoustic', 'unplugged'],
+  };
+
+  const filteredTracks = selectedCategory === 'Popular on VERTEX'
+    ? [...tracks].sort((left, right) => Number(right.plays || 0) - Number(left.plays || 0))
+    : selectedCategory
+      ? tracks.filter((track) => {
+          const genre = (track.genre || '').toLowerCase();
+          return (categoryGenres[selectedCategory] || []).some((candidate) => genre.includes(candidate));
+        })
+      : tracks;
 
   return (
     <div className="space-y-8 pb-12 select-none">
@@ -74,7 +85,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-extrabold text-white tracking-tight">
-            {selectedCategory} Recommendations
+            {selectedCategory} Tracks
           </h2>
           <button
             onClick={() => setSelectedCategory(null)}
@@ -145,17 +156,16 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
       {/* Artists Section */}
       <div>
-        <h2 className="text-xl font-extrabold text-white tracking-tight mb-4">Trending Artists</h2>
+        <h2 className="text-xl font-extrabold text-white tracking-tight mb-4">Artists</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {artists.map((artist) => {
-            const artistTrack = tracks.find((t) => t.artist === artist.name) || tracks[0];
+            const artistTrack = tracks.find((track) => track.userId === artist.id);
             return (
               <div
                 key={artist.id}
                 data-artist-id={artist.id}
-                data-artist-name={artist.name}
                 data-context-type="artist"
-                onClick={() => (onSelectArtist ? onSelectArtist(artist) : onPlayTrack(artistTrack))}
+                onClick={() => { if (onSelectArtist) onSelectArtist(artist); else if (artistTrack) onPlayTrack(artistTrack); }}
                 className="bg-[#181818] hover:bg-[#282828] p-4 rounded-xl text-center flex flex-col items-center group cursor-pointer transition-all shadow"
               >
                 <div className="w-24 h-24 rounded-full overflow-hidden mb-3 border-2 border-white/10 group-hover:border-[#D946EF] transition-colors shadow-lg">

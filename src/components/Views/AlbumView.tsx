@@ -121,7 +121,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
           </h1>
           <div className="flex items-center space-x-2 text-sm text-zinc-300 font-medium pt-2">
             <span
-              onClick={() => onSelectArtist(albumTrack.artist)}
+              onClick={() => onSelectArtist(albumTrack.userId || '')}
               className="font-bold text-white hover:underline cursor-pointer tracking-tight"
             >
               {albumTrack.artist}
@@ -245,7 +245,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                 {/* Go to Artist */}
                 <button
                   onClick={() => {
-                    onSelectArtist(albumTrack.artist);
+                    onSelectArtist(albumTrack.userId || '');
                     setIsMenuOpen(false);
                   }}
                   className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
@@ -341,7 +341,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   </h4>
                   <p className="text-xs text-zinc-400 truncate group-hover:text-white transition-colors">
                     <span 
-                      onClick={(e) => { e.stopPropagation(); onSelectArtist(track.artist); }}
+                      onClick={(e) => { e.stopPropagation(); onSelectArtist(track.userId || ''); }}
                       className="hover:underline cursor-pointer"
                     >
                       {track.artist}
@@ -393,7 +393,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
       {moreByArtist.length > 0 && (
         <div className="pt-6 border-t border-white/5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-white hover:underline cursor-pointer" onClick={() => onSelectArtist(albumTrack.artist)}>
+            <h2 className="text-xl font-bold text-white hover:underline cursor-pointer" onClick={() => onSelectArtist(albumTrack.userId || '')}>
               More by {albumTrack.artist}
             </h2>
           </div>

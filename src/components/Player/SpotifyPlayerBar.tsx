@@ -131,7 +131,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
             onClick={(e) => {
               if (onSelectArtist && currentTrack) {
                 e.stopPropagation();
-                onSelectArtist(currentTrack.artist);
+                onSelectArtist(currentTrack.userId || '');
               }
             }}
             className="text-xs text-zinc-400 truncate hover:text-[#C084FC] hover:underline transition-colors leading-tight mt-0.5 cursor-pointer"

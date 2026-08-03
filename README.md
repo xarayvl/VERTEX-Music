@@ -1,20 +1,23 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# VERTEX Music
 
-# Run and deploy your AI Studio app
+A server-backed React/Express music application with authenticated users, artist profiles, owned tracks and playlists, playback history, likes, follows, search, audio uploads, EQ controls, and optional AI chat/music generation.
 
-This contains everything you need to run your app locally.
+## Requirements
 
-View your app in AI Studio: https://ai.studio/apps/a6375ada-1e95-48b4-a068-f94dae992e19
+- Node.js 20 or newer
+- npm
 
-## Run Locally
+## Local setup
 
-**Prerequisites:**  Node.js
+1. Install dependencies with `npm install`.
+2. Copy `.env.example` to `.env` and configure only the services you use.
+3. Start development mode with `npm run dev`.
+4. Open `http://localhost:3000`.
 
+## Persistence
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- Without Upstash, canonical application data is stored in `data/db.json`.
+- Without Cloudflare R2, uploaded media is stored under `data/uploads`.
+- Upstash and R2 credentials are optional but recommended for deployed environments.
+
+The repository ships with an empty database. It does not create demo users, tracks, artists, playlists, likes, follows, listening history, or chat history.

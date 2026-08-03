@@ -4,7 +4,6 @@ import { Bot, Send, Sparkles, User, Play, Trash2, Music, Globe, Search, ChevronD
 import { Track, Playlist, ChatMessage } from '../../types';
 
 interface ChatViewProps {
-  tracks: Track[];
   playlists: Playlist[];
   messages: ChatMessage[];
   onUpdateMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
@@ -14,20 +13,20 @@ interface ChatViewProps {
   userId?: string;
 }
 
-// Simulated "thinking" phases shown while waiting on the AI response —
-// mirrors the Gemini-app style status line (Thinking. -> Searching the
-// web. -> Writing.). The backend isn't a streaming endpoint, so this is a
-// timed local animation rather than a literal live signal, but it cycles
-// at a pace that reads naturally while the request is in flight.
+// Generic pending-state labels. They deliberately avoid claiming that a
+// specific backend operation is currently happening because this endpoint
+// does not stream internal execution stages to the client.
 const THINKING_PHASES = [
-  { text: 'VERTEX du\u015f\u00fcn\u00fcyor...', Icon: BrainCircuit },
-  { text: "Web'de aran\u0131yor...", Icon: Search },
-  { text: 'Kaynaklar taran\u0131yor...', Icon: Globe },
-  { text: 'Yan\u0131t haz\u0131rlan\u0131yor...', Icon: Sparkles },
+  { text: 'İstek işleniyor...', Icon: BrainCircuit },
+  { text: 'Model yanıt hazırlıyor...', Icon: Sparkles },
 ];
 
+const createMessageId = (prefix: 'user' | 'ai' | 'err'): string => {
+  const randomId = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  return `${prefix}_${randomId}`;
+};
+
 export const ChatView: React.FC<ChatViewProps> = ({
-  tracks,
   playlists,
   messages,
   onUpdateMessages,
@@ -77,21 +76,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
     'Explain the difference between Synthwave and Cyberpunk ⚡',
   ];
 
-  const findMatchedTracksInText = (text: string): Track[] => {
-    const textLower = text.toLowerCase();
-    return tracks.filter((t) => {
-      const titleMatch = textLower.includes(t.title.toLowerCase());
-      const artistMatch = textLower.includes(t.artist.toLowerCase());
-      return titleMatch || (artistMatch && textLower.includes(t.genre.toLowerCase()));
-    });
-  };
-
   const handleSendMessage = async (customText?: string) => {
     const textToSend = customText || input;
     if (!textToSend.trim() || isLoading) return;
 
     const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: createMessageId('user'),
       sender: 'user',
       text: textToSend.trim(),
       timestamp: new Date().toISOString(),
@@ -130,8 +120,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
         throw err;
       }
 
-      const aiReplyText = data.reply || "I'm listening, but couldn't generate a response.";
-      const matched = findMatchedTracksInText(aiReplyText);
+      if (typeof data.reply !== 'string' || !data.reply.trim()) {
+        throw new Error('The AI provider returned no text response.');
+      }
+      const aiReplyText = data.reply.trim();
+      const matched: Track[] = [];
 
       if (data.generatedTrack) {
         onTrackAdded?.(data.generatedTrack);
@@ -141,7 +134,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       }
 
       const aiMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
+        id: createMessageId('ai'),
         sender: 'ai',
         text: aiReplyText,
         timestamp: new Date().toISOString(),
@@ -156,7 +149,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       console.error('Chat error:', err);
       const isRateLimited = !!err?.rateLimited;
       const errorMsg: ChatMessage = {
-        id: `err-${Date.now()}`,
+        id: createMessageId('err'),
         sender: 'ai',
         text: isRateLimited
           ? `⏳ ${err.message}`
@@ -175,7 +168,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
     setIsGeneratingTrack(true);
     const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: createMessageId('user'),
       sender: 'user',
       text: `🎵 AI Music Generation request: "${promptToUse}"`,
       timestamp: new Date().toISOString(),
@@ -183,9 +176,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
     onUpdateMessages((prev) => [...prev, userMsg]);
 
     try {
+      const token = localStorage.getItem('vertex_session_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch('/api/generate-music', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           prompt: promptToUse.trim(),
           model: aiGenModel,
@@ -194,15 +191,36 @@ export const ChatView: React.FC<ChatViewProps> = ({
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to generate AI music track.');
+      if (!res.ok || !data.success || !data.audioUrl || !Number.isFinite(Number(data.duration))) {
+        throw new Error(data.error || 'The provider returned no valid playable audio.');
       }
 
-      const newTrack: Track = data.track;
+      const generatedTitle = String(data.suggestedTitle || promptToUse).trim().slice(0, 160);
+      const createResponse = await fetch('/api/tracks', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId,
+          title: generatedTitle,
+          album: 'Single',
+          releaseType: 'SINGLE',
+          releaseTitle: generatedTitle,
+          releaseId: crypto.randomUUID(),
+          genre: '',
+          duration: Number(data.duration),
+          audioUrl: data.audioUrl,
+        }),
+      });
+      const createData = await createResponse.json();
+      if (!createResponse.ok || !createData.success || !createData.track) {
+        throw new Error(createData.error || 'Generated audio could not be saved as a real track.');
+      }
+
+      const newTrack: Track = createData.track;
       onTrackAdded?.(newTrack);
 
       const aiMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
+        id: createMessageId('ai'),
         sender: 'ai',
         text: `✨ **AI Music Composed with Lyria-3!**\n\nI've generated a custom audio track based on your prompt: **"${newTrack.title}"**. Click play below to listen immediately or find it in your Music Library.`,
         timestamp: new Date().toISOString(),
@@ -213,7 +231,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     } catch (err: any) {
       console.error('AI Music Gen Error:', err);
       const errorMsg: ChatMessage = {
-        id: `err-${Date.now()}`,
+        id: createMessageId('err'),
         sender: 'ai',
         text: `⚠️ Lyria AI Music Generation Error: ${err.message || 'Could not compose track.'}`,
         timestamp: new Date().toISOString(),
@@ -225,21 +243,23 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   const handleClearHistory = async () => {
-    const defaultWelcome: ChatMessage[] = [
-      {
-        id: `welcome-${Date.now()}`,
-        sender: 'ai',
-        text: "Conversation cleared! I'm VERTEX Music AI, ready for your next music question or DJ recommendation.",
-        timestamp: new Date().toISOString(),
-      },
-    ];
-    onUpdateMessages(defaultWelcome);
-    if (userId) {
-      try {
-        await fetch(`/api/chat-history/${userId}`, { method: 'DELETE' });
-      } catch (err) {
-        console.error('Error clearing remote chat history:', err);
+    if (!userId) {
+      onUpdateMessages([]);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('vertex_session_token');
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(`/api/chat-history/${userId}`, { method: 'DELETE', headers });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || `History clear failed (${response.status})`);
       }
+      onUpdateMessages([]);
+    } catch (err) {
+      console.error('Error clearing remote chat history:', err);
     }
   };
 

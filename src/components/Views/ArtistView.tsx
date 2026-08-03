@@ -42,11 +42,11 @@ interface ArtistViewProps {
     avatarUrl: string;
     bannerUrl: string;
     genre: string;
-    artistVerified: boolean;
-    monthlyListeners: string;
     instagramUrl?: string;
     twitterUrl?: string;
     websiteUrl?: string;
+    artistPickTrackId?: string;
+    artistPickComment?: string;
   }) => void;
   onShufflePlay?: (tracks: Track[]) => void;
   isFollowing?: boolean;
@@ -100,7 +100,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         <User className="w-12 h-12 mb-3 text-zinc-600" />
         <p className="text-base font-bold text-white">Artist profile unavailable</p>
         <p className="text-xs text-zinc-500 mt-1">
-          {loadError || 'Select an artist from Search, Home, or Profile to view their page.'}
+          {loadError || '404 — Artist not found.'}
         </p>
         {onGoBack && (
           <button
@@ -135,16 +135,13 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
 
   const bio = isUserProfile
     ? (artist as UserProfile).artistBio || (artist as UserProfile).bio || 'No artist biography has been added yet.'
-    : (artist as Artist).bio || ((artist as Artist).isSynthetic
-      ? 'This catalog artist is not linked to a registered user profile.'
-      : 'No artist biography has been added yet.');
+    : (artist as Artist).bio || 'No artist biography has been added yet.';
 
   const isVerified = isUserProfile
     ? (artist as UserProfile).artistVerified === true
     : (artist as Artist).verified === true;
 
   const profileStats = artist.stats;
-  const isSyntheticArtist = !isUserProfile && (artist as Artist).isSynthetic === true;
 
   // NOTE: ownership must be decided by id only. An earlier version also
   // matched by comparing artistName to the logged-in user's displayName,
@@ -155,7 +152,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   const isOwner = Boolean(userProfile && artist && artist.id === userProfile.id);
 
   // Get unified stats from global helper
-  const { totalPlays: totalArtistPlays, monthlyListenersStr: monthlyListeners, artistTracks } = getArtistStats(artist, allTracks);
+  const { totalPlays: totalArtistPlays, totalStreamsLabel, artistTracks } = getArtistStats(artist, allTracks);
 
   // Display tracks belong strictly to this artist
   const displayTracks = artistTracks;
@@ -171,8 +168,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   const artistPickComment = artist.artistPickComment;
 
   const featuredTrack = artistPickTrackId
-    ? (displayTracks.find((t) => t.id === artistPickTrackId) || (displayTracks.length > 0 ? displayTracks[0] : undefined))
-    : (displayTracks.length > 0 ? displayTracks[0] : undefined);
+    ? displayTracks.find((track) => track.id === artistPickTrackId)
+    : displayTracks[0];
 
   const instagramUrl = artist.instagramUrl;
   const twitterUrl = artist.twitterUrl;
@@ -183,6 +180,20 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
       onPlayTrack(displayTracks[0]);
     }
   };
+
+  if (isEditModalOpen) {
+    return (
+      <EditArtistModal
+        isOpen
+        artist={artist}
+        artistTracks={artistTracks}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={(updatedData) => {
+          onUpdateArtist?.(updatedData);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-8 pb-24 select-none animate-in fade-in duration-300">
@@ -233,7 +244,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
 
           {/* Monthly Listeners Counter */}
           <p className="text-xs sm:text-sm font-semibold text-zinc-200 drop-shadow flex flex-wrap items-center gap-2">
-            <span>{monthlyListeners}</span>
+            <span>{totalStreamsLabel}</span>
             {isUserProfile && (
               <>
                 <span className="text-zinc-400">•</span>
@@ -262,7 +273,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         </button>
 
         {/* Follow / Following Button */}
-        {!isOwner && !isSyntheticArtist && (
+        {!isOwner && (
           <button
             onClick={() => {
               if (onToggleFollow && artist) onToggleFollow(artist);
@@ -599,7 +610,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                 />
               </div>
               <div>
-                <p className="text-xl font-black text-white">{monthlyListeners}</p>
+                <p className="text-xl font-black text-white">{totalStreamsLabel}</p>
                 <p className="text-xs text-zinc-400">Streaming Listeners on VERTEX</p>
               </div>
             </div>
@@ -612,11 +623,6 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
               {isVerified && (
                 <span className="px-3 py-1 rounded-full bg-white/10 text-white text-xs font-bold border border-white/10">
                   Verified Artist
-                </span>
-              )}
-              {isSyntheticArtist && (
-                <span className="px-3 py-1 rounded-full bg-amber-400/10 text-amber-200 text-xs font-bold border border-amber-400/20">
-                  Unclaimed Catalog Artist
                 </span>
               )}
               <span className="px-3 py-1 rounded-full bg-[#D946EF]/20 text-[#D946EF] text-xs font-bold border border-[#D946EF]/30">
@@ -663,18 +669,6 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         </div>
       </div>
 
-      {/* Edit Artist Profile Modal */}
-      <EditArtistModal
-        isOpen={isEditModalOpen}
-        artist={artist}
-        artistTracks={artistTracks}
-        onClose={() => setIsEditModalOpen(false)}
-        onSave={(updatedData) => {
-          if (onUpdateArtist) {
-            onUpdateArtist(updatedData);
-          }
-        }}
-      />
     </div>
   );
 };

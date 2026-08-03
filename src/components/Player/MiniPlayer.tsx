@@ -40,7 +40,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
         {/* Ambient Halo behind album art */}
         <div
           className="absolute -left-6 -top-6 w-24 h-24 rounded-full blur-2xl opacity-40 pointer-events-none transition-colors duration-500"
-          style={{ backgroundColor: currentTrack.accentColor }}
+          style={{ backgroundColor: currentTrack.accentColor || '#A855F7' }}
         />
 
         {/* Track Artwork & Metadata */}

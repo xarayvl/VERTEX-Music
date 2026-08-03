@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, LogIn, UserPlus, Music2, AlertCircle, CheckCircle2, Lock, Mail, User } from 'lucide-react';
+import { X, LogIn, UserPlus, Music2, AlertCircle, Lock, Mail, User } from 'lucide-react';
 import { UserProfile } from '../../types';
 
 interface AuthModalProps {
@@ -96,37 +96,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleQuickDemoRegister = async () => {
-    setError(null);
-    setLoading(true);
-    const randomId = Math.floor(10000 + Math.random() * 90000);
-    const randomPassword = `demo_pass_${Math.random().toString(36).substring(2, 10)}_${Date.now()}`;
-    const demoUser = {
-      username: `musicfan_${randomId}`,
-      email: `fan${randomId}@example.com`,
-      displayName: `Guest User`,
-      password: randomPassword,
-    };
 
-    try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(demoUser),
-      });
-      const data = await res.json();
-      if (data.success) {
-        onLoginSuccess(data.user, data.token);
-        onClose();
-      } else {
-        setError(data.error || 'Demo login failed');
-      }
-    } catch (err: any) {
-      setError('Server error creating demo account.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -313,16 +283,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </form>
           )}
 
-          <div className="mt-5 pt-4 border-t border-white/10 text-center">
-            <button
-              onClick={handleQuickDemoRegister}
-              disabled={loading}
-              className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-zinc-300 hover:text-white transition-colors flex items-center justify-center space-x-2"
-            >
-              <CheckCircle2 className="w-4 h-4 text-[#D946EF]" />
-              <span>Auto-Create Demo Account (1-Click)</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>

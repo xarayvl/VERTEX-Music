@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Pause, Heart, Clock } from 'lucide-react';
 import { Track, Playlist, Album, TabType } from '../../types';
 import { groupTracksByRelease } from '../../utils/artistUtils';
+import { LIKED_SONGS_COVER_URL } from '../../utils/profilePlaceholders';
 
 interface HomeViewProps {
   tracks: Track[];
@@ -11,7 +12,7 @@ interface HomeViewProps {
   isPlaying: boolean;
   onPlayTrack: (track: Track) => void;
   onSelectPlaylist: (playlist: Playlist) => void;
-  onSelectArtist?: (artistName: string) => void;
+  onSelectArtist?: (artistId: string) => void;
   onSelectAlbum?: (track: Track) => void;
   onToggleLike: (trackId: string) => void;
   selectedCategory?: string;
@@ -45,14 +46,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
     return 'Good evening';
   };
 
-  // Category Filtering Logic
-  const filteredTracks = tracks.filter((t) => {
-    if (selectedCategory === 'All') return true;
-    if (selectedCategory === 'Music') return true;
-    if (selectedCategory === 'Podcasts') return t.genre === 'Podcast' || t.genre === 'Ambient';
-    if (selectedCategory === 'Chill') return t.genre === 'Lo-Fi' || t.genre === 'Chillout' || t.genre === 'Synthwave';
-    if (selectedCategory === 'Synthwave') return t.genre === 'Synthwave' || t.genre === 'Cyberpunk';
+  const filteredTracks = tracks.filter((track) => {
+    const genre = (track.genre || '').toLowerCase();
+    if (selectedCategory === 'All' || selectedCategory === 'Music') return true;
+    if (selectedCategory === 'Podcasts') return genre === 'podcast';
+    if (selectedCategory === 'Chill') return ['lo-fi', 'lofi', 'chillout', 'chill'].includes(genre);
+    if (selectedCategory === 'Synthwave') return ['synthwave', 'cyberpunk'].includes(genre);
     return true;
+  });
+
+  const rankedTracks = [...filteredTracks].sort((left, right) => {
+    const playDifference = Number(right.plays || 0) - Number(left.plays || 0);
+    if (playDifference !== 0) return playDifference;
+    return String(right.createdAt || '').localeCompare(String(left.createdAt || ''));
   });
 
   const filteredPlaylists = playlists.filter((p) => {
@@ -64,13 +70,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   const likedTracks = tracks.filter((t) => t.isLiked);
 
-  // Use the real user-scoped listening history. Fall back to fresh releases
-  // only for brand-new users who have not played anything yet.
+  // Use only the real user-scoped listening history.
   const validRecentTracks = recentlyPlayed
     .filter((track) => track && tracks.some((candidate) => candidate.id === track.id))
     .slice(0, 12);
-  const recentSource = validRecentTracks.length > 0 ? validRecentTracks : filteredTracks;
-  const recentReleaseGroups = groupTracksByRelease(recentSource).slice(0, 5);
+  const recentReleaseGroups = groupTracksByRelease(validRecentTracks).slice(0, 5);
 
   // The greeting area now includes actual recently played songs instead of
   // being limited to Liked Songs and playlist shortcuts.
@@ -96,7 +100,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     {
       id: 'liked-songs',
       title: `Liked Songs${likedTracks.length ? ` · ${likedTracks.length}` : ''}`,
-      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=300&q=80',
+      coverUrl: LIKED_SONGS_COVER_URL,
       type: 'library' as const,
       action: () => onSelectTab?.('library'),
     },
@@ -159,12 +163,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       </div>
 
-      {/* "Made For You" - Playlist Cards */}
+      {/* Real playlist catalog */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-extrabold text-white tracking-tight">Made For You</h2>
-            <p className="text-xs text-zinc-400">Personalized algorithmic mixes updated daily</p>
+            <h2 className="text-2xl font-extrabold text-white tracking-tight">Playlists</h2>
+            <p className="text-xs text-zinc-400">Playlists currently available in the catalog</p>
           </div>
           <button
             onClick={() => onSelectTab && onSelectTab('browse')}
@@ -297,7 +301,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <p
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (onSelectArtist) onSelectArtist(track.artist);
+                      if (onSelectArtist) onSelectArtist(track.userId || '');
                     }}
                     className="text-xs text-zinc-400 truncate mt-1 hover:underline hover:text-[#D946EF]"
                   >
@@ -314,14 +318,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* VERTEX Music Popular Tracks Chart List Table */}
       <div>
         <h2 className="text-2xl font-extrabold text-white tracking-tight mb-4">
-          Global Top Songs
+          Most Played on VERTEX
         </h2>
 
         {filteredTracks.length === 0 ? (
           <div className="p-8 rounded-2xl bg-[#181818] border border-white/5 text-center flex flex-col items-center justify-center space-y-3">
             <p className="text-base font-bold text-white">Your Music Library is Empty</p>
             <p className="text-xs text-zinc-400 max-w-md">
-              All stock tracks have been removed. Add your own custom songs or use the built-in Web Synthesizer to create your music database!
+              No playable tracks have been uploaded yet. Upload a real audio file to start your library.
             </p>
             {onOpenAddTrackModal && (
               <button
@@ -346,7 +350,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
             {/* Table Rows */}
             <div className="divide-y divide-white/[0.03]">
-              {filteredTracks.map((track, idx) => {
+              {rankedTracks.map((track, idx) => {
                 const isSelected = currentTrackId === track.id;
                 return (
                   <div
@@ -412,7 +416,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         <p
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (onSelectArtist) onSelectArtist(track.artist);
+                            if (onSelectArtist) onSelectArtist(track.userId || '');
                           }}
                           className="text-xs text-zinc-400 truncate hover:underline hover:text-[#D946EF]"
                         >

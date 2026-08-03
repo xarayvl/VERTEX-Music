@@ -35,6 +35,7 @@ interface ProfileViewProps {
   playlists?: Playlist[];
   recentlyPlayed?: Track[];
   onPlayTrack: (track: Track) => void;
+  onToggleLike: (trackId: string) => void;
   onLogout?: () => void;
   onOpenAuthModal?: () => void;
   onSelectArtist?: (artist: Artist | UserProfile | string) => void;
@@ -88,6 +89,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   playlists = [],
   recentlyPlayed = [],
   onPlayTrack,
+  onToggleLike,
   onLogout,
   onOpenAuthModal,
   onSelectArtist,
@@ -96,45 +98,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onOpenAddTrackModal,
   artists = [],
 }) => {
-  // "This month" stats must reflect the CURRENT user's own listening history, not the
-  // global/shared track catalog. Falls back to an empty state (not someone else's data)
-  // when the user hasn't played anything yet.
-  const personalTopTracks = (recentlyPlayed || []).filter((t): t is Track => Boolean(t && t.id)).slice(0, 5);
-  const personalTopArtistNames: string[] = Array.from(
-    new Set((recentlyPlayed || []).filter((t) => t && t.artist).map((t) => t.artist))
+  // Personal history is resolved from the current account's server-backed recent track IDs.
+  // An empty history remains empty instead of borrowing another account's catalog data.
+  const personalTopTracks = recentlyPlayed.filter((track): track is Track => Boolean(track?.id)).slice(0, 5);
+  const recentArtistIds = Array.from(
+    new Set(recentlyPlayed.map((track) => track.userId).filter((id): id is string => Boolean(id)))
   );
-  // Resolve a real photo for each top artist: prefer the registered
-  // artist's own avatar (or the user's own avatar, when it's you), then
-  // fall back to the cover art of one of their tracks, so the grid never
-  // has to fall back to plain initials unless truly nothing is available.
-  const personalTopArtists = personalTopArtistNames.map((name) => {
-    const nameLower = name.toLowerCase();
-    const isSelf =
-      userProfile &&
-      [userProfile.artistName, userProfile.displayName, userProfile.username]
-        .filter(Boolean)
-        .some((n) => n!.toLowerCase() === nameLower);
-    const matchedArtist = artists.find((a) => a.name.toLowerCase() === nameLower);
-    const matchedTrack = (recentlyPlayed || []).find(
-      (t) => t && t.artist && t.artist.toLowerCase() === nameLower && t.coverUrl
-    );
-    const preferredAvatar =
-      (isSelf ? userProfile?.avatarUrl : undefined) || matchedArtist?.avatarUrl || '';
-    const fallbackAvatar = matchedTrack?.coverUrl || DEFAULT_AVATAR_URL;
-    return {
-      name,
-      avatarUrl: preferredAvatar || fallbackAvatar,
-      fallbackAvatar,
-      id: (isSelf ? userProfile?.id : matchedArtist?.id) || name,
-    };
-  });
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'audioEngine' | 'settings'>('overview');
+  const personalTopArtists = recentArtistIds
+    .map((artistId) => {
+      const profile = artistId === userProfile?.id
+        ? ({
+            id: userProfile.id,
+            name: userProfile.artistName || userProfile.displayName || userProfile.username,
+            avatarUrl: userProfile.avatarUrl || DEFAULT_AVATAR_URL,
+            totalStreamsLabel: userProfile.totalStreamsLabel || '0 total streams',
+            verified: userProfile.artistVerified === true,
+            genre: userProfile.favoriteGenres?.[0] || '',
+            isUser: true,
+          } as Artist)
+        : artists.find((artist) => artist.id === artistId);
+      if (!profile) return null;
+      const trackCover = recentlyPlayed.find((track) => track.userId === artistId)?.coverUrl;
+      return { profile, fallbackAvatar: trackCover || DEFAULT_AVATAR_URL };
+    })
+    .filter((item): item is { profile: Artist; fallbackAvatar: string } => Boolean(item));
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'settings'>('overview');
   const [isEditing, setIsEditing] = useState(false);
-  const [likedTrackIds, setLikedTrackIds] = useState<Record<string, boolean>>({
-    'trk-1': true,
-    'trk-3': true,
-    'trk-5': true,
-  });
 
   // Edit profile form state
   const [displayName, setDisplayName] = useState(userProfile?.displayName || '');
@@ -146,13 +135,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const [isReadingAvatarFile, setIsReadingAvatarFile] = useState(false);
 
-  // Audio & App Preferences state
-  const [settings, setSettings] = useState({
-    losslessAudio: userProfile?.settings?.losslessAudio ?? true,
-    autoplay: userProfile?.settings?.autoplay ?? true,
-    audioNormalization: userProfile?.settings?.audioNormalization ?? true,
-    offlineDownloads: userProfile?.settings?.offlineDownloads ?? true,
-  });
 
   const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -182,15 +164,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       bio: bio.trim(),
       avatarUrl: avatarUrl || userProfile.avatarUrl,
       favoriteGenres,
-      settings,
     });
     setIsEditing(false);
   };
 
-  const handleToggleLike = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setLikedTrackIds((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
 
   const handleAddGenre = () => {
     if (newGenre.trim() && !favoriteGenres.includes(newGenre.trim())) {
@@ -207,7 +184,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   // DYNAMIC USER ACTIVITY & STATS CALCULATION
   // -------------------------------------------------------------
   const realPlaylistsCount = playlists
-    ? playlists.filter((p) => !p.userId || p.userId === userProfile?.id).length
+    ? playlists.filter((p) => p.userId === userProfile?.id).length
     : userProfile?.stats?.playlistsCreated ?? 0;
 
   // Calculate Listening Hours dynamically from secondsListened or hoursListened
@@ -221,7 +198,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   // Calculate Top Genre & Genre Percentage dynamically from user's tracks & favorite genres
   const genreCounts: Record<string, number> = {};
-  tracks.forEach((t) => {
+  recentlyPlayed.forEach((t) => {
     if (t.genre) {
       genreCounts[t.genre] = (genreCounts[t.genre] || 0) + 1;
     }
@@ -236,7 +213,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   if (genreEntries.length > 0) {
     genreEntries.sort((a, b) => b[1] - a[1]);
     calculatedTopGenre = genreEntries[0][0];
-    const totalGenreTracks = tracks.length;
+    const totalGenreTracks = recentlyPlayed.length;
     topGenrePercentage = totalGenreTracks > 0 ? Math.round((genreEntries[0][1] / totalGenreTracks) * 100) : 0;
   } else if (userProfile?.favoriteGenres && userProfile.favoriteGenres.length > 0) {
     calculatedTopGenre = userProfile.favoriteGenres[0];
@@ -255,7 +232,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
         <h2 className="text-2xl font-black text-white">You are not signed in</h2>
         <p className="text-xs text-zinc-400 mt-2 max-w-md">
-          Sign in or register for a VERTEX Music account to save custom playlists, customize your profile, and keep your audio settings synced.
+          Sign in or register for a VERTEX Music account to save custom playlists, customize your profile, and keep your account activity synced.
         </p>
         <div className="flex items-center gap-3 mt-6">
           <button
@@ -300,7 +277,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </span>
               <span className="px-2.5 py-0.5 rounded-full bg-[#A855F7]/20 text-[#C084FC] text-[10px] font-mono border border-[#A855F7]/30 flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-[#D946EF]" />
-                {userProfile.membershipTier || 'Free 24-Bit Lossless Account'}
+                {userProfile.isArtist ? 'Artist account' : 'Listener account'}
               </span>
             </div>
 
@@ -319,7 +296,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <span>•</span>
               <span className="text-white font-bold">{followingCount.toLocaleString()} Following</span>
               <span>•</span>
-              <span className="font-mono text-zinc-500">Member since {userProfile.memberSince}</span>
+              <span className="font-mono text-zinc-500">Joined {userProfile.createdAt ? new Date(userProfile.createdAt).toLocaleDateString() : 'date unavailable'}</span>
             </div>
           </div>
         </div>
@@ -327,9 +304,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         {/* Action Bar */}
         <div className="flex items-center space-x-3 pt-8 flex-wrap gap-y-3">
           <button
-            onClick={() => tracks[0] && onPlayTrack(tracks[0])}
-            className="w-14 h-14 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-transform"
-            title="Play Favorite Mix"
+            onClick={() => personalTopTracks[0] && onPlayTrack(personalTopTracks[0])}
+            disabled={personalTopTracks.length === 0}
+            className="w-14 h-14 disabled:opacity-40 disabled:cursor-not-allowed rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-transform"
+            title="Play your most recently played track"
           >
             <Play className="w-6 h-6 fill-white ml-0.5" />
           </button>
@@ -373,17 +351,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           Overview & Listening
         </button>
 
-        <button
-          onClick={() => setActiveSubTab('audioEngine')}
-          className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center space-x-1.5 ${
-            activeSubTab === 'audioEngine'
-              ? 'bg-[#D946EF] text-white shadow'
-              : 'text-zinc-400 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          <Headphones className="w-3.5 h-3.5" />
-          <span>Hi-Res Audio Features</span>
-        </button>
 
         <button
           onClick={() => setActiveSubTab('settings')}
@@ -394,7 +361,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           }`}
         >
           <Settings className="w-3.5 h-3.5" />
-          <span>Account Settings</span>
+          <span>Account Information</span>
         </button>
       </div>
 
@@ -528,7 +495,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <Music className="w-4 h-4 text-[#D946EF]" />
               </div>
               <p className="text-2xl font-black text-white">{tracksPlayedCount.toLocaleString()}</p>
-              <p className="text-[10px] text-zinc-500">{tracksPlayedCount > 0 ? 'Hi-Res FLAC quality' : 'No tracks played yet'}</p>
+              <p className="text-[10px] text-zinc-500">{tracksPlayedCount > 0 ? 'Based on saved play history' : 'No tracks played yet'}</p>
             </div>
 
             <div className="p-4 rounded-xl bg-[#181818] border border-white/5 space-y-1">
@@ -673,16 +640,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             })()}
           </div>
 
-          {/* Top Tracks This Month Table */}
+          {/* Recently Played Tracks */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-white">Top tracks this month</h2>
+                <h2 className="text-xl font-bold text-white">Recently played tracks</h2>
                 <p className="text-xs text-zinc-400">Only visible to you</p>
               </div>
-              <button className="text-xs font-bold text-zinc-400 hover:text-white uppercase tracking-wider">
-                Show all
-              </button>
             </div>
 
             {personalTopTracks.length === 0 ? (
@@ -725,19 +689,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       </span>
 
                       <button
-                        onClick={(e) => handleToggleLike(track.id, e)}
+                        onClick={(event) => { event.stopPropagation(); onToggleLike(track.id); }}
                         className={`transition-colors ${
-                          likedTrackIds[track.id]
+                          track.isLiked
                             ? 'text-[#D946EF]'
                             : 'text-zinc-500 hover:text-white'
                         }`}
                       >
                         <Heart
-                          className={`w-4 h-4 ${likedTrackIds[track.id] ? 'fill-[#D946EF]' : ''}`}
+                          className={`w-4 h-4 ${track.isLiked ? 'fill-[#D946EF]' : ''}`}
                         />
                       </button>
 
-                      <span className="text-xs font-mono text-zinc-400">{track.duration}</span>
+                      <span className="text-xs font-mono text-zinc-400">{`${Math.floor(track.duration / 60)}:${Math.floor(track.duration % 60).toString().padStart(2, '0')}`}</span>
                     </div>
                   </div>
                 ))}
@@ -746,20 +710,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             )}
           </div>
 
-          {/* Top Artists This Month */}
+          {/* Recently Played Artists */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-white">Top artists this month</h2>
+                <h2 className="text-xl font-bold text-white">Recently played artists</h2>
                 <p className="text-xs text-zinc-400">Only visible to you</p>
               </div>
-              <button className="text-xs font-bold text-zinc-400 hover:text-white uppercase tracking-wider">
-                Show all
-              </button>
             </div>
 
             {(() => {
-              if (personalTopArtistNames.length === 0) {
+              if (personalTopArtists.length === 0) {
                 return (
                   <p className="text-xs text-zinc-400 italic bg-white/5 p-4 rounded-xl border border-white/5">
                     Play some songs to see your personal top artists here!
@@ -768,17 +729,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               }
               return (
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
-                  {personalTopArtists.map((artist, idx) => (
+                  {personalTopArtists.map(({ profile: artist, fallbackAvatar }, idx) => (
                     <div
                       key={artist.id}
-                      onClick={() => onSelectArtist && onSelectArtist(artist.name)}
+                      onClick={() => onSelectArtist && onSelectArtist(artist)}
                       style={{ '--stagger-index': idx } as React.CSSProperties}
                       className="stagger-item card-interactive group flex cursor-pointer flex-col items-center space-y-3 rounded-xl border border-white/5 bg-[#181818] p-4 text-center transition-all hover:bg-[#282828]"
                     >
                       <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-xl font-black text-white shadow-lg transition-transform duration-300 group-hover:scale-105">
                         <ReliableArtistImage
                           src={artist.avatarUrl}
-                          fallbackSrc={artist.fallbackAvatar}
+                          fallbackSrc={fallbackAvatar}
                           alt={artist.name}
                         />
                       </div>
@@ -798,143 +759,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       )}
 
-      {/* SUB-TAB 2: HI-RES AUDIO FEATURES */}
-      {activeSubTab === 'audioEngine' && (
-        <div className="space-y-8 animate-in fade-in">
-          {/* Free App Announcement Banner */}
-          <div className="relative rounded-2xl p-8 bg-gradient-to-r from-purple-950/80 via-[#181818] to-fuchsia-950/60 border border-[#D946EF]/30 space-y-4 shadow-2xl">
-            <span className="px-3 py-1 rounded-full bg-[#D946EF]/20 text-[#D946EF] font-black text-xs uppercase tracking-wider inline-flex items-center gap-2">
-              <Sparkles className="w-4 h-4" /> 100% FREE AUDIO ENGINE
-            </span>
-            <h2 className="text-3xl font-black text-white tracking-tight">
-              Uncompromised Studio Audio. Completely Free.
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed max-w-2xl">
-              VERTEX Music provides 24-bit / 96kHz Lossless FLAC streaming, real-time spatial audio, interactive AI DJ voice interactions, and offline listening to every listener with zero paywalls.
-            </p>
-          </div>
-
-          {/* Core Free Features Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-5 rounded-2xl bg-[#181818] border border-white/10 space-y-3">
-              <div className="w-10 h-10 rounded-full bg-[#D946EF]/20 text-[#D946EF] flex items-center justify-center font-bold">
-                <Headphones className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-extrabold text-white">24-Bit FLAC Lossless Stream</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Bit-perfect studio master resolution without lossy compression artifacting.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-[#181818] border border-white/10 space-y-3">
-              <div className="w-10 h-10 rounded-full bg-[#D946EF]/20 text-[#D946EF] flex items-center justify-center font-bold">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-extrabold text-white">VERTEX AI DJ Assistant</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Conversational AI music curator powered by Gemini for intelligent recommendations.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-[#181818] border border-white/10 space-y-3">
-              <div className="w-10 h-10 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold">
-                <SlidersHorizontal className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-extrabold text-white">Parametric Equalizer</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Customize bass boost, vocal clarity, and acoustic sound stages on any output device.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-[#181818] border border-white/10 space-y-3">
-              <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
-                <Download className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-extrabold text-white">Offline Caching</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Save your favorite tracks and mixes directly to local browser storage.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SUB-TAB 3: ACCOUNT SETTINGS */}
+      {/* ACCOUNT SETTINGS */}
       {activeSubTab === 'settings' && (
         <div className="space-y-6 animate-in fade-in">
           <div className="space-y-2">
-            <h2 className="text-xl font-bold text-white">Audio Engine & Application Preferences</h2>
-            <p className="text-xs text-zinc-400">Configure playback quality, downloads, and playback normalization.</p>
+            <h2 className="text-xl font-bold text-white">Account Information</h2>
+            <p className="text-xs text-zinc-400">These values come from the authenticated account and server-side activity records.</p>
           </div>
 
-          <div className="bg-[#181818] rounded-2xl p-6 divide-y divide-white/10 border border-white/10 space-y-4">
-            <div className="flex items-center justify-between pt-1">
-              <div>
-                <h4 className="text-sm font-bold text-white">24-bit Lossless FLAC Streaming</h4>
-                <p className="text-xs text-zinc-400">Stream studio master files up to 24-bit / 96kHz (100% free).</p>
-              </div>
-              <button
-                onClick={() => {
-                  const next = !settings.losslessAudio;
-                  setSettings({ ...settings, losslessAudio: next });
-                  onUpdateProfile({ ...userProfile, settings: { ...settings, losslessAudio: next } });
-                }}
-                className={`w-12 h-7 rounded-full transition-colors relative p-1 ${
-                  settings.losslessAudio ? 'bg-[#D946EF]' : 'bg-white/20'
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 rounded-full bg-black shadow-md transform transition-transform ${
-                    settings.losslessAudio ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-2xl bg-[#181818] border border-white/10 p-5">
+              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Account type</p>
+              <p className="mt-2 text-sm font-bold text-white">{userProfile.isArtist ? 'Artist' : 'Listener'}</p>
             </div>
-
-            <div className="flex items-center justify-between pt-4">
-              <div>
-                <h4 className="text-sm font-bold text-white">Autoplay Recommended Tracks</h4>
-                <p className="text-xs text-zinc-400">Keep listening to similar songs when your queue finishes.</p>
-              </div>
-              <button
-                onClick={() => {
-                  const next = !settings.autoplay;
-                  setSettings({ ...settings, autoplay: next });
-                  onUpdateProfile({ ...userProfile, settings: { ...settings, autoplay: next } });
-                }}
-                className={`w-12 h-7 rounded-full transition-colors relative p-1 ${
-                  settings.autoplay ? 'bg-[#D946EF]' : 'bg-white/20'
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 rounded-full bg-black shadow-md transform transition-transform ${
-                    settings.autoplay ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+            <div className="rounded-2xl bg-[#181818] border border-white/10 p-5">
+              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Joined</p>
+              <p className="mt-2 text-sm font-bold text-white">
+                {userProfile.createdAt ? new Date(userProfile.createdAt).toLocaleDateString() : 'Unavailable'}
+              </p>
             </div>
-
-            <div className="flex items-center justify-between pt-4">
-              <div>
-                <h4 className="text-sm font-bold text-white">Loudness Normalization</h4>
-                <p className="text-xs text-zinc-400">Maintain constant volume levels across all tracks.</p>
-              </div>
-              <button
-                onClick={() => {
-                  const next = !settings.audioNormalization;
-                  setSettings({ ...settings, audioNormalization: next });
-                  onUpdateProfile({ ...userProfile, settings: { ...settings, audioNormalization: next } });
-                }}
-                className={`w-12 h-7 rounded-full transition-colors relative p-1 ${
-                  settings.audioNormalization ? 'bg-[#D946EF]' : 'bg-white/20'
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 rounded-full bg-black shadow-md transform transition-transform ${
-                    settings.audioNormalization ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+            <div className="rounded-2xl bg-[#181818] border border-white/10 p-5">
+              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Owned playlists</p>
+              <p className="mt-2 text-sm font-bold text-white">{realPlaylistsCount}</p>
+            </div>
+            <div className="rounded-2xl bg-[#181818] border border-white/10 p-5">
+              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Saved plays</p>
+              <p className="mt-2 text-sm font-bold text-white">{tracksPlayedCount.toLocaleString()}</p>
             </div>
           </div>
         </div>

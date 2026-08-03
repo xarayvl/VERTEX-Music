@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { Redis } from '@upstash/redis';
 
 const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
@@ -21,7 +22,6 @@ export interface UserRecord {
   artistBio?: string;
   artistVerified?: boolean;
   bannerUrl?: string;
-  monthlyListeners?: string;
   instagramUrl?: string;
   twitterUrl?: string;
   websiteUrl?: string;
@@ -36,12 +36,6 @@ export interface UserRecord {
     followersCount?: number;
     followingCount?: number;
   };
-  settings?: {
-    losslessAudio?: boolean;
-    autoplay?: boolean;
-    audioNormalization?: boolean;
-    offlineDownloads?: boolean;
-  };
 }
 
 export interface PlaylistRecord {
@@ -51,19 +45,18 @@ export interface PlaylistRecord {
   description: string;
   coverUrl: string;
   trackIds: string[];
-  likes?: string;
-  tags?: string[];
+  trackCount: number;
   createdAt: string;
 }
 
 export interface TrackRecord {
   id: string;
-  userId?: string;
+  userId: string;
   title: string;
   artist: string;
   album: string;
   coverUrl: string;
-  audioUrl?: string; // Audio file URL or base64 data URL
+  audioUrl: string; // Real playable audio file URL
   duration: number; // in seconds
   genre: string;
   accentColor?: string;
@@ -83,6 +76,7 @@ export interface TrackRecord {
 export interface UserStateRecord {
   likedTrackIds: string[];
   recentTrackIds: string[];
+  followedArtistIds: string[];
 }
 
 export interface ChatMessageRecord {
@@ -91,6 +85,9 @@ export interface ChatMessageRecord {
   text: string;
   timestamp: string;
   matchedTracks?: any[];
+  webSearchUsed?: boolean;
+  searchQueries?: string[];
+  sources?: { title: string; uri: string }[];
 }
 
 export interface DBData {
@@ -101,9 +98,298 @@ export interface DBData {
   chatHistories: Record<string, ChatMessageRecord[]>;
 }
 
+function emptyUserState(): UserStateRecord {
+  return { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function isPersistedMediaUrl(value: string, expected: 'audio' | 'image'): boolean {
+  if (value.startsWith('/uploads/') || value.startsWith('/api/r2-file/') || isHttpUrl(value)) return true;
+  return expected === 'audio'
+    ? /^data:audio\/[^;]+;base64,/i.test(value)
+    : /^data:image\/[^;]+;base64,/i.test(value) || /^data:image\/svg\+xml/i.test(value);
+}
+
+function normalizedIsoDate(value: unknown): string {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value))
+    ? new Date(value).toISOString()
+    : new Date(0).toISOString();
+}
+
+/**
+ * Removes legacy/orphaned entities before they can reach the API.
+ * A playable track or playlist must always belong to a real registered user.
+ * Tracks without a valid audio source are metadata-only records and are discarded.
+ */
+export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBData {
+  const rawUsers = Array.isArray(input?.users) ? input!.users : [];
+  const usedUserIds = new Set<string>();
+  const usedUsernames = new Set<string>();
+  const usedEmails = new Set<string>();
+  const users: UserRecord[] = [];
+  for (const rawUser of rawUsers) {
+    if (!rawUser || typeof rawUser !== 'object') continue;
+    const id = typeof rawUser.id === 'string' ? rawUser.id.trim() : '';
+    const username = typeof rawUser.username === 'string' ? rawUser.username.trim() : '';
+    const email = typeof rawUser.email === 'string' ? rawUser.email.trim().toLowerCase() : '';
+    const password = typeof rawUser.password === 'string' ? rawUser.password : '';
+    const usernameKey = username.toLowerCase();
+    if (
+      !id || usedUserIds.has(id) ||
+      !/^[a-zA-Z0-9_.-]{3,32}$/.test(username) || usedUsernames.has(usernameKey) ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || usedEmails.has(email) ||
+      !password
+    ) continue;
+
+    usedUserIds.add(id);
+    usedUsernames.add(usernameKey);
+    usedEmails.add(email);
+    const displayName = typeof rawUser.displayName === 'string' && rawUser.displayName.trim()
+      ? rawUser.displayName.trim().slice(0, 80)
+      : username;
+    const avatarUrl = typeof rawUser.avatarUrl === 'string' && isPersistedMediaUrl(rawUser.avatarUrl.trim(), 'image')
+      ? rawUser.avatarUrl.trim()
+      : '';
+    const bannerUrl = typeof rawUser.bannerUrl === 'string' && rawUser.bannerUrl.trim() && isPersistedMediaUrl(rawUser.bannerUrl.trim(), 'image')
+      ? rawUser.bannerUrl.trim()
+      : undefined;
+    const cleanOptionalHttpUrl = (value: unknown): string | undefined =>
+      typeof value === 'string' && value.trim() && isHttpUrl(value.trim()) ? value.trim().slice(0, 2_000) : undefined;
+
+    users.push({
+      id,
+      username,
+      email,
+      password,
+      displayName,
+      avatarUrl,
+      bio: typeof rawUser.bio === 'string' ? rawUser.bio.trim().slice(0, 500) : '',
+      favoriteGenres: Array.isArray(rawUser.favoriteGenres)
+        ? Array.from(new Set(rawUser.favoriteGenres.filter((genre): genre is string => typeof genre === 'string' && Boolean(genre.trim())).map((genre) => genre.trim()).filter((genre) => genre.length <= 80))).slice(0, 20)
+        : [],
+      createdAt: normalizedIsoDate(rawUser.createdAt),
+      isAdmin: rawUser.isAdmin === true,
+      isArtist: rawUser.isArtist === true,
+      artistName: typeof rawUser.artistName === 'string' && rawUser.artistName.trim() ? rawUser.artistName.trim().slice(0, 80) : undefined,
+      artistBio: typeof rawUser.artistBio === 'string' ? rawUser.artistBio.trim().slice(0, 2_000) : undefined,
+      artistVerified: rawUser.artistVerified === true,
+      bannerUrl,
+      instagramUrl: cleanOptionalHttpUrl(rawUser.instagramUrl),
+      twitterUrl: cleanOptionalHttpUrl(rawUser.twitterUrl),
+      websiteUrl: cleanOptionalHttpUrl(rawUser.websiteUrl),
+      artistPickTrackId: typeof rawUser.artistPickTrackId === 'string' && rawUser.artistPickTrackId.trim() ? rawUser.artistPickTrackId.trim() : undefined,
+      artistPickComment: typeof rawUser.artistPickComment === 'string' ? rawUser.artistPickComment.trim().slice(0, 500) : undefined,
+      stats: rawUser.stats,
+    });
+  }
+
+  const userById = new Map(users.map((user) => [user.id, user]));
+  const rawTracks = Array.isArray(input?.tracks) ? input!.tracks : [];
+  const usedTrackIds = new Set<string>();
+  const tracks: TrackRecord[] = [];
+  for (const rawTrack of rawTracks) {
+    if (!rawTrack || typeof rawTrack !== 'object') continue;
+    const id = typeof rawTrack.id === 'string' ? rawTrack.id.trim() : '';
+    const owner = typeof rawTrack.userId === 'string' ? userById.get(rawTrack.userId) : undefined;
+    const title = typeof rawTrack.title === 'string' ? rawTrack.title.trim() : '';
+    const audioUrl = typeof rawTrack.audioUrl === 'string' ? rawTrack.audioUrl.trim() : '';
+    const duration = Number(rawTrack.duration);
+    if (
+      !id || usedTrackIds.has(id) || !owner ||
+      !title || title.length > 160 ||
+      !audioUrl || !isPersistedMediaUrl(audioUrl, 'audio') ||
+      !Number.isFinite(duration) || duration <= 0 || duration > 86_400
+    ) continue;
+
+    usedTrackIds.add(id);
+    const canonicalArtistName = (owner.artistName || owner.displayName || owner.username).trim();
+    const album = typeof rawTrack.album === 'string' && rawTrack.album.trim()
+      ? rawTrack.album.trim().slice(0, 160)
+      : 'Single';
+    const rawReleaseType = typeof rawTrack.releaseType === 'string' ? rawTrack.releaseType.trim().toUpperCase() : '';
+    const releaseType = ['SINGLE', 'EP', 'ALBUM'].includes(rawReleaseType)
+      ? rawReleaseType
+      : album === 'Single' ? 'SINGLE' : 'ALBUM';
+    const releaseTitle = typeof rawTrack.releaseTitle === 'string' && rawTrack.releaseTitle.trim()
+      ? rawTrack.releaseTitle.trim().slice(0, 160)
+      : album === 'Single' ? title : album;
+    const releaseYear = Number(rawTrack.releaseYear);
+    const currentYear = new Date().getFullYear();
+    const trackNumber = Number(rawTrack.trackNumber);
+    const coverCandidate = typeof rawTrack.coverUrl === 'string' ? rawTrack.coverUrl.trim() : '';
+    const coverUrl = coverCandidate && isPersistedMediaUrl(coverCandidate, 'image')
+      ? coverCandidate
+      : owner.avatarUrl;
+    const plays = Number.parseInt(String(rawTrack.plays || '0'), 10);
+
+    tracks.push({
+      id,
+      userId: owner.id,
+      title,
+      artist: canonicalArtistName,
+      album,
+      coverUrl,
+      audioUrl,
+      duration,
+      genre: typeof rawTrack.genre === 'string' ? rawTrack.genre.trim().slice(0, 80) : '',
+      plays: String(Number.isFinite(plays) && plays >= 0 ? plays : 0),
+      syncedLyrics: Array.isArray(rawTrack.syncedLyrics)
+        ? rawTrack.syncedLyrics
+            .filter((line): line is { time: number; text: string } => Boolean(line && Number.isFinite(Number(line.time)) && Number(line.time) >= 0 && Number(line.time) <= duration + 1 && typeof line.text === 'string' && line.text.trim()))
+            .map((line) => ({ time: Number(line.time), text: line.text.trim().slice(0, 2_000) }))
+            .slice(0, 5_000)
+        : [],
+      createdAt: normalizedIsoDate(rawTrack.createdAt),
+      releaseType,
+      releaseTitle,
+      releaseId: typeof rawTrack.releaseId === 'string' && rawTrack.releaseId.trim() ? rawTrack.releaseId.trim().slice(0, 200) : undefined,
+      copyright: typeof rawTrack.copyright === 'string' && rawTrack.copyright.trim() ? rawTrack.copyright.trim().slice(0, 300) : undefined,
+      releaseYear: Number.isInteger(releaseYear) && releaseYear >= 1850 && releaseYear <= currentYear + 1 ? releaseYear : undefined,
+      trackNumber: Number.isInteger(trackNumber) && trackNumber >= 1 && trackNumber <= 999 ? trackNumber : undefined,
+    });
+  }
+
+  const trackIds = new Set(tracks.map((track) => track.id));
+  const rawPlaylists = Array.isArray(input?.playlists) ? input!.playlists : [];
+  const usedPlaylistIds = new Set<string>();
+  const playlists = rawPlaylists
+    .filter((playlist): playlist is PlaylistRecord => {
+      const id = playlist && typeof playlist.id === 'string' ? playlist.id.trim() : '';
+      const valid = Boolean(
+        playlist && id && !usedPlaylistIds.has(id) &&
+        typeof playlist.userId === 'string' && userById.has(playlist.userId) &&
+        typeof playlist.title === 'string' && playlist.title.trim() && playlist.title.trim().length <= 120
+      );
+      if (valid) usedPlaylistIds.add(id);
+      return valid;
+    })
+    .map((playlist) => {
+      const validPlaylistTrackIds = Array.isArray(playlist.trackIds)
+        ? Array.from(new Set(playlist.trackIds.filter((id) => typeof id === 'string' && trackIds.has(id))))
+        : [];
+      const coverCandidate = typeof playlist.coverUrl === 'string' ? playlist.coverUrl.trim() : '';
+      const owner = userById.get(playlist.userId)!;
+      return {
+        id: playlist.id.trim(),
+        userId: playlist.userId,
+        title: playlist.title.trim(),
+        description: typeof playlist.description === 'string' ? playlist.description.trim().slice(0, 1_000) : '',
+        coverUrl: coverCandidate && isPersistedMediaUrl(coverCandidate, 'image') ? coverCandidate : owner.avatarUrl,
+        trackIds: validPlaylistTrackIds,
+        trackCount: validPlaylistTrackIds.length,
+        createdAt: normalizedIsoDate(playlist.createdAt),
+      };
+    });
+
+  const realArtistIds = new Set(
+    users
+      .filter((user) => user.isArtist || tracks.some((track) => track.userId === user.id))
+      .map((user) => user.id)
+  );
+  const rawStates = input?.userStates && typeof input.userStates === 'object' ? input.userStates : {};
+  const userStates: Record<string, UserStateRecord> = {};
+  for (const user of users) {
+    const raw = rawStates[user.id] || emptyUserState();
+    userStates[user.id] = {
+      likedTrackIds: Array.isArray(raw.likedTrackIds)
+        ? Array.from(new Set(raw.likedTrackIds.filter((id) => typeof id === 'string' && trackIds.has(id))))
+        : [],
+      recentTrackIds: Array.isArray(raw.recentTrackIds)
+        ? Array.from(new Set(raw.recentTrackIds.filter((id) => typeof id === 'string' && trackIds.has(id))))
+        : [],
+      followedArtistIds: Array.isArray((raw as UserStateRecord).followedArtistIds)
+        ? Array.from(new Set((raw as UserStateRecord).followedArtistIds.filter(
+            (id) => typeof id === 'string' && id !== user.id && realArtistIds.has(id)
+          )))
+        : [],
+    };
+  }
+
+  // Recompute relationship and ownership-derived counters from authoritative data.
+  // Persisted relationship counters from older versions are not trusted.
+  for (const user of users) {
+    const followedArtistIds = userStates[user.id]?.followedArtistIds || [];
+    const followersCount = users.reduce(
+      (count, candidate) => count + (userStates[candidate.id]?.followedArtistIds.includes(user.id) ? 1 : 0),
+      0
+    );
+    const ownedTracks = tracks.filter((track) => track.userId === user.id);
+    const artistPickTrackId = user.artistPickTrackId && ownedTracks.some((track) => track.id === user.artistPickTrackId)
+      ? user.artistPickTrackId
+      : undefined;
+
+    user.artistPickTrackId = artistPickTrackId;
+    if (!artistPickTrackId) user.artistPickComment = undefined;
+    const secondsListened = Math.max(0, Number(user.stats?.secondsListened) || 0);
+    const recentGenreCounts = new Map<string, number>();
+    for (const recentTrackId of userStates[user.id]?.recentTrackIds || []) {
+      const recentTrack = tracks.find((track) => track.id === recentTrackId);
+      const genre = recentTrack?.genre?.trim();
+      if (genre) recentGenreCounts.set(genre, (recentGenreCounts.get(genre) || 0) + 1);
+    }
+    const topGenre = [...recentGenreCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+    user.stats = {
+      hoursListened: secondsListened / 3600,
+      secondsListened,
+      tracksPlayed: Math.max(0, Math.floor(Number(user.stats?.tracksPlayed) || 0)),
+      topGenre,
+      playlistsCreated: playlists.filter((playlist) => playlist.userId === user.id).length,
+      followersCount,
+      followingCount: followedArtistIds.length,
+    };
+  }
+
+  const rawHistories = input?.chatHistories && typeof input.chatHistories === 'object' ? input.chatHistories : {};
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  const chatHistories: Record<string, ChatMessageRecord[]> = {};
+  for (const user of users) {
+    const history = Array.isArray(rawHistories[user.id]) ? rawHistories[user.id] : [];
+    chatHistories[user.id] = history.slice(-200).filter((message): message is ChatMessageRecord =>
+      Boolean(
+        message &&
+        typeof message.id === 'string' && message.id.trim() &&
+        (message.sender === 'user' || message.sender === 'ai') &&
+        typeof message.text === 'string' && message.text.trim() &&
+        typeof message.timestamp === 'string' && !Number.isNaN(Date.parse(message.timestamp))
+      )
+    ).map((message) => ({
+      id: message.id.trim(),
+      sender: message.sender,
+      text: message.text.trim().slice(0, 20_000),
+      timestamp: new Date(message.timestamp).toISOString(),
+      matchedTracks: Array.isArray(message.matchedTracks)
+        ? message.matchedTracks
+            .map((track: any) => typeof track === 'string' ? track : track?.id)
+            .filter((trackId: unknown): trackId is string => typeof trackId === 'string' && trackById.has(trackId))
+            .slice(0, 20)
+            .map((trackId) => trackById.get(trackId)!)
+        : undefined,
+      webSearchUsed: message.webSearchUsed === true,
+      searchQueries: Array.isArray(message.searchQueries)
+        ? message.searchQueries.filter((query): query is string => typeof query === 'string' && Boolean(query.trim())).map((query) => query.trim().slice(0, 500)).slice(0, 10)
+        : undefined,
+      sources: Array.isArray(message.sources)
+        ? message.sources
+            .filter((source): source is { title: string; uri: string } => Boolean(source && typeof source.title === 'string' && source.title.trim() && typeof source.uri === 'string' && isHttpUrl(source.uri)))
+            .map((source) => ({ title: source.title.trim().slice(0, 500), uri: source.uri.trim().slice(0, 2_000) }))
+            .slice(0, 10)
+        : undefined,
+    }));
+  }
+
+  return { users, playlists, tracks, userStates, chatHistories };
+}
+
 let cachedDB: DBData | null = null;
-let writeQueue: Array<() => void> = [];
-let isWriting = false;
+let writeChain: Promise<void> = Promise.resolve();
 
 let redisClient: Redis | null = null;
 
@@ -126,32 +412,17 @@ export function isUpstashConfigured(): boolean {
   return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
 }
 
-function processWriteQueue() {
-  if (isWriting || writeQueue.length === 0) return;
-  isWriting = true;
-  const nextWrite = writeQueue.shift();
-  if (nextWrite) {
-    try {
-      nextWrite();
-    } catch (e) {
-      console.error('Error executing DB write queue task:', e);
-    } finally {
-      isWriting = false;
-      processWriteQueue();
-    }
-  }
-}
-
 export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<void> {
   try {
+    data = sanitizeDBData(data);
     const userIds = (data.users || []).map((u) => u.id).filter(Boolean);
     const trackIds = (data.tracks || []).map((t) => t.id).filter(Boolean);
     const playlistIds = (data.playlists || []).map((p) => p.id).filter(Boolean);
 
-    // Collect all artist IDs and artist names
-    const artistUserIds = (data.users || []).filter((u) => u.isArtist).map((u) => u.id);
-    const trackArtistNames = Array.from(new Set((data.tracks || []).map((t) => t.artist).filter(Boolean)));
-    const allArtistIds = Array.from(new Set([...artistUserIds, ...trackArtistNames]));
+    // Artists are real registered user IDs only; track metadata must never create artist identities.
+    const allArtistIds = (data.users || [])
+      .filter((u) => u.isArtist || data.tracks.some((track) => track.userId === u.id))
+      .map((u) => u.id);
 
     // Store sets & ID lists in Upstash Redis
     await Promise.all([
@@ -186,6 +457,31 @@ export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<vo
     }
 
     await Promise.all(entityPromises);
+
+    // Remove entity keys that are no longer present in the canonical database.
+    // Without this cleanup, deleted or rejected legacy records could remain
+    // addressable through stale Redis keys even though the main DB no longer
+    // contains them.
+    const expectedEntityKeys = new Set<string>();
+    for (const userId of userIds) expectedEntityKeys.add(`app:user:${userId}`);
+    for (const trackId of trackIds) {
+      expectedEntityKeys.add(`app:song:${trackId}`);
+      expectedEntityKeys.add(`app:track:${trackId}`);
+    }
+    for (const playlistId of playlistIds) expectedEntityKeys.add(`app:playlist:${playlistId}`);
+
+    const existingEntityKeys = (
+      await Promise.all([
+        redis.keys('app:user:*'),
+        redis.keys('app:song:*'),
+        redis.keys('app:track:*'),
+        redis.keys('app:playlist:*'),
+      ])
+    ).flat();
+    const staleEntityKeys = existingEntityKeys.filter((key) => !expectedEntityKeys.has(key));
+    if (staleEntityKeys.length > 0) {
+      await redis.del(...staleEntityKeys);
+    }
   } catch (err) {
     console.error('Failed syncing indices to Upstash Redis:', err);
   }
@@ -201,13 +497,7 @@ export async function initUpstashDB(): Promise<DBData> {
       console.log('⚡ Upstash Redis detected! Syncing database from Upstash...');
       const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
       if (remoteData && typeof remoteData === 'object') {
-        const validated: DBData = {
-          users: Array.isArray(remoteData.users) ? remoteData.users : [],
-          playlists: Array.isArray(remoteData.playlists) ? remoteData.playlists : [],
-          tracks: Array.isArray(remoteData.tracks) ? remoteData.tracks : [],
-          userStates: remoteData.userStates && typeof remoteData.userStates === 'object' ? remoteData.userStates : {},
-          chatHistories: remoteData.chatHistories && typeof remoteData.chatHistories === 'object' ? remoteData.chatHistories : {},
-        };
+        const validated = sanitizeDBData(remoteData);
         cachedDB = validated;
         // Also mirror to local disk as secondary fallback
         saveToLocalDisk(validated);
@@ -215,7 +505,7 @@ export async function initUpstashDB(): Promise<DBData> {
         console.log(`✅ Loaded ${validated.users.length} users, ${validated.tracks.length} tracks from Upstash Redis.`);
         return validated;
       } else {
-        console.log('ℹ️ Upstash Redis key empty. Seeding Upstash from local disk...');
+        console.log('ℹ️ Upstash Redis key empty. Initializing from the canonical local database...');
         const localData = readFromLocalDisk();
         cachedDB = localData;
         await syncUpstashIndices(redis, localData);
@@ -261,13 +551,7 @@ function readFromLocalDisk(): DBData {
       return defaultData;
     }
     const parsed = JSON.parse(raw);
-    return {
-      users: Array.isArray(parsed?.users) ? parsed.users : [],
-      playlists: Array.isArray(parsed?.playlists) ? parsed.playlists : [],
-      tracks: Array.isArray(parsed?.tracks) ? parsed.tracks : [],
-      userStates: parsed?.userStates && typeof parsed.userStates === 'object' ? parsed.userStates : {},
-      chatHistories: parsed?.chatHistories && typeof parsed.chatHistories === 'object' ? parsed.chatHistories : {},
-    };
+    return sanitizeDBData(parsed);
   } catch (err) {
     console.error('Error reading db.json:', err);
     return { users: [], playlists: [], tracks: [], userStates: {}, chatHistories: {} };
@@ -280,7 +564,7 @@ function saveToLocalDisk(data: DBData): void {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    const tempFile = `${DB_FILE}.tmp.${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const tempFile = `${DB_FILE}.tmp.${crypto.randomUUID()}`;
     fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
     fs.renameSync(tempFile, DB_FILE);
   } catch (err) {
@@ -298,18 +582,13 @@ export function readDB(): DBData {
 }
 
 export async function readDBAsync(): Promise<DBData> {
+  await writeChain.catch(() => undefined);
   const redis = getUpstashClient();
   if (redis) {
     try {
       const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
       if (remoteData && typeof remoteData === 'object') {
-        const validated: DBData = {
-          users: Array.isArray(remoteData.users) ? remoteData.users : [],
-          playlists: Array.isArray(remoteData.playlists) ? remoteData.playlists : [],
-          tracks: Array.isArray(remoteData.tracks) ? remoteData.tracks : [],
-          userStates: remoteData.userStates && typeof remoteData.userStates === 'object' ? remoteData.userStates : {},
-          chatHistories: remoteData.chatHistories && typeof remoteData.chatHistories === 'object' ? remoteData.chatHistories : {},
-        };
+        const validated = sanitizeDBData(remoteData);
         cachedDB = validated;
         saveToLocalDisk(validated);
         return validated;
@@ -321,33 +600,29 @@ export async function readDBAsync(): Promise<DBData> {
   return readDB();
 }
 
-export function writeDB(data: DBData): void {
+function enqueueDatabaseWrite(input: DBData): Promise<void> {
+  const data = sanitizeDBData(input);
   cachedDB = data;
-  writeQueue.push(() => {
-    saveToLocalDisk(data);
+  writeChain = writeChain
+    .catch(() => undefined)
+    .then(async () => {
+      saveToLocalDisk(data);
+      const redis = getUpstashClient();
+      if (redis) await syncUpstashIndices(redis, data);
+    })
+    .catch((error) => {
+      console.error('Failed to persist database write:', error);
+      throw error;
+    });
+  return writeChain;
+}
 
-    const redis = getUpstashClient();
-    if (redis) {
-      syncUpstashIndices(redis, data).catch((err) => {
-        console.error('Failed to sync writeDB to Upstash Redis:', err);
-      });
-    }
-  });
-  processWriteQueue();
+export function writeDB(data: DBData): void {
+  void enqueueDatabaseWrite(data).catch(() => undefined);
 }
 
 export async function writeDBAsync(data: DBData): Promise<void> {
-  cachedDB = data;
-  saveToLocalDisk(data);
-
-  const redis = getUpstashClient();
-  if (redis) {
-    try {
-      await syncUpstashIndices(redis, data);
-    } catch (err) {
-      console.error('Failed async writeDB to Upstash Redis:', err);
-    }
-  }
+  await enqueueDatabaseWrite(data);
 }
 
 // ==========================================

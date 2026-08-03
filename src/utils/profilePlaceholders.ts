@@ -13,3 +13,21 @@ const svg = `
 </svg>`;
 
 export const DEFAULT_AVATAR_URL = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+
+const coverSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
+  <defs>
+    <linearGradient id="cover" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#171717"/>
+      <stop offset="0.5" stop-color="#581c87"/>
+      <stop offset="1" stop-color="#be185d"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="800" rx="72" fill="url(#cover)"/>
+  <circle cx="400" cy="400" r="205" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="44"/>
+  <circle cx="400" cy="400" r="55" fill="rgba(255,255,255,.9)"/>
+  <path d="M400 195v150l130-75z" fill="rgba(255,255,255,.9)"/>
+</svg>`;
+
+export const DEFAULT_COVER_URL = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(coverSvg)}`;
+export const LIKED_SONGS_COVER_URL = DEFAULT_COVER_URL;

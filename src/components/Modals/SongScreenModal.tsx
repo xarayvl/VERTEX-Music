@@ -87,7 +87,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               Playing from {currentTrack.releaseType || 'Single'} · {currentTrack.album || currentTrack.title}
             </p>
           </div>
-          <p className="text-[10px] font-bold text-[#C084FC] tracking-wide">VERTEX Hi-Res Lossless Audio</p>
+          <p className="text-[10px] font-bold text-[#C084FC] tracking-wide">VERTEX Web Player</p>
         </div>
 
         {onOpenEQ ? (

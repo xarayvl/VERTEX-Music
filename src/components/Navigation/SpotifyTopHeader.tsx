@@ -208,7 +208,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                   <p className="text-[11px] text-zinc-400 truncate">{userProfile.email}</p>
                   <div className="mt-1.5 flex items-center gap-1.5">
                     <span className="px-2 py-0.5 rounded-full bg-[#D946EF]/20 text-[#D946EF] text-[10px] font-extrabold uppercase">
-                      {userProfile.membershipTier || 'Free Hi-Res Account'}
+                      {userProfile.isArtist ? 'Artist account' : 'Listener account'}
                     </span>
                   </div>
                 </div>

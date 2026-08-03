@@ -30,6 +30,7 @@ interface SpotifySidebarProps {
   style?: React.CSSProperties;
   recentlyPlayed?: Track[];
   onSelectAlbum?: (track: Track) => void;
+  onSelectArtist?: (artist: Artist | string) => void;
 }
 
 export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
@@ -46,6 +47,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
   style,
   recentlyPlayed = [],
   onSelectAlbum,
+  onSelectArtist,
 }) => {
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -240,14 +242,12 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
               instead of Artists sitting all the way down past Playlists. */}
           {(libraryFilter === 'all' || libraryFilter === 'artists') &&
             filteredArtists.map((artist) => {
-              const artistTrack = tracks.find((t) => t.artist === artist.name) || tracks[0];
               return (
                 <div
                   key={artist.id}
                   data-artist-id={artist.id}
-                  data-artist-name={artist.name}
                   data-context-type="artist"
-                  onClick={() => onPlayTrack(artistTrack)}
+                  onClick={() => onSelectArtist?.(artist)}
                   className="flex items-center space-x-3 p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors"
                 >
                   <img

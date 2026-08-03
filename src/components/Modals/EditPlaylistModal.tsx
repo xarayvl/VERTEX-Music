@@ -29,24 +29,6 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
 
   if (!isOpen || !playlist) return null;
 
-  const presetCovers = [
-    {
-      name: 'Neon Cyber',
-      url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      name: 'Deep Cosmos',
-      url: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      name: 'Retro Grid',
-      url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      name: 'Tokyo Neon',
-      url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80',
-    },
-  ];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,33 +102,6 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
             </div>
           </div>
 
-          {/* Cover Art Image Selection */}
-          <div>
-            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-              Preset Artwork Themes
-            </label>
-            <div className="grid grid-cols-4 gap-2">
-              {presetCovers.map((item, i) => (
-                <div
-                  key={i}
-                  onClick={() => setCoverUrl(item.url)}
-                  className={`aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
-                    coverUrl === item.url
-                      ? 'border-[#D946EF] ring-2 ring-[#D946EF]/50 scale-105'
-                      : 'border-transparent opacity-60 hover:opacity-100'
-                  }`}
-                >
-                  <img
-                    src={item.url}
-                    alt={item.name}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Custom Cover URL */}
           <div>
             <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
@@ -157,7 +112,7 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
               type="text"
               value={coverUrl}
               onChange={(e) => setCoverUrl(e.target.value)}
-              placeholder="https://images.unsplash.com/..."
+              placeholder="Paste a real image URL"
               className="w-full px-3.5 py-2 rounded-xl bg-white/5 border border-white/15 text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#A855F7]"
             />
           </div>

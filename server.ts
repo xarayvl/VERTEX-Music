@@ -4,10 +4,10 @@ import fs from "fs";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import { readDB, writeDB, readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
+import { readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
 
 dotenv.config();
 
@@ -24,6 +24,53 @@ const emptyStats = () => ({
   followingCount: 0,
 });
 
+function createEntityId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID()}`;
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isStoredMediaUrl(value: string): boolean {
+  return value.startsWith("/uploads/") || value.startsWith("/api/r2-file/") || isHttpUrl(value);
+}
+
+function sanitizeChatHistory(value: unknown, tracks: TrackRecord[] = []): any[] {
+  if (!Array.isArray(value)) return [];
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  return value.slice(-200).flatMap((message: any) => {
+    if (!message || (message.sender !== "user" && message.sender !== "ai") || typeof message.text !== "string") return [];
+    const text = message.text.trim().slice(0, 20_000);
+    if (!text) return [];
+    return [{
+      id: typeof message.id === "string" && message.id.trim() ? message.id.trim().slice(0, 160) : createEntityId("msg"),
+      sender: message.sender,
+      text,
+      timestamp: typeof message.timestamp === "string" && !Number.isNaN(Date.parse(message.timestamp))
+        ? new Date(message.timestamp).toISOString()
+        : new Date().toISOString(),
+      matchedTracks: Array.isArray(message.matchedTracks)
+        ? message.matchedTracks
+            .map((track: any) => typeof track === "string" ? track : track?.id)
+            .filter((trackId: unknown): trackId is string => typeof trackId === "string" && trackById.has(trackId))
+            .slice(0, 20)
+            .map((trackId: string) => trackById.get(trackId))
+        : undefined,
+      webSearchUsed: message.webSearchUsed === true,
+      searchQueries: Array.isArray(message.searchQueries) ? message.searchQueries.filter((item: unknown): item is string => typeof item === "string").slice(0, 10) : undefined,
+      sources: Array.isArray(message.sources)
+        ? message.sources.filter((item: any) => item && typeof item.title === "string" && typeof item.uri === "string" && isHttpUrl(item.uri)).slice(0, 10)
+        : undefined,
+    }];
+  });
+}
+
 // Shared shape-builder for turning a stored user record into the public
 // "artist card" shape the client renders in Search / Sidebar / ArtistView.
 // IMPORTANT: keep this in sync with the `Artist`/`UserProfile` fields that
@@ -33,10 +80,7 @@ const emptyStats = () => ({
 function toPublicArtistCard(u: UserRecord, tracks: TrackRecord[] = []) {
   const artistTracks = tracks.filter((track) => track.userId === u.id);
   const totalPlays = artistTracks.reduce((sum, track) => sum + (Number.parseInt(track.plays || "0", 10) || 0), 0);
-  const storedMonthlyListeners = (u.monthlyListeners || "").trim();
-  const monthlyListeners = storedMonthlyListeners && !/^0\s+monthly listeners$/i.test(storedMonthlyListeners)
-    ? storedMonthlyListeners
-    : `${totalPlays.toLocaleString()} monthly listeners`;
+  const totalStreamsLabel = `${totalPlays.toLocaleString()} total streams`;
 
   return {
     id: u.id,
@@ -47,7 +91,7 @@ function toPublicArtistCard(u: UserRecord, tracks: TrackRecord[] = []) {
     bannerUrl: u.bannerUrl || "",
     bio: u.artistBio || u.bio || "",
     genre: u.favoriteGenres?.[0] || "",
-    monthlyListeners,
+    totalStreamsLabel,
     verified: u.artistVerified === true,
     stats: { ...emptyStats(), ...(u.stats || {}) },
     instagramUrl: u.instagramUrl,
@@ -56,15 +100,16 @@ function toPublicArtistCard(u: UserRecord, tracks: TrackRecord[] = []) {
     artistPickTrackId: u.artistPickTrackId,
     artistPickComment: u.artistPickComment,
     isUser: true,
-    isSynthetic: false,
   };
 }
 
 function sanitizeUserId(userId: string): string {
-  if (!userId || typeof userId !== "string") return "public";
+  if (!userId || typeof userId !== "string") {
+    throw new Error("A valid owner ID is required for uploaded files.");
+  }
   const sanitized = userId.replace(/[^a-zA-Z0-9_-]/g, "");
   if (!sanitized || sanitized === ".." || sanitized.includes("..")) {
-    return "public";
+    throw new Error("Invalid owner ID for uploaded files.");
   }
   return sanitized;
 }
@@ -92,41 +137,117 @@ function getR2Client(): S3Client | null {
   return null;
 }
 
-async function saveFileToLocalDisk(base64Data: string, mimeType: string, folderUserId: string, filePrefix: string): Promise<string> {
-  const safeUserId = sanitizeUserId(folderUserId);
-  const fileId = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const uploadsRootDir = path.join(process.cwd(), "data", "uploads");
-  const userUploadDir = path.join(uploadsRootDir, safeUserId);
+function saveBufferToLocalDisk(buffer: Buffer, safeUserId: string, filename: string): string {
+  const uploadsRootDir = path.resolve(process.cwd(), "data", "uploads");
+  const userUploadDir = path.resolve(uploadsRootDir, safeUserId);
+  const localFilePath = path.resolve(userUploadDir, filename);
 
-  if (!userUploadDir.startsWith(uploadsRootDir)) {
+  if (!userUploadDir.startsWith(`${uploadsRootDir}${path.sep}`) || !localFilePath.startsWith(`${userUploadDir}${path.sep}`)) {
     throw new Error("Invalid target directory path");
   }
 
-  if (!fs.existsSync(userUploadDir)) {
-    fs.mkdirSync(userUploadDir, { recursive: true });
+  fs.mkdirSync(userUploadDir, { recursive: true });
+  fs.writeFileSync(localFilePath, buffer);
+  return `/uploads/${safeUserId}/${filename}`;
+}
+
+function getManagedStorageKey(mediaUrl: string): string | null {
+  try {
+    let key = '';
+    if (mediaUrl.startsWith('/uploads/')) key = mediaUrl.slice('/uploads/'.length);
+    else if (mediaUrl.startsWith('/api/r2-file/')) key = mediaUrl.slice('/api/r2-file/'.length);
+    else if (isHttpUrl(mediaUrl) && process.env.R2_PUBLIC_DOMAIN) {
+      const media = new URL(mediaUrl);
+      const configured = new URL(
+        process.env.R2_PUBLIC_DOMAIN.startsWith('http')
+          ? process.env.R2_PUBLIC_DOMAIN
+          : `https://${process.env.R2_PUBLIC_DOMAIN}`
+      );
+      if (media.host !== configured.host) return null;
+      key = media.pathname.replace(/^\/+/, '');
+    }
+    key = decodeURIComponent(key).replace(/\\/g, '/');
+    if (!key || key.startsWith('/') || key.split('/').some((segment) => !segment || segment === '.' || segment === '..')) return null;
+    return key;
+  } catch {
+    return null;
+  }
+}
+
+async function deleteManagedFile(mediaUrl: string): Promise<void> {
+  const key = getManagedStorageKey(mediaUrl);
+  if (!key) return;
+
+  const uploadsRoot = path.resolve(process.cwd(), 'data', 'uploads');
+  const target = path.resolve(uploadsRoot, key);
+  if (target.startsWith(`${uploadsRoot}${path.sep}`)) {
+    try {
+      if (fs.existsSync(target) && fs.statSync(target).isFile()) fs.rmSync(target, { force: true });
+    } catch (error) {
+      console.error('Failed to delete local managed media file:', error);
+    }
   }
 
-  let ext = (mimeType || '').split('/')[1] || 'bin';
-  if (ext.includes(';')) ext = ext.split(';')[0];
-  if (ext === 'mpeg' || ext === 'mp3') ext = 'mp3';
-  if (ext === 'jpeg' || ext === 'jpg') ext = 'jpg';
-  if (ext === 'png') ext = 'png';
-  if (ext === 'ogg') ext = 'ogg';
-  if (ext === 'wav') ext = 'wav';
-  if (ext === 'webm') ext = 'webm';
-  if (ext === 'm4a' || ext === 'x-m4a' || ext === 'mp4') ext = 'm4a';
+  const r2 = getR2Client();
+  const bucketName = process.env.R2_BUCKET_NAME;
+  if (r2 && bucketName) {
+    try {
+      await r2.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
+    } catch (error) {
+      console.error('Failed to delete Cloudflare R2 media object:', error);
+    }
+  }
+}
 
-  const localFilename = `${filePrefix}_${fileId}.${ext}`;
-  const localFilePath = path.join(userUploadDir, localFilename);
-  const cleanBase64 = base64Data.replace(/[\r\n\s]/g, "");
-  const buffer = Buffer.from(cleanBase64, "base64");
-  fs.writeFileSync(localFilePath, buffer);
-  return `/uploads/${safeUserId}/${localFilename}`;
+function collectReferencedMediaUrls(db: { users: UserRecord[]; tracks: TrackRecord[]; playlists: PlaylistRecord[] }): Set<string> {
+  const refs = new Set<string>();
+  for (const user of db.users) {
+    if (user.avatarUrl) refs.add(user.avatarUrl);
+    if (user.bannerUrl) refs.add(user.bannerUrl);
+  }
+  for (const track of db.tracks) {
+    if (track.audioUrl) refs.add(track.audioUrl);
+    if (track.coverUrl) refs.add(track.coverUrl);
+  }
+  for (const playlist of db.playlists) if (playlist.coverUrl) refs.add(playlist.coverUrl);
+  return refs;
+}
+
+
+function getWavDurationSeconds(base64Data: string): number {
+  try {
+    const buffer = Buffer.from(base64Data.replace(/[\r\n\s]/g, ""), "base64");
+    if (buffer.length < 44 || buffer.toString("ascii", 0, 4) !== "RIFF" || buffer.toString("ascii", 8, 12) !== "WAVE") {
+      return 0;
+    }
+
+    let offset = 12;
+    let byteRate = 0;
+    let dataSize = 0;
+    while (offset + 8 <= buffer.length) {
+      const chunkId = buffer.toString("ascii", offset, offset + 4);
+      const chunkSize = buffer.readUInt32LE(offset + 4);
+      const chunkDataOffset = offset + 8;
+      if (chunkDataOffset + chunkSize > buffer.length) break;
+      if (chunkId === "fmt " && chunkSize >= 12) {
+        byteRate = buffer.readUInt32LE(chunkDataOffset + 8);
+      } else if (chunkId === "data") {
+        dataSize = chunkSize;
+      }
+      if (byteRate > 0 && dataSize > 0) break;
+      offset = chunkDataOffset + chunkSize + (chunkSize % 2);
+    }
+
+    const duration = byteRate > 0 && dataSize > 0 ? dataSize / byteRate : 0;
+    return Number.isFinite(duration) && duration > 0 ? Math.max(1, Math.round(duration)) : 0;
+  } catch {
+    return 0;
+  }
 }
 
 async function saveUploadedFile(base64Data: string, mimeType: string, folderUserId: string, filePrefix: string): Promise<string> {
   const safeUserId = sanitizeUserId(folderUserId);
-  const fileId = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const fileId = crypto.randomUUID();
 
   let ext = (mimeType || '').split('/')[1] || 'bin';
   if (ext.includes(';')) ext = ext.split(';')[0];
@@ -158,12 +279,9 @@ async function saveUploadedFile(base64Data: string, mimeType: string, folderUser
     else cleanMime = filePrefix.includes('audio') ? 'audio/mpeg' : 'image/jpeg';
   }
 
-  // Save local disk backup copy for resilience
-  try {
-    await saveFileToLocalDisk(base64Data, mimeType, folderUserId, filePrefix);
-  } catch (err) {
-    console.warn("Local disk backup save error:", err);
-  }
+  // Persist the exact same object key locally. The previous implementation
+  // generated a second random filename and returned a path that did not exist.
+  const localUrl = saveBufferToLocalDisk(buffer, safeUserId, filename);
 
   const r2 = getR2Client();
   const bucketName = process.env.R2_BUCKET_NAME;
@@ -191,7 +309,7 @@ async function saveUploadedFile(base64Data: string, mimeType: string, folderUser
     }
   }
 
-  return `/uploads/${safeUserId}/${filename}`;
+  return localUrl;
 }
 
 
@@ -233,7 +351,10 @@ async function startServer() {
 
   // Serve files stored in Cloudflare R2 directly or via proxy endpoint
   app.all("/api/r2-file/*", async (req, res) => {
-    const key = req.params[0];
+    const key = String(req.params[0] || "").replace(/^\/+/, "");
+    const r2UploadsRoot = path.resolve(process.cwd(), "data", "uploads");
+    const localPathForKey = path.resolve(r2UploadsRoot, key);
+    const keyIsSafe = Boolean(key) && localPathForKey.startsWith(`${r2UploadsRoot}${path.sep}`);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Authorization, X-Requested-With, *");
@@ -248,15 +369,14 @@ async function startServer() {
       const r2 = getR2Client();
       const bucketName = process.env.R2_BUCKET_NAME;
 
-      if (!key) {
-        return res.status(404).send("File key missing.");
+      if (!keyIsSafe) {
+        return res.status(404).send("File not found.");
       }
 
       // Check local disk first as fast fallback if R2 is not configured
       if (!r2 || !bucketName) {
-        const localPath = path.join(process.cwd(), "data", "uploads", key);
-        if (fs.existsSync(localPath)) {
-          return res.sendFile(localPath);
+        if (fs.existsSync(localPathForKey) && fs.statSync(localPathForKey).isFile()) {
+          return res.sendFile(localPathForKey);
         }
         return res.status(404).send("File not found and R2 storage not configured.");
       }
@@ -320,10 +440,9 @@ async function startServer() {
       }
     } catch (err: any) {
       // Local disk fallback on R2 fetch failure (e.g. NoSuchKey or network error)
-      if (key) {
-        const localPath = path.join(process.cwd(), "data", "uploads", key);
-        if (fs.existsSync(localPath)) {
-          return res.sendFile(localPath);
+      if (keyIsSafe) {
+        if (fs.existsSync(localPathForKey) && fs.statSync(localPathForKey).isFile()) {
+          return res.sendFile(localPathForKey);
         }
       }
       console.error("R2 File Express Route Error:", err);
@@ -336,26 +455,27 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
   // System status endpoint to check Upstash & R2 integration status
-  app.get("/api/system-status", (req, res) => {
-    const upstashActive = isUpstashConfigured();
-    const r2Active = !!(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME);
-    const db = readDB();
+  app.get("/api/system-status", async (req, res) => {
+    const sessionUserId = getUserIdFromToken(req);
+    if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
+    const db = await readDBAsync();
+    const requestingUser = db.users.find((user) => user.id === sessionUserId);
+    if (!requestingUser?.isAdmin) return res.status(403).json({ error: "Forbidden: Admin access required." });
 
-    res.json({
+    return res.json({
       status: "ok",
-      upstashRedis: {
-        configured: upstashActive,
-        message: upstashActive ? "Connected and active" : "Not configured. Using local disk (specify UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN in environment settings)."
-      },
-      cloudflareR2: {
-        configured: r2Active,
-        message: r2Active ? "Connected and active" : "Not configured. Using local disk fallback (specify R2_* variables in environment settings)."
-      },
+      upstashRedisConfigured: isUpstashConfigured(),
+      cloudflareR2Configured: Boolean(
+        process.env.R2_ACCOUNT_ID &&
+        process.env.R2_ACCESS_KEY_ID &&
+        process.env.R2_SECRET_ACCESS_KEY &&
+        process.env.R2_BUCKET_NAME
+      ),
       databaseStats: {
         usersCount: db.users.length,
         tracksCount: db.tracks.length,
-        playlistsCount: db.playlists.length
-      }
+        playlistsCount: db.playlists.length,
+      },
     });
   });
 
@@ -367,6 +487,7 @@ async function startServer() {
   // survive restarts and are shared across instances. Falls back to
   // in-memory-only behavior automatically if Upstash isn't configured.
   const activeSessions = new Map<string, string>(Object.entries(persistedSessions));
+  const recentPlayEvents = new Map<string, number>();
 
   function issueSessionToken(userId: string): string {
     if (!userId) return "";
@@ -394,28 +515,36 @@ async function startServer() {
     deleteSessionFromRedis(token); // fire-and-forget
   }
 
-  function verifyUserOwnership(req: express.Request, targetUserId?: string): boolean {
-    if (!targetUserId || targetUserId === "public") return false;
-    const sessionUserId = getUserIdFromToken(req);
-    if (!sessionUserId) return false;
-    return sessionUserId === targetUserId;
-  }
-
   // User Registration
   app.post("/api/auth/register", async (req, res) => {
     try {
       const { username, email, password, displayName } = req.body;
 
-      if (!username || !email || !password) {
+      if (typeof username !== "string" || typeof email !== "string" || typeof password !== "string") {
         return res.status(400).json({ error: "Username, email, and password are required." });
       }
+      const cleanUsername = username.trim();
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanDisplayName = typeof displayName === "string" ? displayName.trim() : "";
+      if (!/^[a-zA-Z0-9_.-]{3,32}$/.test(cleanUsername)) {
+        return res.status(400).json({ error: "Username must be 3-32 characters and may only contain letters, numbers, dot, underscore, or hyphen." });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) || cleanEmail.length > 254) {
+        return res.status(400).json({ error: "A valid email address is required." });
+      }
+      if (password.length < 8 || password.length > 128) {
+        return res.status(400).json({ error: "Password must be between 8 and 128 characters." });
+      }
+      if (cleanDisplayName.length > 80) {
+        return res.status(400).json({ error: "Display name cannot exceed 80 characters." });
+      }
 
-      const db = readDB();
+      const db = await readDBAsync();
 
       const existingUser = db.users.find(
         (u) =>
-          u.username.toLowerCase() === username.trim().toLowerCase() ||
-          u.email.toLowerCase() === email.trim().toLowerCase()
+          u.username.toLowerCase() === cleanUsername.toLowerCase() ||
+          u.email.toLowerCase() === cleanEmail
       );
 
       if (existingUser) {
@@ -425,11 +554,11 @@ async function startServer() {
       const hashedPassword = await bcrypt.hash(password, 10);
 
       const newUser: UserRecord = {
-        id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        username: username.trim(),
-        email: email.trim().toLowerCase(),
+        id: createEntityId("usr"),
+        username: cleanUsername,
+        email: cleanEmail,
         password: hashedPassword,
-        displayName: (displayName || username).trim(),
+        displayName: cleanDisplayName || cleanUsername,
         avatarUrl: DEFAULT_AVATAR_URL,
         bio: "",
         favoriteGenres: [],
@@ -443,17 +572,11 @@ async function startServer() {
           followersCount: 0,
           followingCount: 0,
         },
-        settings: {
-          losslessAudio: true,
-          autoplay: true,
-          audioNormalization: true,
-          offlineDownloads: true,
-        },
       };
 
       db.users.push(newUser);
-      db.userStates[newUser.id] = { likedTrackIds: [], recentTrackIds: [] };
-      writeDB(db);
+      db.userStates[newUser.id] = { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
+      await writeDBAsync(db);
 
       const token = issueSessionToken(newUser.id);
       // Omit password from returned user object
@@ -468,14 +591,17 @@ async function startServer() {
   // User Login
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { usernameOrEmail, password } = req.body;
+      const { usernameOrEmail, password } = req.body || {};
 
-      if (!usernameOrEmail || !password) {
+      if (typeof usernameOrEmail !== "string" || typeof password !== "string") {
         return res.status(400).json({ error: "Username/email and password are required." });
       }
-
-      const db = readDB();
       const identifier = usernameOrEmail.trim().toLowerCase();
+      if (!identifier || identifier.length > 254 || !password || password.length > 128) {
+        return res.status(400).json({ error: "Invalid login input." });
+      }
+
+      const db = await readDBAsync();
 
       const user = db.users.find(
         (u) =>
@@ -494,7 +620,7 @@ async function startServer() {
         isMatch = user.password === password;
         if (isMatch) {
           user.password = await bcrypt.hash(password, 10);
-          writeDB(db);
+          await writeDBAsync(db);
         }
       }
 
@@ -511,6 +637,14 @@ async function startServer() {
     }
   });
 
+  // Revoke the current session token on logout.
+  app.post("/api/auth/logout", (req, res) => {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (token) revokeSessionToken(token);
+    return res.json({ success: true });
+  });
+
   // Fetch Application Data (Tracks, Playlists, User State, Chat History)
   app.get("/api/data", async (req, res) => {
     try {
@@ -520,20 +654,21 @@ async function startServer() {
       let currentUser = null;
       let likedTrackIds: string[] = [];
       let userChatHistory: any[] = [];
-      let userPlaylists = db.playlists.filter((p) => !p.userId || p.userId === "public");
-      let token = "";
+      let followedArtistIds: string[] = [];
+      let recentTrackIds: string[] = [];
 
       if (authUserId) {
         const found = db.users.find((u) => u.id === authUserId);
         if (found) {
           const { password: _, ...uNoPass } = found;
-          currentUser = uNoPass;
+          const ownTotalStreams = db.tracks
+            .filter((track) => track.userId === found.id)
+            .reduce((sum, track) => sum + (Number.parseInt(track.plays || '0', 10) || 0), 0);
+          currentUser = { ...uNoPass, totalStreamsLabel: `${ownTotalStreams.toLocaleString()} total streams` };
           likedTrackIds = db.userStates[authUserId] ? db.userStates[authUserId].likedTrackIds : [];
           userChatHistory = db.chatHistories[authUserId] ? db.chatHistories[authUserId] : [];
-          userPlaylists = db.playlists.filter(
-            (p) => !p.userId || p.userId === "public" || p.userId === authUserId
-          );
-          token = issueSessionToken(authUserId);
+          followedArtistIds = db.userStates[authUserId]?.followedArtistIds || [];
+          recentTrackIds = db.userStates[authUserId]?.recentTrackIds || [];
         }
       }
 
@@ -543,10 +678,11 @@ async function startServer() {
         artists: db.users
           .filter((user) => user.isArtist || db.tracks.some((track) => track.userId === user.id))
           .map((user) => toPublicArtistCard(user, db.tracks)),
-        playlists: userPlaylists,
+        playlists: db.playlists,
         likedTrackIds,
+        followedArtistIds,
+        recentTrackIds,
         chatHistory: userChatHistory,
-        token,
       });
     } catch (error: any) {
       console.error("Fetch Data Error:", error);
@@ -555,13 +691,20 @@ async function startServer() {
   });
 
   // Get User-Scoped Chat History
-  app.get("/api/chat-history/:userId", (req, res) => {
+  app.get("/api/chat-history/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
-      if (!verifyUserOwnership(req, userId)) {
-        return res.status(403).json({ error: "Forbidden: Unauthorized user session." });
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
       }
-      const db = readDB();
+      if (sessionUserId !== userId) {
+        return res.status(403).json({ error: "Forbidden: You can only access your own account data." });
+      }
+      const db = await readDBAsync();
+      if (!db.users.some((user) => user.id === userId)) {
+        return res.status(404).json({ error: "User not found." });
+      }
       const history = db.chatHistories[userId] || [];
       return res.json({ success: true, chatHistory: history });
     } catch (error: any) {
@@ -571,17 +714,24 @@ async function startServer() {
   });
 
   // Save User-Scoped Chat History
-  app.post("/api/chat-history/:userId", (req, res) => {
+  app.post("/api/chat-history/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
-      if (!verifyUserOwnership(req, userId)) {
-        return res.status(403).json({ error: "Forbidden: Unauthorized user session." });
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      }
+      if (sessionUserId !== userId) {
+        return res.status(403).json({ error: "Forbidden: You can only access your own account data." });
       }
       const { chatHistory } = req.body;
-      const db = readDB();
+      const db = await readDBAsync();
+      if (!db.users.some((user) => user.id === userId)) {
+        return res.status(404).json({ error: "User not found." });
+      }
 
-      db.chatHistories[userId] = Array.isArray(chatHistory) ? chatHistory : [];
-      writeDB(db);
+      db.chatHistories[userId] = sanitizeChatHistory(chatHistory, db.tracks);
+      await writeDBAsync(db);
 
       return res.json({ success: true, chatHistory: db.chatHistories[userId] });
     } catch (error: any) {
@@ -600,7 +750,10 @@ async function startServer() {
         return res.json({
           query: "",
           tracks: db.tracks.slice(0, 10),
-          artists: db.users.map((u) => toPublicArtistCard(u, db.tracks)),
+          artists: db.users
+            .filter((user) => user.isArtist || db.tracks.some((track) => track.userId === user.id))
+            .slice(0, 10)
+            .map((user) => toPublicArtistCard(user, db.tracks)),
           playlists: db.playlists.slice(0, 10),
           topResult: null,
         });
@@ -617,39 +770,24 @@ async function startServer() {
 
       // 2. Match Users & Artists
       const matchedUsers = db.users
+        .filter((user) => user.isArtist || db.tracks.some((track) => track.userId === user.id))
         .filter(
-          (u) =>
-            u.username.toLowerCase().includes(query) ||
-            u.displayName.toLowerCase().includes(query) ||
-            (u.artistName && u.artistName.toLowerCase().includes(query)) ||
-            (u.email && u.email.toLowerCase().includes(query)) ||
-            (u.bio && u.bio.toLowerCase().includes(query))
+          (user) =>
+            user.username.toLowerCase().includes(query) ||
+            user.displayName.toLowerCase().includes(query) ||
+            (user.artistName && user.artistName.toLowerCase().includes(query)) ||
+            (user.bio && user.bio.toLowerCase().includes(query))
         )
-        .map((u) => toPublicArtistCard(u, db.tracks));
+        .map((user) => toPublicArtistCard(user, db.tracks));
 
-      // Extract unique artists from uploaded tracks. We only ever resolve
-      // these to a REAL registered user (by track.userId, or by a matching
-      // displayName/artistName) — never fabricate a stand-in profile for a
-      // track-artist name that isn't actually a registered account. If no
-      // real user owns that name, it's simply left out of the results, and
-      // the client shows its existing "no registered artist profile was
-      // found" not-found state instead of a fake/mock artist card.
-      const trackArtistNames = Array.from(new Set(db.tracks.map((t) => t.artist).filter(Boolean)));
-      const matchedTrackArtists = trackArtistNames
-        .filter((name) => name.toLowerCase().includes(query))
-        .filter((name) => !matchedUsers.some((u) => u.name.toLowerCase() === name.toLowerCase()))
-        .map((name) => {
-          const sampleTrack = db.tracks.find((t) => t.artist === name);
-          const userMatch = db.users.find(
-            (u) =>
-              (sampleTrack?.userId && sampleTrack.userId !== "public" && u.id === sampleTrack.userId) ||
-              u.displayName?.toLowerCase() === name.toLowerCase() ||
-              u.artistName?.toLowerCase() === name.toLowerCase()
-          );
-
-          return userMatch ? toPublicArtistCard(userMatch, db.tracks) : null;
-        })
-        .filter((artist): artist is NonNullable<typeof artist> => artist !== null);
+      // Track metadata never creates an artist identity. Every matching track
+      // resolves through its immutable owner userId, so duplicate display
+      // names cannot redirect to the wrong account and orphaned identities
+      // cannot appear in search.
+      const matchedTrackOwnerIds = new Set(matchedTracks.map((track) => track.userId).filter(Boolean));
+      const matchedTrackArtists = db.users
+        .filter((user) => matchedTrackOwnerIds.has(user.id))
+        .map((user) => toPublicArtistCard(user, db.tracks));
 
       const combinedArtists = Array.from(
         new Map([...matchedUsers, ...matchedTrackArtists].map((artist) => [artist.id, artist])).values()
@@ -699,16 +837,23 @@ async function startServer() {
   });
 
   // Clear User-Scoped Chat History
-  app.delete("/api/chat-history/:userId", (req, res) => {
+  app.delete("/api/chat-history/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
-      if (!verifyUserOwnership(req, userId)) {
-        return res.status(403).json({ error: "Forbidden: Unauthorized user session." });
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
       }
-      const db = readDB();
+      if (sessionUserId !== userId) {
+        return res.status(403).json({ error: "Forbidden: You can only access your own account data." });
+      }
+      const db = await readDBAsync();
+      if (!db.users.some((user) => user.id === userId)) {
+        return res.status(404).json({ error: "User not found." });
+      }
 
       db.chatHistories[userId] = [];
-      writeDB(db);
+      await writeDBAsync(db);
 
       return res.json({ success: true, chatHistory: [] });
     } catch (error: any) {
@@ -727,9 +872,10 @@ async function startServer() {
     try {
       const { userId } = req.params;
       const db = await readDBAsync();
-      const found = db.users.find((u) => u.id === userId);
-      if (!found) {
-        return res.status(404).json({ error: "User not found." });
+      const found = db.users.find((user) => user.id === userId);
+      const isRealArtist = Boolean(found && (found.isArtist || db.tracks.some((track) => track.userId === found.id)));
+      if (!found || !isRealArtist) {
+        return res.status(404).json({ error: "Artist not found." });
       }
       return res.json({ success: true, user: toPublicArtistCard(found, db.tracks) });
     } catch (error: any) {
@@ -738,122 +884,219 @@ async function startServer() {
     }
   });
 
-  // Follow / Unfollow an artist (real registered user). This updates the
-  // TARGET's followersCount server-side. Deliberately does NOT require
-  // verifyUserOwnership(targetUserId) — following someone else is exactly
-  // the case where the requester does NOT own the target account. It only
-  // requires the requester to be authenticated, so we know who's acting.
-  // Without this route, a user's "Followers" count could never move: the
-  // client only ever incremented the follower's own "Following" count,
-  // never the followed artist's "Followers" count, so every profile stayed
-  // stuck at 0 followers no matter how many people followed it.
+  // Follow / unfollow a real registered artist. The relationship is stored
+  // server-side and the operation is idempotent, so refreshes, account
+  // switches, duplicate clicks, and forged localStorage values cannot alter
+  // ownership or follower counts.
   app.post("/api/users/:userId/follow", async (req, res) => {
     try {
-      const { userId } = req.params;
+      const targetUserId = req.params.userId;
       const { action } = req.body as { action?: "follow" | "unfollow" };
-
       const sessionUserId = getUserIdFromToken(req);
+
       if (!sessionUserId) {
         return res.status(401).json({ error: "Unauthorized: Active session required." });
       }
       if (action !== "follow" && action !== "unfollow") {
         return res.status(400).json({ error: "action must be 'follow' or 'unfollow'." });
       }
-
-      const db = await readDBAsync();
-      const index = db.users.findIndex((u) => u.id === userId);
-      if (index === -1) {
-        // Not a registered user (e.g. a mock/track-derived artist) — nothing
-        // to update server-side, but this isn't an error for the client.
-        return res.json({ success: true, followersCount: null });
+      if (targetUserId === sessionUserId) {
+        return res.status(400).json({ error: "You cannot follow your own profile." });
       }
 
-      const currentCount = db.users[index].stats?.followersCount || 0;
-      const nextCount = Math.max(0, currentCount + (action === "follow" ? 1 : -1));
+      const db = await readDBAsync();
+      const requesterIndex = db.users.findIndex((user) => user.id === sessionUserId);
+      const targetIndex = db.users.findIndex((user) => user.id === targetUserId);
+      if (requesterIndex === -1) {
+        return res.status(404).json({ error: "Signed-in user not found." });
+      }
+      if (targetIndex === -1 || !(db.users[targetIndex].isArtist || db.tracks.some((track) => track.userId === targetUserId))) {
+        return res.status(404).json({ error: "Artist not found." });
+      }
 
-      db.users[index] = {
-        ...db.users[index],
-        stats: {
-          tracksPlayed: 0,
-          topGenre: "N/A",
-          playlistsCreated: 0,
-          ...db.users[index].stats,
-          followersCount: nextCount,
-        },
+      const requesterState = db.userStates[sessionUserId] || {
+        likedTrackIds: [],
+        recentTrackIds: [],
+        followedArtistIds: [],
       };
-      writeDB(db);
+      const current = new Set(requesterState.followedArtistIds || []);
+      if (action === "follow") current.add(targetUserId);
+      else current.delete(targetUserId);
+      requesterState.followedArtistIds = Array.from(current);
+      db.userStates[sessionUserId] = requesterState;
 
-      return res.json({ success: true, followersCount: nextCount });
+      const followersCount = Object.values(db.userStates).filter((state) =>
+        (state.followedArtistIds || []).includes(targetUserId)
+      ).length;
+      const followingCount = requesterState.followedArtistIds.length;
+
+      db.users[targetIndex] = {
+        ...db.users[targetIndex],
+        stats: { ...emptyStats(), ...(db.users[targetIndex].stats || {}), followersCount },
+      };
+      db.users[requesterIndex] = {
+        ...db.users[requesterIndex],
+        stats: { ...emptyStats(), ...(db.users[requesterIndex].stats || {}), followingCount },
+      };
+
+      await writeDBAsync(db);
+      return res.json({
+        success: true,
+        isFollowing: action === "follow",
+        followedArtistIds: requesterState.followedArtistIds,
+        followersCount,
+        followingCount,
+      });
     } catch (error: any) {
       console.error("Follow/Unfollow Error:", error);
       return res.status(500).json({ error: "Failed to update follow state." });
     }
   });
 
-  // Update User Profile
+  // Update only user-owned profile fields. Privileged/derived values such as
+  // admin, verification, total streams, follower counts, and playback
+  // statistics are deliberately ignored here and can only be changed by the
+  // server paths that own those values.
   app.put("/api/users/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
-      if (!verifyUserOwnership(req, userId)) {
-        return res.status(403).json({ error: "Forbidden: Unauthorized user session." });
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
       }
-      const updates = req.body;
-      const db = await readDBAsync();
+      if (sessionUserId !== userId) {
+        return res.status(403).json({ error: "Forbidden: You can only access your own account data." });
+      }
 
-      const index = db.users.findIndex((u) => u.id === userId);
+      const updates = req.body || {};
+      const db = await readDBAsync();
+      const index = db.users.findIndex((user) => user.id === userId);
       if (index === -1) {
         return res.status(404).json({ error: "User not found." });
       }
 
-      let avatarUrl = updates.avatarUrl ?? db.users[index].avatarUrl;
-      let bannerUrl = updates.bannerUrl ?? db.users[index].bannerUrl;
-
-      if (avatarUrl && typeof avatarUrl === "string" && avatarUrl.startsWith("data:")) {
-        const mimeMatch = avatarUrl.match(/^data:([^;]+);base64,/);
-        const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
-        const b64 = avatarUrl.includes(",") ? avatarUrl.split(",")[1] : avatarUrl;
-        if (b64) avatarUrl = await saveUploadedFile(b64, mimeType, userId, "avatar");
+      const current = db.users[index];
+      const nextUsername = typeof updates.username === "string" && updates.username.trim()
+        ? updates.username.trim()
+        : current.username;
+      if (!/^[a-zA-Z0-9_.-]{3,32}$/.test(nextUsername)) {
+        return res.status(400).json({ error: "Username must be 3-32 characters and may only contain letters, numbers, dot, underscore, or hyphen." });
+      }
+      const usernameTaken = db.users.some(
+        (user) => user.id !== userId && user.username.toLowerCase() === nextUsername.toLowerCase()
+      );
+      if (usernameTaken) {
+        return res.status(409).json({ error: "Username is already in use." });
       }
 
-      if (bannerUrl && typeof bannerUrl === "string" && bannerUrl.startsWith("data:")) {
-        const mimeMatch = bannerUrl.match(/^data:([^;]+);base64,/);
-        const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
-        const b64 = bannerUrl.includes(",") ? bannerUrl.split(",")[1] : bannerUrl;
-        if (b64) bannerUrl = await saveUploadedFile(b64, mimeType, userId, "banner");
+      let avatarUrl = typeof updates.avatarUrl === "string" ? updates.avatarUrl.trim() : current.avatarUrl;
+      let bannerUrl = typeof updates.bannerUrl === "string" ? updates.bannerUrl.trim() : current.bannerUrl || "";
+
+      if (avatarUrl.startsWith("data:")) {
+        const mimeMatch = avatarUrl.match(/^data:(image\/[^;]+);base64,/);
+        const b64 = avatarUrl.includes(",") ? avatarUrl.split(",")[1] : "";
+        if (!mimeMatch || !b64) return res.status(400).json({ error: "Invalid avatar image." });
+        avatarUrl = await saveUploadedFile(b64, mimeMatch?.[1] || "image/jpeg", userId, "avatar");
       }
+      if (bannerUrl.startsWith("data:")) {
+        const mimeMatch = bannerUrl.match(/^data:(image\/[^;]+);base64,/);
+        const b64 = bannerUrl.includes(",") ? bannerUrl.split(",")[1] : "";
+        if (!mimeMatch || !b64) return res.status(400).json({ error: "Invalid banner image." });
+        bannerUrl = await saveUploadedFile(b64, mimeMatch?.[1] || "image/jpeg", userId, "banner");
+      }
+      if (avatarUrl && !isStoredMediaUrl(avatarUrl)) return res.status(400).json({ error: "Avatar URL must use HTTP(S) or an uploaded file." });
+      if (bannerUrl && !isStoredMediaUrl(bannerUrl)) return res.status(400).json({ error: "Banner URL must use HTTP(S) or an uploaded file." });
+
+      const hasPickUpdate = Object.prototype.hasOwnProperty.call(updates, "artistPickTrackId");
+      const requestedPick = hasPickUpdate
+        ? typeof updates.artistPickTrackId === "string" && updates.artistPickTrackId.trim()
+          ? updates.artistPickTrackId.trim()
+          : undefined
+        : current.artistPickTrackId;
+      if (requestedPick && !db.tracks.some((track) => track.id === requestedPick && track.userId === userId)) {
+        return res.status(404).json({ error: "Artist pick track not found." });
+      }
+
+      const displayName = typeof updates.displayName === "string" && updates.displayName.trim()
+        ? updates.displayName.trim()
+        : current.displayName;
+      if (displayName.length > 80) return res.status(400).json({ error: "Display name cannot exceed 80 characters." });
+      if (typeof updates.bio === "string" && updates.bio.length > 500) return res.status(400).json({ error: "Bio cannot exceed 500 characters." });
+      if (typeof updates.artistBio === "string" && updates.artistBio.length > 2_000) return res.status(400).json({ error: "Artist bio cannot exceed 2000 characters." });
+      const isArtist = typeof updates.isArtist === "boolean" ? updates.isArtist : current.isArtist || false;
+      const artistName = typeof updates.artistName === "string" && updates.artistName.trim()
+        ? updates.artistName.trim()
+        : current.artistName || displayName;
+      if (artistName.length > 80) return res.status(400).json({ error: "Artist name cannot exceed 80 characters." });
+
+      let favoriteGenres = current.favoriteGenres;
+      if (updates.favoriteGenres !== undefined) {
+        if (!Array.isArray(updates.favoriteGenres)) {
+          return res.status(400).json({ error: "Favorite genres must be an array." });
+        }
+        const suppliedGenres: string[] = (updates.favoriteGenres as unknown[])
+          .filter((genre: unknown): genre is string => typeof genre === "string")
+          .map((genre: string) => genre.trim())
+          .filter(Boolean);
+        if (suppliedGenres.some((genre: string) => genre.length > 80)) {
+          return res.status(400).json({ error: "Genre names cannot exceed 80 characters." });
+        }
+        favoriteGenres = Array.from(new Set(suppliedGenres)).slice(0, 20);
+      }
+
+      const cleanSocialUrl = (value: unknown, currentValue?: string): string | undefined => {
+        if (value === undefined) return currentValue;
+        if (typeof value !== "string") throw new Error("INVALID_SOCIAL_URL");
+        const clean = value.trim();
+        if (!clean) return undefined;
+        if (!isHttpUrl(clean)) throw new Error("INVALID_SOCIAL_URL");
+        return clean.slice(0, 2_000);
+      };
+      let instagramUrl: string | undefined;
+      let twitterUrl: string | undefined;
+      let websiteUrl: string | undefined;
+      try {
+        instagramUrl = cleanSocialUrl(updates.instagramUrl, current.instagramUrl);
+        twitterUrl = cleanSocialUrl(updates.twitterUrl, current.twitterUrl);
+        websiteUrl = cleanSocialUrl(updates.websiteUrl, current.websiteUrl);
+      } catch {
+        return res.status(400).json({ error: "Social links must be valid HTTP(S) URLs." });
+      }
+
+      const artistPickComment = requestedPick
+        ? typeof updates.artistPickComment === "string"
+          ? updates.artistPickComment.trim().slice(0, 500)
+          : current.artistPickComment
+        : undefined;
 
       db.users[index] = {
-        ...db.users[index],
-        displayName: updates.displayName ?? db.users[index].displayName,
-        username: updates.username ?? db.users[index].username,
-        bio: updates.bio ?? db.users[index].bio,
-        avatarUrl,
+        ...current,
+        displayName,
+        username: nextUsername,
+        bio: typeof updates.bio === "string" ? updates.bio.trim() : current.bio,
+        avatarUrl: avatarUrl || DEFAULT_AVATAR_URL,
         bannerUrl,
-        favoriteGenres: updates.favoriteGenres ?? db.users[index].favoriteGenres,
-        isArtist: updates.isArtist ?? db.users[index].isArtist ?? false,
-        artistName: updates.artistName ?? db.users[index].artistName ?? updates.displayName ?? db.users[index].displayName,
-        artistBio: updates.artistBio ?? db.users[index].artistBio ?? updates.bio ?? db.users[index].bio,
-        artistVerified: updates.artistVerified ?? db.users[index].artistVerified ?? false,
-        monthlyListeners: updates.monthlyListeners ?? db.users[index].monthlyListeners ?? "0 monthly listeners",
-        instagramUrl: updates.instagramUrl ?? db.users[index].instagramUrl,
-        twitterUrl: updates.twitterUrl ?? db.users[index].twitterUrl,
-        websiteUrl: updates.websiteUrl ?? db.users[index].websiteUrl,
-        artistPickTrackId: updates.artistPickTrackId ?? db.users[index].artistPickTrackId,
-        artistPickComment: updates.artistPickComment ?? db.users[index].artistPickComment,
-        stats: updates.stats ?? db.users[index].stats ?? {
-          hoursListened: 0,
-          secondsListened: 0,
-          tracksPlayed: 0,
-          topGenre: "N/A",
-          playlistsCreated: 0,
-          followersCount: 0,
-          followingCount: 0,
-        },
-        settings: updates.settings ?? db.users[index].settings,
+        favoriteGenres,
+        isArtist,
+        artistName,
+        artistBio: typeof updates.artistBio === "string" ? updates.artistBio.trim() : current.artistBio,
+        instagramUrl,
+        twitterUrl,
+        websiteUrl,
+        artistPickTrackId: requestedPick,
+        artistPickComment,
+        // Server-owned fields: never trust values supplied by the client.
+        isAdmin: current.isAdmin,
+        artistVerified: current.artistVerified === true,
+        stats: current.stats,
       };
 
-      writeDB(db);
+      // Keep all of this owner's track artist labels canonical after a profile rename.
+      db.tracks = db.tracks.map((track) =>
+        track.userId === userId ? { ...track, artist: artistName } : track
+      );
 
+      await writeDBAsync(db);
       const { password: _, ...updatedUser } = db.users[index];
       return res.json({ success: true, user: updatedUser });
     } catch (error: any) {
@@ -869,14 +1112,15 @@ async function startServer() {
   app.post("/api/users/:userId/listening-stats", async (req, res) => {
     try {
       const { userId } = req.params;
-      if (!verifyUserOwnership(req, userId)) {
-        return res.status(403).json({ error: "Forbidden: Unauthorized user session." });
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      }
+      if (sessionUserId !== userId) {
+        return res.status(403).json({ error: "Forbidden: You can only access your own account data." });
       }
 
-      const { secondsListened, hoursListened } = req.body as {
-        secondsListened?: number;
-        hoursListened?: number;
-      };
+      const { secondsListened } = req.body as { secondsListened?: number };
 
       const db = await readDBAsync();
       const index = db.users.findIndex((u) => u.id === userId);
@@ -884,23 +1128,25 @@ async function startServer() {
         return res.status(404).json({ error: "User not found." });
       }
 
+      const previousStats = { ...emptyStats(), ...(db.users[index].stats || {}) };
+      const previousSeconds = Math.max(0, Number(previousStats.secondsListened) || 0);
+      const requestedSeconds = Number(secondsListened);
+      if (!Number.isFinite(requestedSeconds) || requestedSeconds < previousSeconds) {
+        return res.status(400).json({ error: "secondsListened must be a monotonic numeric value." });
+      }
+      // The client reports roughly every 15 seconds. Cap one request to two minutes
+      // of progress so a forged payload cannot manufacture listening history.
+      const acceptedSeconds = Math.min(requestedSeconds, previousSeconds + 120);
       db.users[index] = {
         ...db.users[index],
         stats: {
-          tracksPlayed: 0,
-          topGenre: "N/A",
-          playlistsCreated: 0,
-          ...db.users[index].stats,
-          secondsListened: Number.isFinite(secondsListened)
-            ? Number(secondsListened)
-            : db.users[index].stats?.secondsListened || 0,
-          hoursListened: Number.isFinite(hoursListened)
-            ? Number(hoursListened)
-            : db.users[index].stats?.hoursListened || 0,
+          ...previousStats,
+          secondsListened: acceptedSeconds,
+          hoursListened: acceptedSeconds / 3600,
         },
       };
 
-      writeDB(db);
+      await writeDBAsync(db);
 
       return res.json({ success: true, stats: db.users[index].stats });
     } catch (error: any) {
@@ -909,88 +1155,139 @@ async function startServer() {
     }
   });
 
-  // Add Custom Track & Store Audio File to User Directory / Cloudflare R2
+  // Fetch one real, playable track. Orphaned/metadata-only legacy records are
+  // removed by the DB sanitizer and therefore correctly return 404 here.
+  app.get("/api/tracks/:id", async (req, res) => {
+    try {
+      const db = await readDBAsync();
+      const track = db.tracks.find((item) => item.id === req.params.id);
+      if (!track) return res.status(404).json({ error: "Track not found." });
+      return res.json({ success: true, track });
+    } catch (error) {
+      console.error("Fetch Track Error:", error);
+      return res.status(500).json({ error: "Failed to fetch track." });
+    }
+  });
+
+  // Add a real playable track owned by the authenticated uploader. The server
+  // ignores client-supplied artist/owner identities and never creates silent
+  // metadata-only records.
   app.post("/api/tracks", async (req, res) => {
     try {
-      const { userId, title, artist, album, coverUrl, audioUrl, duration, genre, syncedLyrics, releaseType, releaseTitle, releaseId, copyright, releaseYear, trackNumber } = req.body;
-
-      if (!title) {
-        return res.status(400).json({ success: false, error: "Track title is required." });
-      }
-
+      const { userId, title, album, coverUrl, audioUrl, duration, genre, syncedLyrics, releaseType, releaseTitle, releaseId, copyright, releaseYear, trackNumber } = req.body;
       const sessionUserId = getUserIdFromToken(req);
+
       if (!sessionUserId) {
         return res.status(401).json({ success: false, error: "You must be signed in to upload music." });
       }
-      const folderUserId = sessionUserId;
-
       if (userId && userId !== sessionUserId) {
         return res.status(403).json({ success: false, error: "Forbidden: Unauthorized user session." });
       }
+      if (typeof title !== "string" || !title.trim()) {
+        return res.status(400).json({ success: false, error: "Track title is required." });
+      }
+      if (title.trim().length > 160) {
+        return res.status(400).json({ success: false, error: "Track title cannot exceed 160 characters." });
+      }
+      if (typeof audioUrl !== "string" || !audioUrl.trim()) {
+        return res.status(400).json({ success: false, error: "A real audio file or audio URL is required." });
+      }
+      if (!Number.isFinite(Number(duration)) || Number(duration) <= 0 || Number(duration) > 86_400) {
+        return res.status(400).json({ success: false, error: "A valid audio duration is required." });
+      }
 
       const db = await readDBAsync();
-      const uploader = db.users.find((user) => user.id === sessionUserId);
-      if (!uploader) {
+      const uploaderIndex = db.users.findIndex((user) => user.id === sessionUserId);
+      if (uploaderIndex === -1) {
         return res.status(404).json({ success: false, error: "Uploader profile was not found." });
       }
+      const uploader = db.users[uploaderIndex];
       const canonicalArtistName = (uploader.artistName || uploader.displayName || uploader.username).trim();
       if (!canonicalArtistName) {
         return res.status(400).json({ success: false, error: "Add an artist name to your profile before uploading music." });
       }
-      const trackId = `trk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
-      let persistentAudioUrl = audioUrl || "";
-      let persistentCoverUrl = coverUrl || "";
-
-      // 1. Save base64 audio file
-      if (audioUrl && typeof audioUrl === "string" && audioUrl.startsWith("data:")) {
-        const mimeMatch = audioUrl.match(/^data:([^;]+);base64,/);
-        const mimeType = mimeMatch ? mimeMatch[1] : "audio/mpeg";
-        const base64Data = audioUrl.includes(",") ? audioUrl.split(",")[1] : audioUrl;
-        
-        if (base64Data) {
-          persistentAudioUrl = await saveUploadedFile(base64Data, mimeType, folderUserId, "audio");
-        }
+      let persistentAudioUrl = audioUrl.trim();
+      let persistentCoverUrl = typeof coverUrl === "string" ? coverUrl.trim() : "";
+      if (persistentAudioUrl.startsWith("data:")) {
+        const mimeMatch = persistentAudioUrl.match(/^data:(audio\/[^;]+);base64,/);
+        if (!mimeMatch) return res.status(400).json({ success: false, error: "Audio upload must contain an audio MIME type." });
+        const base64Data = persistentAudioUrl.includes(",") ? persistentAudioUrl.split(",")[1] : "";
+        if (!base64Data) return res.status(400).json({ success: false, error: "Invalid audio file." });
+        persistentAudioUrl = await saveUploadedFile(base64Data, mimeMatch?.[1] || "audio/mpeg", sessionUserId, "audio");
       }
-
-      // 2. Save base64 cover image
-      if (coverUrl && typeof coverUrl === "string" && coverUrl.startsWith("data:")) {
-        const mimeMatch = coverUrl.match(/^data:([^;]+);base64,/);
-        const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
-        const imgBase64 = coverUrl.includes(",") ? coverUrl.split(",")[1] : coverUrl;
-        
-        if (imgBase64) {
-          persistentCoverUrl = await saveUploadedFile(imgBase64, mimeType, folderUserId, "cover");
-        }
+      if (persistentCoverUrl.startsWith("data:")) {
+        const mimeMatch = persistentCoverUrl.match(/^data:(image\/[^;]+);base64,/);
+        if (!mimeMatch) return res.status(400).json({ success: false, error: "Cover upload must contain an image MIME type." });
+        const imgBase64 = persistentCoverUrl.includes(",") ? persistentCoverUrl.split(",")[1] : "";
+        if (!imgBase64) return res.status(400).json({ success: false, error: "Invalid cover image." });
+        persistentCoverUrl = await saveUploadedFile(imgBase64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "cover");
       }
+      if (!isStoredMediaUrl(persistentAudioUrl)) return res.status(400).json({ success: false, error: "Audio URL must use HTTP(S) or an uploaded file." });
+      if (persistentCoverUrl && !isStoredMediaUrl(persistentCoverUrl)) return res.status(400).json({ success: false, error: "Cover URL must use HTTP(S) or an uploaded file." });
+      if (!persistentCoverUrl) persistentCoverUrl = uploader.avatarUrl || DEFAULT_AVATAR_URL;
 
-      if (!persistentCoverUrl) {
-        persistentCoverUrl = uploader.avatarUrl || DEFAULT_AVATAR_URL;
+      const cleanAlbum = typeof album === "string" && album.trim() ? album.trim() : "Single";
+      if (cleanAlbum.length > 160) return res.status(400).json({ success: false, error: "Album name cannot exceed 160 characters." });
+      const cleanReleaseType = typeof releaseType === "string" && releaseType.trim()
+        ? releaseType.trim().toUpperCase()
+        : cleanAlbum === "Single" ? "SINGLE" : "ALBUM";
+      if (!["SINGLE", "EP", "ALBUM"].includes(cleanReleaseType)) {
+        return res.status(400).json({ success: false, error: "releaseType must be SINGLE, EP, or ALBUM." });
       }
-
+      const cleanReleaseTitle = typeof releaseTitle === "string" && releaseTitle.trim()
+        ? releaseTitle.trim()
+        : cleanAlbum === "Single" ? title.trim() : cleanAlbum;
+      if (cleanReleaseTitle.length > 160) return res.status(400).json({ success: false, error: "Release title cannot exceed 160 characters." });
+      const cleanGenre = typeof genre === "string" ? genre.trim() : "";
+      if (cleanGenre.length > 80) return res.status(400).json({ success: false, error: "Genre cannot exceed 80 characters." });
+      const currentYear = new Date().getFullYear();
+      const cleanReleaseYear = releaseYear === undefined || releaseYear === null || releaseYear === ""
+        ? undefined
+        : Number(releaseYear);
+      if (cleanReleaseYear !== undefined && (!Number.isInteger(cleanReleaseYear) || cleanReleaseYear < 1850 || cleanReleaseYear > currentYear + 1)) {
+        return res.status(400).json({ success: false, error: "Release year is invalid." });
+      }
+      const cleanTrackNumber = trackNumber === undefined || trackNumber === null || trackNumber === ""
+        ? undefined
+        : Number(trackNumber);
+      if (cleanTrackNumber !== undefined && (!Number.isInteger(cleanTrackNumber) || cleanTrackNumber < 1 || cleanTrackNumber > 999)) {
+        return res.status(400).json({ success: false, error: "Track number must be an integer between 1 and 999." });
+      }
+      const cleanCopyright = typeof copyright === "string" && copyright.trim() ? copyright.trim() : undefined;
+      if (cleanCopyright && cleanCopyright.length > 300) return res.status(400).json({ success: false, error: "Copyright text cannot exceed 300 characters." });
       const newTrack: TrackRecord = {
-        id: trackId,
-        userId: folderUserId,
+        id: createEntityId("trk"),
+        userId: sessionUserId,
         title: title.trim(),
         artist: canonicalArtistName,
-        album: (album || "Single").trim(),
-        releaseType: releaseType || (album === "Single" ? "SINGLE" : "ALBUM"),
-        releaseTitle: releaseTitle || (album === "Single" ? title.trim() : (album || "Single").trim()),
-        releaseId: releaseId || `rel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        copyright: copyright ? String(copyright).trim() : undefined,
-        releaseYear: releaseYear ? Number(releaseYear) : new Date().getFullYear(),
-        trackNumber: trackNumber !== undefined && trackNumber !== null ? Number(trackNumber) : undefined,
+        album: cleanAlbum,
+        releaseType: cleanReleaseType,
+        releaseTitle: cleanReleaseTitle,
+        releaseId: typeof releaseId === "string" && releaseId.trim()
+          ? `rel_${sessionUserId}_${crypto.createHash("sha256").update(releaseId.trim()).digest("hex").slice(0, 24)}`
+          : createEntityId("rel"),
+        copyright: cleanCopyright,
+        releaseYear: cleanReleaseYear,
+        trackNumber: cleanTrackNumber,
         coverUrl: persistentCoverUrl,
         audioUrl: persistentAudioUrl,
-        duration: Number(duration) || 180,
-        genre: genre || "",
-        syncedLyrics: Array.isArray(syncedLyrics) ? syncedLyrics : [],
+        duration: Number(duration),
+        genre: cleanGenre,
+        syncedLyrics: Array.isArray(syncedLyrics)
+          ? syncedLyrics
+              .filter((line: any) => line && Number.isFinite(Number(line.time)) && Number(line.time) >= 0 && Number(line.time) <= Number(duration) + 1 && typeof line.text === "string")
+              .map((line: any) => ({ time: Number(line.time), text: line.text.trim().slice(0, 2_000) }))
+              .filter((line: any) => Boolean(line.text))
+              .slice(0, 5_000)
+          : [],
+        plays: "0",
         createdAt: new Date().toISOString(),
       };
 
+      db.users[uploaderIndex] = { ...uploader, isArtist: true, artistName: canonicalArtistName };
       db.tracks.unshift(newTrack);
-      writeDB(db);
-
+      await writeDBAsync(db);
       return res.json({ success: true, track: newTrack });
     } catch (error: any) {
       console.error("Add Track Error:", error);
@@ -998,84 +1295,101 @@ async function startServer() {
     }
   });
 
-  // Update Track (with Ownership Authorization)
+  // Update Track (strict uploader ownership). Owner and artist identity are
+  // immutable from the request body and are derived from the session user.
   app.put("/api/tracks/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const { userId, title, artist, album, genre, coverUrl, audioUrl, duration, releaseType, releaseTitle, copyright, releaseYear, trackNumber } = req.body;
-      const db = await readDBAsync();
-
-      const trackIndex = db.tracks.findIndex((t) => t.id === id);
-      if (trackIndex === -1) {
-        return res.status(404).json({ error: "Track not found." });
-      }
-
-      const existingTrack = db.tracks[trackIndex];
+      const { title, album, genre, coverUrl, audioUrl, duration, releaseType, releaseTitle, copyright, releaseYear, trackNumber } = req.body;
       const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
 
-      if (!sessionUserId) {
-        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      const db = await readDBAsync();
+      const trackIndex = db.tracks.findIndex((track) => track.id === id);
+      if (trackIndex === -1) return res.status(404).json({ error: "Track not found." });
+      const existingTrack = db.tracks[trackIndex];
+      if (existingTrack.userId !== sessionUserId) {
+        return res.status(403).json({ error: "Forbidden: You can only edit tracks you uploaded." });
       }
 
-      if (existingTrack.userId && existingTrack.userId !== "public") {
-        if (existingTrack.userId !== sessionUserId) {
-          return res.status(403).json({ error: "Forbidden: You can only edit tracks you uploaded." });
-        }
-      } else {
-        const requestingUser = db.users.find((u) => u.id === sessionUserId);
-        const isAdmin = requestingUser?.isAdmin === true;
-        if (!isAdmin) {
-          return res.status(403).json({ error: "Forbidden: Public seed tracks cannot be edited." });
-        }
-      }
+      const owner = db.users.find((user) => user.id === sessionUserId);
+      if (!owner) return res.status(404).json({ error: "Track owner not found." });
 
       let persistentCoverUrl = existingTrack.coverUrl;
-      if (coverUrl !== undefined && coverUrl.trim()) {
-        if (coverUrl.startsWith("data:")) {
-          const mimeMatch = coverUrl.match(/^data:([^;]+);base64,/);
-          const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
-          const imgBase64 = coverUrl.includes(",") ? coverUrl.split(",")[1] : coverUrl;
-          if (imgBase64) {
-            persistentCoverUrl = await saveUploadedFile(imgBase64, mimeType, sessionUserId, "cover");
-          }
+      if (typeof coverUrl === "string") {
+        const cleanCover = coverUrl.trim();
+        if (cleanCover.startsWith("data:")) {
+          const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
+          const imgBase64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
+          if (!mimeMatch || !imgBase64) return res.status(400).json({ error: "Invalid cover image." });
+          persistentCoverUrl = await saveUploadedFile(imgBase64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "cover");
+        } else if (cleanCover) {
+          if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Cover URL must use HTTP(S) or an uploaded file." });
+          persistentCoverUrl = cleanCover;
+        }
+      }
+
+      let persistentAudioUrl = existingTrack.audioUrl || "";
+      if (typeof audioUrl === "string" && audioUrl.trim()) {
+        const cleanAudio = audioUrl.trim();
+        if (cleanAudio.startsWith("data:")) {
+          const mimeMatch = cleanAudio.match(/^data:(audio\/[^;]+);base64,/);
+          const audioBase64 = cleanAudio.includes(",") ? cleanAudio.split(",")[1] : "";
+          if (!mimeMatch || !audioBase64) return res.status(400).json({ error: "Invalid audio file." });
+          persistentAudioUrl = await saveUploadedFile(audioBase64, mimeMatch?.[1] || "audio/mpeg", sessionUserId, "audio");
         } else {
-          persistentCoverUrl = coverUrl.trim();
+          if (!isStoredMediaUrl(cleanAudio)) return res.status(400).json({ error: "Audio URL must use HTTP(S) or an uploaded file." });
+          persistentAudioUrl = cleanAudio;
         }
       }
+      if (!persistentAudioUrl) return res.status(400).json({ error: "A real audio source is required." });
 
-      // Allow replacing the actual audio file too (same base64 upload path
-      // used when the track was first created), so editing a track can
-      // change literally everything the original upload form collected.
-      let persistentAudioUrl = existingTrack.audioUrl;
-      if (audioUrl !== undefined && typeof audioUrl === "string" && audioUrl.trim() && audioUrl.startsWith("data:")) {
-        const mimeMatch = audioUrl.match(/^data:([^;]+);base64,/);
-        const mimeType = mimeMatch ? mimeMatch[1] : "audio/mpeg";
-        const audioBase64 = audioUrl.includes(",") ? audioUrl.split(",")[1] : audioUrl;
-        if (audioBase64) {
-          persistentAudioUrl = await saveUploadedFile(audioBase64, mimeType, sessionUserId, "audio");
-        }
+      const nextDuration = duration !== undefined ? Number(duration) : existingTrack.duration;
+      if (!Number.isFinite(nextDuration) || nextDuration <= 0 || nextDuration > 86_400) {
+        return res.status(400).json({ error: "A valid audio duration is required." });
       }
 
-      const updatedTrack = {
+      const nextTitle = typeof title === "string" && title.trim() ? title.trim() : existingTrack.title;
+      const nextAlbum = typeof album === "string" && album.trim() ? album.trim() : existingTrack.album;
+      const nextReleaseType = typeof releaseType === "string" && releaseType.trim() ? releaseType.trim().toUpperCase() : existingTrack.releaseType || "SINGLE";
+      const nextReleaseTitle = typeof releaseTitle === "string" && releaseTitle.trim() ? releaseTitle.trim() : existingTrack.releaseTitle || nextAlbum;
+      const nextGenre = typeof genre === "string" ? genre.trim() : existingTrack.genre;
+      if (nextTitle.length > 160 || nextAlbum.length > 160 || nextReleaseTitle.length > 160) {
+        return res.status(400).json({ error: "Track, album, and release titles cannot exceed 160 characters." });
+      }
+      if (!["SINGLE", "EP", "ALBUM"].includes(nextReleaseType)) return res.status(400).json({ error: "releaseType must be SINGLE, EP, or ALBUM." });
+      if (nextGenre.length > 80) return res.status(400).json({ error: "Genre cannot exceed 80 characters." });
+      const currentYear = new Date().getFullYear();
+      const nextReleaseYear = releaseYear === undefined ? existingTrack.releaseYear : Number(releaseYear);
+      if (nextReleaseYear !== undefined && (!Number.isInteger(nextReleaseYear) || nextReleaseYear < 1850 || nextReleaseYear > currentYear + 1)) {
+        return res.status(400).json({ error: "Release year is invalid." });
+      }
+      const nextTrackNumber = trackNumber === undefined ? existingTrack.trackNumber : Number(trackNumber);
+      if (nextTrackNumber !== undefined && (!Number.isInteger(nextTrackNumber) || nextTrackNumber < 1 || nextTrackNumber > 999)) {
+        return res.status(400).json({ error: "Track number must be an integer between 1 and 999." });
+      }
+      const nextCopyright = copyright !== undefined ? (String(copyright).trim() || undefined) : existingTrack.copyright;
+      if (nextCopyright && nextCopyright.length > 300) return res.status(400).json({ error: "Copyright text cannot exceed 300 characters." });
+
+      const updatedTrack: TrackRecord = {
         ...existingTrack,
-        title: title !== undefined && title.trim() ? title.trim() : existingTrack.title,
-        artist: artist !== undefined && artist.trim() ? artist.trim() : existingTrack.artist,
-        album: album !== undefined && album.trim() ? album.trim() : existingTrack.album,
-        releaseType: releaseType !== undefined ? releaseType : existingTrack.releaseType,
-        releaseTitle: releaseTitle !== undefined ? releaseTitle : existingTrack.releaseTitle,
-        genre: genre !== undefined && genre.trim() ? genre.trim() : existingTrack.genre,
-        coverUrl: persistentCoverUrl,
+        userId: sessionUserId,
+        artist: (owner.artistName || owner.displayName || owner.username).trim(),
+        title: nextTitle,
+        album: nextAlbum,
+        releaseType: nextReleaseType,
+        releaseTitle: nextReleaseTitle,
+        genre: nextGenre,
+        coverUrl: persistentCoverUrl || owner.avatarUrl || DEFAULT_AVATAR_URL,
         audioUrl: persistentAudioUrl,
-        duration: duration !== undefined && Number(duration) > 0 ? Number(duration) : existingTrack.duration,
-        copyright: copyright !== undefined ? (copyright ? String(copyright).trim() : undefined) : existingTrack.copyright,
-        releaseYear: releaseYear !== undefined ? Number(releaseYear) : existingTrack.releaseYear,
-        trackNumber: trackNumber !== undefined && trackNumber !== null ? Number(trackNumber) : existingTrack.trackNumber,
-        userId: existingTrack.userId || userId,
+        duration: nextDuration,
+        copyright: nextCopyright,
+        releaseYear: nextReleaseYear,
+        trackNumber: nextTrackNumber,
       };
 
       db.tracks[trackIndex] = updatedTrack;
-      writeDB(db);
-
+      await writeDBAsync(db);
       return res.json({ success: true, track: updatedTrack });
     } catch (error: any) {
       console.error("Update Track Error:", error);
@@ -1083,46 +1397,63 @@ async function startServer() {
     }
   });
 
-  // Record a track play. The client fires this every time a track starts
-  // playing so the "N plays" count shown on tracks/artists is real and
-  // survives redeploys (persisted to disk / Upstash) instead of only
-  // living in local React state, which used to reset on every refresh.
+  // Record a real track play and persist the authenticated listener's history.
   app.post("/api/tracks/:id/play", async (req, res) => {
     try {
       const { id } = req.params;
       const db = await readDBAsync();
+      const trackIndex = db.tracks.findIndex((track) => track.id === id);
+      if (trackIndex === -1) return res.status(404).json({ error: "Track not found." });
 
-      const trackIndex = db.tracks.findIndex((t) => t.id === id);
-      if (trackIndex === -1) {
-        return res.status(404).json({ error: "Track not found." });
+      const sessionUserId = getUserIdFromToken(req);
+      const listenerKey = sessionUserId || `${req.ip || 'unknown'}:${String(req.headers['user-agent'] || '').slice(0, 160)}`;
+      const playEventKey = `${listenerKey}:${id}`;
+      const now = Date.now();
+      const previousPlayAt = recentPlayEvents.get(playEventKey) || 0;
+      if (now - previousPlayAt < 30_000) {
+        return res.json({ success: true, plays: db.tracks[trackIndex].plays || "0", deduplicated: true });
+      }
+      recentPlayEvents.set(playEventKey, now);
+      if (recentPlayEvents.size > 10_000) {
+        for (const [key, timestamp] of recentPlayEvents) {
+          if (now - timestamp > 120_000) recentPlayEvents.delete(key);
+        }
       }
 
       const currentPlays = Number.parseInt(db.tracks[trackIndex].plays || "0", 10) || 0;
-      const nextPlays = (currentPlays + 1).toString();
+      const nextPlays = String(currentPlays + 1);
       db.tracks[trackIndex] = { ...db.tracks[trackIndex], plays: nextPlays };
 
-      // Also bump the listener's own "tracks played" stat, if they're
-      // logged in. The frontend comment on this call claims it persists
-      // this stat, so make that true instead of only updating the track.
-      const sessionUserId = getUserIdFromToken(req);
       if (sessionUserId) {
-        const userIndex = db.users.findIndex((u) => u.id === sessionUserId);
+        const userIndex = db.users.findIndex((user) => user.id === sessionUserId);
         if (userIndex !== -1) {
+          const state = db.userStates[sessionUserId] || { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
+          state.recentTrackIds = [id, ...state.recentTrackIds.filter((trackId) => trackId !== id)].slice(0, 50);
+          db.userStates[sessionUserId] = state;
+
+          const recentTracks = state.recentTrackIds
+            .map((trackId) => db.tracks.find((track) => track.id === trackId))
+            .filter((track): track is TrackRecord => Boolean(track));
+          const genreCounts = new Map<string, number>();
+          for (const track of recentTracks) {
+            const genre = track.genre?.trim();
+            if (genre) genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1);
+          }
+          const topGenre = [...genreCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "N/A";
+          const previousStats = db.users[userIndex].stats || emptyStats();
           db.users[userIndex] = {
             ...db.users[userIndex],
             stats: {
-              hoursListened: 0,
-              topGenre: "N/A",
-              playlistsCreated: 0,
-              ...db.users[userIndex].stats,
-              tracksPlayed: (db.users[userIndex].stats?.tracksPlayed || 0) + 1,
+              ...emptyStats(),
+              ...previousStats,
+              tracksPlayed: (previousStats.tracksPlayed || 0) + 1,
+              topGenre,
             },
           };
         }
       }
 
-      writeDB(db);
-
+      await writeDBAsync(db);
       return res.json({ success: true, plays: nextPlays });
     } catch (error: any) {
       console.error("Record Track Play Error:", error);
@@ -1130,95 +1461,81 @@ async function startServer() {
     }
   });
 
-  // Delete Track
+  // Delete only a track owned by the active session.
   app.delete("/api/tracks/:id", async (req, res) => {
     try {
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
+
       const { id } = req.params;
       const db = await readDBAsync();
-
-      const trackToDelete = db.tracks.find((t) => t.id === id);
-      if (!trackToDelete) {
-        return res.status(404).json({ error: "Track not found." });
+      const track = db.tracks.find((item) => item.id === id);
+      if (!track) return res.status(404).json({ error: "Track not found." });
+      if (track.userId !== sessionUserId) {
+        return res.status(403).json({ error: "Forbidden: You can only delete tracks you uploaded." });
       }
 
-      const sessionUserId = getUserIdFromToken(req);
-      if (!sessionUserId) {
-        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      db.tracks = db.tracks.filter((item) => item.id !== id);
+      for (const playlist of db.playlists) {
+        playlist.trackIds = playlist.trackIds.filter((trackId) => trackId !== id);
+        playlist.trackCount = playlist.trackIds.length;
       }
-
-      if (trackToDelete.userId && trackToDelete.userId !== "public") {
-        if (trackToDelete.userId !== sessionUserId) {
-          return res.status(403).json({ error: "Forbidden: You can only delete tracks you uploaded." });
-        }
-      } else {
-        const requestingUser = db.users.find((u) => u.id === sessionUserId);
-        const isAdmin = requestingUser?.isAdmin === true;
-        if (!isAdmin) {
-          return res.status(403).json({ error: "Forbidden: Public seed tracks cannot be deleted." });
-        }
+      for (const state of Object.values(db.userStates)) {
+        state.likedTrackIds = state.likedTrackIds.filter((trackId) => trackId !== id);
+        state.recentTrackIds = state.recentTrackIds.filter((trackId) => trackId !== id);
       }
-
-      db.tracks = db.tracks.filter((t) => t.id !== id);
-      db.playlists.forEach((p) => {
-        p.trackIds = p.trackIds.filter((tid) => tid !== id);
-      });
-      Object.keys(db.userStates).forEach((uid) => {
-        db.userStates[uid].likedTrackIds = db.userStates[uid].likedTrackIds.filter((tid) => tid !== id);
-      });
-
-      writeDB(db);
-      return res.json({ success: true });
+      await writeDBAsync(db);
+      const referencedMedia = collectReferencedMediaUrls(db);
+      await Promise.all(
+        [track.audioUrl, track.coverUrl]
+          .filter((mediaUrl): mediaUrl is string => Boolean(mediaUrl && !referencedMedia.has(mediaUrl)))
+          .map((mediaUrl) => deleteManagedFile(mediaUrl))
+      );
+      return res.json({ success: true, deletedTrackId: id });
     } catch (error: any) {
       console.error("Delete Track Error:", error);
       return res.status(500).json({ error: "Failed to delete track." });
     }
   });
 
-  // Wipe All Uploaded Tracks & Clear Uploaded Files
+  // Remove only the active user's own uploads. Never wipe other accounts.
   const handleWipeTracks = async (req: express.Request, res: express.Response) => {
     try {
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
+
       const db = await readDBAsync();
-      const count = db.tracks.length;
+      const ownedTracks = db.tracks.filter((track) => track.userId === sessionUserId);
+      const ownedIds = new Set(ownedTracks.map((track) => track.id));
+      if (ownedIds.size === 0) return res.status(404).json({ error: "No uploaded tracks found for this account." });
 
-      // 1. Clear track list
-      db.tracks = [];
-
-      // 2. Clear track IDs in playlists
-      db.playlists.forEach((p) => {
-        p.trackIds = [];
-      });
-
-      // 3. Clear track IDs in user states
-      Object.keys(db.userStates).forEach((uid) => {
-        if (db.userStates[uid]) {
-          db.userStates[uid].likedTrackIds = [];
-          db.userStates[uid].recentTrackIds = [];
-        }
-      });
-
-      // 4. Save updated DB to disk and Upstash Redis
+      db.tracks = db.tracks.filter((track) => !ownedIds.has(track.id));
+      for (const playlist of db.playlists) {
+        playlist.trackIds = playlist.trackIds.filter((trackId) => !ownedIds.has(trackId));
+        playlist.trackCount = playlist.trackIds.length;
+      }
+      for (const state of Object.values(db.userStates)) {
+        state.likedTrackIds = state.likedTrackIds.filter((trackId) => !ownedIds.has(trackId));
+        state.recentTrackIds = state.recentTrackIds.filter((trackId) => !ownedIds.has(trackId));
+      }
       await writeDBAsync(db);
-
-      // 5. Clean up local uploads directory
-      const uploadsRootDir = path.join(process.cwd(), "data", "uploads");
-      if (fs.existsSync(uploadsRootDir)) {
-        try {
-          fs.rmSync(uploadsRootDir, { recursive: true, force: true });
-          fs.mkdirSync(uploadsRootDir, { recursive: true });
-        } catch (fileErr) {
-          console.warn("Notice clearing local uploads directory:", fileErr);
+      const referencedMedia = collectReferencedMediaUrls(db);
+      const mediaToDelete = new Set<string>();
+      for (const track of ownedTracks) {
+        for (const mediaUrl of [track.audioUrl, track.coverUrl]) {
+          if (mediaUrl && !referencedMedia.has(mediaUrl)) mediaToDelete.add(mediaUrl);
         }
       }
+      await Promise.all([...mediaToDelete].map((mediaUrl) => deleteManagedFile(mediaUrl)));
 
-      return res.json({ success: true, message: "All uploaded tracks wiped successfully.", wipedCount: count });
+      return res.json({ success: true, wipedCount: ownedIds.size, deletedTrackIds: [...ownedIds] });
     } catch (error: any) {
       console.error("Wipe Tracks Error:", error);
-      return res.status(500).json({ success: false, error: "Failed to wipe uploaded tracks." });
+      return res.status(500).json({ error: "Failed to wipe uploaded tracks." });
     }
   };
 
   app.post("/api/tracks/wipe", handleWipeTracks);
-  app.delete("/api/tracks/wipe", handleWipeTracks);
 
   // Get and Sync all IDs (User IDs, Song IDs, Playlist IDs, Artist IDs) in Upstash Redis
   app.get("/api/upstash/ids", async (req, res) => {
@@ -1241,9 +1558,9 @@ async function startServer() {
       const songIds = (db.tracks || []).map((t) => t.id).filter(Boolean);
       const playlistIds = (db.playlists || []).map((p) => p.id).filter(Boolean);
 
-      const artistUserIds = (db.users || []).filter((u) => u.isArtist).map((u) => u.id);
-      const trackArtistNames = Array.from(new Set((db.tracks || []).map((t) => t.artist).filter(Boolean)));
-      const artistIds = Array.from(new Set([...artistUserIds, ...trackArtistNames]));
+      const artistIds = (db.users || [])
+        .filter((u) => u.isArtist || db.tracks.some((track) => track.userId === u.id))
+        .map((u) => u.id);
 
       if (redis) {
         await syncUpstashIndices(redis, db);
@@ -1270,93 +1587,126 @@ async function startServer() {
     }
   });
 
-  // Create Playlist
+  app.get("/api/playlists/:id", async (req, res) => {
+    try {
+      const db = await readDBAsync();
+      const playlist = db.playlists.find((item) => item.id === req.params.id);
+      if (!playlist) return res.status(404).json({ error: "Playlist not found." });
+      return res.json({ success: true, playlist });
+    } catch (error: any) {
+      console.error("Get Playlist Error:", error);
+      return res.status(500).json({ error: "Failed to fetch playlist." });
+    }
+  });
+
+  // Create a playlist for the active account only.
   app.post("/api/playlists", async (req, res) => {
     try {
-      const { userId, title, description, coverUrl, trackIds } = req.body;
-
-      if (!title) {
-        return res.status(400).json({ error: "Playlist title is required." });
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
+      if (req.body.userId && req.body.userId !== sessionUserId) {
+        return res.status(403).json({ error: "Forbidden: Playlist owner cannot be assigned to another account." });
       }
 
-      if (userId && !verifyUserOwnership(req, userId)) {
-        return res.status(403).json({ error: "Forbidden: Unauthorized user session." });
+      const title = typeof req.body.title === "string" ? req.body.title.trim() : "";
+      if (!title) return res.status(400).json({ error: "Playlist title is required." });
+      if (title.length > 120) return res.status(400).json({ error: "Playlist title cannot exceed 120 characters." });
+      const description = typeof req.body.description === "string" ? req.body.description.trim() : "";
+      if (description.length > 1_000) return res.status(400).json({ error: "Playlist description cannot exceed 1000 characters." });
+
+      const db = await readDBAsync();
+      const owner = db.users.find((user) => user.id === sessionUserId);
+      if (!owner) return res.status(404).json({ error: "Playlist owner not found." });
+
+      const requestedTrackIds: string[] = Array.isArray(req.body.trackIds) ? req.body.trackIds.filter((id: unknown): id is string => typeof id === "string") : [];
+      const validTrackIds = new Set(db.tracks.map((track) => track.id));
+      if (requestedTrackIds.some((trackId: unknown) => typeof trackId !== "string" || !validTrackIds.has(trackId))) {
+        return res.status(404).json({ error: "One or more playlist tracks were not found." });
       }
 
-      const sessionUserId = getUserIdFromToken(req) || userId || "public";
-      let persistentCoverUrl = coverUrl || "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80";
-
-      if (coverUrl && typeof coverUrl === "string" && coverUrl.startsWith("data:")) {
-        const mimeMatch = coverUrl.match(/^data:([^;]+);base64,/);
-        const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
-        const imgBase64 = coverUrl.includes(",") ? coverUrl.split(",")[1] : coverUrl;
-        if (imgBase64) {
-          persistentCoverUrl = await saveUploadedFile(imgBase64, mimeType, sessionUserId, "playlist");
+      let persistentCoverUrl = owner.avatarUrl || DEFAULT_AVATAR_URL;
+      if (typeof req.body.coverUrl === "string" && req.body.coverUrl.trim()) {
+        const cleanCover = req.body.coverUrl.trim();
+        if (cleanCover.startsWith("data:")) {
+          const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
+          const base64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
+          if (!mimeMatch || !base64) return res.status(400).json({ error: "Invalid playlist cover image." });
+          persistentCoverUrl = await saveUploadedFile(base64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "playlist");
+        } else {
+          if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Playlist cover URL must use HTTP(S) or an uploaded file." });
+          persistentCoverUrl = cleanCover;
         }
       }
 
-      const db = await readDBAsync();
       const newPlaylist: PlaylistRecord = {
-        id: `pl_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        userId: userId || "",
-        title: title.trim(),
-        description: (description || "").trim(),
+        id: createEntityId("pl"),
+        userId: sessionUserId,
+        title,
+        description,
         coverUrl: persistentCoverUrl,
-        trackIds: Array.isArray(trackIds) ? trackIds : [],
-        likes: "1",
+        trackIds: [...new Set(requestedTrackIds)],
+        trackCount: new Set(requestedTrackIds).size,
         createdAt: new Date().toISOString(),
       };
-
       db.playlists.unshift(newPlaylist);
-      writeDB(db);
-
-      return res.json({ success: true, playlist: newPlaylist });
+      const ownerIndex = db.users.findIndex((user) => user.id === sessionUserId);
+      const stats = db.users[ownerIndex].stats || emptyStats();
+      db.users[ownerIndex].stats = { ...emptyStats(), ...stats, playlistsCreated: db.playlists.filter((p) => p.userId === sessionUserId).length };
+      await writeDBAsync(db);
+      return res.status(201).json({ success: true, playlist: newPlaylist });
     } catch (error: any) {
       console.error("Create Playlist Error:", error);
       return res.status(500).json({ error: "Failed to create playlist." });
     }
   });
 
-  // Update Playlist
   app.put("/api/playlists/:id", async (req, res) => {
     try {
-      const { id } = req.params;
-      const { title, description, coverUrl, trackIds } = req.body;
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
       const db = await readDBAsync();
-
-      const index = db.playlists.findIndex((p) => p.id === id);
-      if (index === -1) {
-        return res.status(404).json({ error: "Playlist not found." });
-      }
-
-      const existingPlaylist = db.playlists[index];
-      if (existingPlaylist.userId && !verifyUserOwnership(req, existingPlaylist.userId)) {
+      const index = db.playlists.findIndex((playlist) => playlist.id === req.params.id);
+      if (index === -1) return res.status(404).json({ error: "Playlist not found." });
+      const existing = db.playlists[index];
+      if (existing.userId !== sessionUserId) {
         return res.status(403).json({ error: "Forbidden: You can only edit playlists you created." });
       }
 
-      let persistentCoverUrl = db.playlists[index].coverUrl;
-      if (coverUrl !== undefined) {
-        if (typeof coverUrl === "string" && coverUrl.startsWith("data:")) {
-          const mimeMatch = coverUrl.match(/^data:([^;]+);base64,/);
-          const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
-          const imgBase64 = coverUrl.includes(",") ? coverUrl.split(",")[1] : coverUrl;
-          if (imgBase64) {
-            persistentCoverUrl = await saveUploadedFile(imgBase64, mimeType, existingPlaylist.userId || "public", "playlist");
-          }
-        } else {
-          persistentCoverUrl = coverUrl;
+      const nextTrackIds = req.body.trackIds === undefined ? existing.trackIds : req.body.trackIds;
+      if (!Array.isArray(nextTrackIds)) return res.status(400).json({ error: "trackIds must be an array." });
+      const validTrackIds = new Set(db.tracks.map((track) => track.id));
+      if (nextTrackIds.some((trackId: unknown) => typeof trackId !== "string" || !validTrackIds.has(trackId))) {
+        return res.status(404).json({ error: "One or more playlist tracks were not found." });
+      }
+
+      let persistentCoverUrl = existing.coverUrl;
+      if (typeof req.body.coverUrl === "string") {
+        const cleanCover = req.body.coverUrl.trim();
+        if (cleanCover.startsWith("data:")) {
+          const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
+          const base64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
+          if (!mimeMatch || !base64) return res.status(400).json({ error: "Invalid playlist cover image." });
+          persistentCoverUrl = await saveUploadedFile(base64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "playlist");
+        } else if (cleanCover) {
+          if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Playlist cover URL must use HTTP(S) or an uploaded file." });
+          persistentCoverUrl = cleanCover;
         }
       }
 
+      const nextTitle = req.body.title === undefined ? existing.title : String(req.body.title).trim();
+      if (!nextTitle) return res.status(400).json({ error: "Playlist title is required." });
+      if (nextTitle.length > 120) return res.status(400).json({ error: "Playlist title cannot exceed 120 characters." });
+      const nextDescription = req.body.description === undefined ? existing.description : String(req.body.description).trim();
+      if (nextDescription.length > 1_000) return res.status(400).json({ error: "Playlist description cannot exceed 1000 characters." });
       db.playlists[index] = {
-        ...db.playlists[index],
-        title: title !== undefined ? title.trim() : db.playlists[index].title,
-        description: description !== undefined ? description.trim() : db.playlists[index].description,
+        ...existing,
+        title: nextTitle,
+        description: nextDescription,
         coverUrl: persistentCoverUrl,
-        trackIds: Array.isArray(trackIds) ? trackIds : db.playlists[index].trackIds,
+        trackIds: [...new Set(nextTrackIds)],
+        trackCount: new Set(nextTrackIds).size,
       };
-
-      writeDB(db);
+      await writeDBAsync(db);
       return res.json({ success: true, playlist: db.playlists[index] });
     } catch (error: any) {
       console.error("Update Playlist Error:", error);
@@ -1364,21 +1714,24 @@ async function startServer() {
     }
   });
 
-  // Delete Playlist
   app.delete("/api/playlists/:id", async (req, res) => {
     try {
-      const { id } = req.params;
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
       const db = await readDBAsync();
-
-      const targetPlaylist = db.playlists.find((p) => p.id === id);
-      if (targetPlaylist && targetPlaylist.userId && !verifyUserOwnership(req, targetPlaylist.userId)) {
+      const target = db.playlists.find((playlist) => playlist.id === req.params.id);
+      if (!target) return res.status(404).json({ error: "Playlist not found." });
+      if (target.userId !== sessionUserId) {
         return res.status(403).json({ error: "Forbidden: You can only delete playlists you created." });
       }
-
-      db.playlists = db.playlists.filter((p) => p.id !== id);
-      writeDB(db);
-
-      return res.json({ success: true });
+      db.playlists = db.playlists.filter((playlist) => playlist.id !== target.id);
+      const ownerIndex = db.users.findIndex((user) => user.id === sessionUserId);
+      if (ownerIndex !== -1) {
+        const stats = db.users[ownerIndex].stats || emptyStats();
+        db.users[ownerIndex].stats = { ...emptyStats(), ...stats, playlistsCreated: db.playlists.filter((p) => p.userId === sessionUserId).length };
+      }
+      await writeDBAsync(db);
+      return res.json({ success: true, deletedPlaylistId: target.id });
     } catch (error: any) {
       console.error("Delete Playlist Error:", error);
       return res.status(500).json({ error: "Failed to delete playlist." });
@@ -1386,21 +1739,34 @@ async function startServer() {
   });
 
   // Update User Liked Tracks
-  app.post("/api/user-state/:userId/liked-tracks", (req, res) => {
+  app.post("/api/user-state/:userId/liked-tracks", async (req, res) => {
     try {
       const { userId } = req.params;
-      if (!verifyUserOwnership(req, userId)) {
-        return res.status(403).json({ error: "Forbidden: Unauthorized user session." });
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      }
+      if (sessionUserId !== userId) {
+        return res.status(403).json({ error: "Forbidden: You can only access your own account data." });
       }
       const { likedTrackIds } = req.body;
-      const db = readDB();
-
+      const db = await readDBAsync();
+      if (!db.users.some((user) => user.id === userId)) {
+        return res.status(404).json({ error: "User not found." });
+      }
+      if (!Array.isArray(likedTrackIds)) {
+        return res.status(400).json({ error: "likedTrackIds must be an array." });
+      }
+      const validTrackIds = new Set(db.tracks.map((track) => track.id));
+      if (likedTrackIds.some((trackId: unknown) => typeof trackId !== "string" || !validTrackIds.has(trackId))) {
+        return res.status(404).json({ error: "One or more liked tracks were not found." });
+      }
       if (!db.userStates[userId]) {
-        db.userStates[userId] = { likedTrackIds: [], recentTrackIds: [] };
+        db.userStates[userId] = { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
       }
 
-      db.userStates[userId].likedTrackIds = Array.isArray(likedTrackIds) ? likedTrackIds : [];
-      writeDB(db);
+      db.userStates[userId].likedTrackIds = [...new Set(likedTrackIds)];
+      await writeDBAsync(db);
 
       return res.json({ success: true, likedTrackIds: db.userStates[userId].likedTrackIds });
     } catch (error: any) {
@@ -1409,223 +1775,94 @@ async function startServer() {
     }
   });
 
-// Helper to parse clean user-friendly error messages from API exceptions.
-// `context` lets us tailor the RESOURCE_EXHAUSTED (429) message to what
-// actually happened — the music endpoint synthesizes a fallback track, but
-// the chat endpoint does not, so it must never claim one was generated.
-function parseCleanErrorMessage(err: any, context: "chat" | "music" = "music"): { message: string; rateLimited: boolean } {
+// Helper to return clean API errors without claiming that content was created.
+function parseCleanErrorMessage(err: any): { message: string; rateLimited: boolean } {
   if (!err) return { message: "An unexpected error occurred.", rateLimited: false };
   let msg = typeof err === "string" ? err : err.message || String(err);
-
   if (msg.startsWith("{") || msg.includes('"error":')) {
     try {
       const parsed = JSON.parse(msg);
-      if (parsed?.error?.message) {
-        msg = parsed.error.message;
-      }
+      if (parsed?.error?.message) msg = parsed.error.message;
     } catch {
-      // ignore
+      // Keep the original provider message.
     }
   }
-
-  const isRateLimited = msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429") || msg.includes("Quota exceeded");
-
-  if (isRateLimited) {
-    if (context === "music") {
-      return {
-        message: "The Lyria AI Music generation free quota is currently rate limited. A fallback audio track was generated for your request.",
-        rateLimited: true,
-      };
-    }
-    return {
-      message: "VERTEX Music AI is experiencing high demand right now. Please wait a moment and try again shortly.",
-      rateLimited: true,
-    };
-  }
-
-  return { message: msg, rateLimited: false };
+  const rateLimited = msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429") || msg.includes("Quota exceeded");
+  return {
+    message: rateLimited
+      ? "VERTEX Music AI is experiencing high demand. No track was created; please try again later."
+      : msg,
+    rateLimited,
+  };
 }
 
-// Procedural WAV audio generator fallback when Lyria rate limits or offline
-function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
-  const sampleRate = 22050;
-  const numSamples = Math.floor(sampleRate * durationSec);
-  const dataSize = numSamples * 2;
-  const buffer = Buffer.alloc(44 + dataSize);
-
-  // WAV Header
-  buffer.write("RIFF", 0);
-  buffer.writeUInt32LE(36 + dataSize, 4);
-  buffer.write("WAVE", 8);
-  buffer.write("fmt ", 12);
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20); // PCM
-  buffer.writeUInt16LE(1, 22); // mono
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(sampleRate * 2, 28);
-  buffer.writeUInt16LE(2, 32);
-  buffer.writeUInt16LE(16, 34);
-  buffer.write("data", 36);
-  buffer.writeUInt32LE(dataSize, 40);
-
-  const pLower = prompt.toLowerCase();
-  let baseFreq = 220; // A3
-  if (pLower.includes("chill") || pLower.includes("lofi")) baseFreq = 196; // G3
-  if (pLower.includes("cyber") || pLower.includes("heavy") || pLower.includes("synth")) baseFreq = 146.83; // D3
-  if (pLower.includes("ambient") || pLower.includes("relax")) baseFreq = 261.63; // C4
-
-  const scale = [baseFreq, baseFreq * 1.125, baseFreq * 1.25, baseFreq * 1.5, baseFreq * 1.667, baseFreq * 1.875];
-
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const beat = Math.floor(t * 2);
-    const noteFreq = scale[beat % scale.length] || baseFreq;
-
-    const phase = (t * noteFreq) % 1;
-    const synthWave = (phase * 2 - 1) * 0.3;
-    const padWave = Math.sin(2 * Math.PI * (noteFreq * 1.002) * t) * 0.25;
-    const subBass = Math.sin(2 * Math.PI * (baseFreq / 2) * t) * 0.3;
-
-    const beatPhase = (t * 2) % 1;
-    const env = Math.exp(-beatPhase * 2.5);
-
-    const sample = Math.max(-1, Math.min(1, (synthWave + padWave + subBass) * env * 0.5));
-    const int16 = Math.floor(sample * 32767);
-    buffer.writeInt16LE(int16, 44 + i * 2);
-  }
-
-  return `data:audio/wav;base64,${buffer.toString("base64")}`;
-}
-
-  // AI Music Generation Endpoint using Google GenAI Lyria models
+  // AI Music Generation Endpoint using only real audio returned by Google Lyria.
   app.post("/api/generate-music", async (req, res) => {
     try {
       const { prompt, model = "lyria-3-clip-preview", title, genre, userId } = req.body;
-
-      if (!prompt || typeof prompt !== "string") {
-        return res.status(400).json({ error: "Music prompt is required" });
+      if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+        return res.status(400).json({ error: "Music prompt is required." });
       }
-
-      if (!userId || !verifyUserOwnership(req, userId)) {
+      if (prompt.trim().length > 4_000) return res.status(400).json({ error: "Music prompt cannot exceed 4000 characters." });
+      if (typeof userId !== "string" || !userId.trim()) {
+        return res.status(400).json({ error: "A valid artist account ID is required." });
+      }
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
         return res.status(401).json({ error: "A valid signed-in artist session is required to generate and save music." });
       }
-
-      const ownerDB = readDB();
-      const uploader = ownerDB.users.find((user) => user.id === userId);
-      if (!uploader) {
-        return res.status(404).json({ error: "The signed-in artist profile could not be found." });
+      if (sessionUserId !== userId) {
+        return res.status(403).json({ error: "Forbidden: Music can only be generated for the active account." });
       }
-      const uploaderArtistName = (uploader.artistName || uploader.displayName || uploader.username).trim();
+
+      const db = await readDBAsync();
+      const uploader = db.users.find((user) => user.id === userId);
+      if (!uploader) return res.status(404).json({ error: "The signed-in artist profile could not be found." });
 
       const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({
-          error: "GEMINI_API_KEY is missing. Please configure your API key in Secrets.",
-        });
-      }
+      if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY is missing. Please configure your API key in Secrets." });
 
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            "User-Agent": "aistudio-build",
-          },
-        },
-      });
-
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
       const selectedModel = model === "lyria-3-pro-preview" ? "lyria-3-pro-preview" : "lyria-3-clip-preview";
+      const responseStream = await ai.models.generateContentStream({ model: selectedModel, contents: prompt.trim() });
 
-      let audioDataUrl = "";
+      let audioBase64 = "";
+      let mimeType = "audio/wav";
       let lyrics = "";
-      let isFallback = false;
-
-      try {
-        const responseStream = await ai.models.generateContentStream({
-          model: selectedModel,
-          contents: prompt,
-        });
-
-        let audioBase64 = "";
-        let mimeType = "audio/wav";
-
-        for await (const chunk of responseStream) {
-          const parts = chunk.candidates?.[0]?.content?.parts;
-          if (!parts) continue;
-
-          for (const part of parts) {
-            if (part.inlineData?.data) {
-              if (!audioBase64 && part.inlineData.mimeType) {
-                mimeType = part.inlineData.mimeType;
-              }
-              audioBase64 += part.inlineData.data;
-            }
-            if (part.text && !lyrics) {
-              lyrics = part.text;
-            }
+      for await (const chunk of responseStream) {
+        const parts = chunk.candidates?.[0]?.content?.parts || [];
+        for (const part of parts) {
+          if (part.inlineData?.data) {
+            if (!audioBase64 && part.inlineData.mimeType) mimeType = part.inlineData.mimeType;
+            audioBase64 += part.inlineData.data;
           }
+          if (part.text) lyrics += part.text;
         }
-
-        if (audioBase64) {
-          audioDataUrl = `data:${mimeType};base64,${audioBase64}`;
-        }
-      } catch (streamErr: any) {
-        console.warn("Lyria API stream rate limit / error, generating audio composition fallback:", streamErr?.message || streamErr);
-        isFallback = true;
-        audioDataUrl = generateFallbackAudioWav(prompt, selectedModel === "lyria-3-pro-preview" ? 15 : 10);
+      }
+      if (!audioBase64) {
+        return res.status(404).json({ error: "The music provider returned no playable audio. No track was created." });
       }
 
-      if (!audioDataUrl) {
-        audioDataUrl = generateFallbackAudioWav(prompt, 10);
-        isFallback = true;
+      const generatedDuration = getWavDurationSeconds(audioBase64);
+      if (generatedDuration <= 0) {
+        return res.status(404).json({ error: "The music provider returned audio without valid duration metadata. No track was created." });
       }
-
-      const trackTitle = title?.trim() || (prompt.length > 30 ? prompt.slice(0, 30).trim() + "..." : prompt);
-      const trackGenre = genre || "Electronic";
-
-      const presetCovers: Record<string, string> = {
-        Synthwave: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
-        Cyberpunk: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80",
-        Lofi: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80",
-        Ambient: "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=800&q=80",
-        Electronic: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80",
-      };
-
-      const db = readDB();
-      const newTrack: TrackRecord = {
-        id: `ai-track-${Date.now()}`,
-        userId: uploader.id,
-        title: trackTitle,
-        artist: uploaderArtistName,
-        album: selectedModel === "lyria-3-pro-preview" ? "Lyria Full Track" : "Lyria Clip Preview",
-        releaseType: "SINGLE",
-        releaseTitle: trackTitle,
-        releaseId: `rel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        genre: trackGenre,
-        duration: selectedModel === "lyria-3-pro-preview" ? 180 : 30,
-        audioUrl: audioDataUrl,
-        coverUrl: presetCovers[trackGenre] || presetCovers.Electronic,
-        bpm: 120,
-        plays: "1",
-        createdAt: new Date().toISOString(),
-      };
-
-      db.tracks.unshift(newTrack);
-      writeDB(db);
-
+      const audioUrl = await saveUploadedFile(audioBase64, mimeType, uploader.id, "ai_audio");
+      const cleanPrompt = prompt.trim();
+      const trackTitle = typeof title === "string" && title.trim()
+        ? title.trim()
+        : cleanPrompt.length > 60 ? `${cleanPrompt.slice(0, 57).trim()}...` : cleanPrompt;
       return res.json({
         success: true,
-        track: newTrack,
-        lyrics,
-        isFallback,
-        notice: isFallback ? "Lyria API quota was rate-limited. Synthesized procedural music preview generated instead." : undefined,
+        audioUrl,
+        duration: generatedDuration,
+        suggestedTitle: trackTitle,
+        lyrics: lyrics.trim(),
       });
     } catch (error: any) {
       console.error("Lyria AI Music Generation Error:", error);
-      const { message: cleanMsg, rateLimited } = parseCleanErrorMessage(error, "music");
-      return res.status(rateLimited ? 429 : 500).json({
-        error: cleanMsg,
-        rateLimited,
-      });
+      const { message, rateLimited } = parseCleanErrorMessage(error);
+      return res.status(rateLimited ? 429 : 502).json({ error: message, rateLimited });
     }
   });
 
@@ -1637,6 +1874,9 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
       if (!message || typeof message !== "string") {
         return res.status(400).json({ error: "Message string is required" });
       }
+      const cleanMessage = message.trim();
+      if (!cleanMessage) return res.status(400).json({ error: "Message string is required" });
+      if (cleanMessage.length > 20_000) return res.status(400).json({ error: "Message cannot exceed 20000 characters." });
 
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -1654,97 +1894,91 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
         },
       });
 
-      const isGenRequest = /(generate|create|make|compose|produce)\s+(a\s+)?(music|song|track|beat|melody|lofi|synthwave|ambient)/i.test(message);
-      let generatedTrack: TrackRecord | undefined = undefined;
-      let generationOwner: UserRecord | undefined;
-      let generationArtistName = "";
+      const isGenRequest = /(generate|create|make|compose|produce)\s+(a\s+)?(music|song|track|beat|melody|lofi|synthwave|ambient)/i.test(cleanMessage);
+      let generatedTrack: TrackRecord | undefined;
+      let requestOwner: UserRecord | undefined;
+
+      if (userId) {
+        if (typeof userId !== "string") {
+          return res.status(400).json({ error: "userId must be a string." });
+        }
+        const sessionUserId = getUserIdFromToken(req);
+        if (!sessionUserId) {
+          return res.status(401).json({ error: "Unauthorized: Active session required." });
+        }
+        if (sessionUserId !== userId) {
+          return res.status(403).json({ error: "Forbidden: You can only use your own account context." });
+        }
+        const ownerDB = await readDBAsync();
+        requestOwner = ownerDB.users.find((user) => user.id === userId);
+        if (!requestOwner) return res.status(404).json({ error: "User not found." });
+      }
 
       if (isGenRequest) {
-        if (!userId || !verifyUserOwnership(req, userId)) {
+        if (!requestOwner) {
           return res.status(401).json({ error: "A valid signed-in artist session is required to generate and save music." });
         }
-        generationOwner = readDB().users.find((user) => user.id === userId);
-        if (!generationOwner) {
-          return res.status(404).json({ error: "The signed-in artist profile could not be found." });
-        }
-        generationArtistName = (generationOwner.artistName || generationOwner.displayName || generationOwner.username).trim();
-        try {
-          const responseStream = await ai.models.generateContentStream({
-            model: "lyria-3-clip-preview",
-            contents: message,
-          });
 
-          let audioBase64 = "";
-          let mimeType = "audio/wav";
-
-          for await (const chunk of responseStream) {
-            const parts = chunk.candidates?.[0]?.content?.parts;
-            if (!parts) continue;
-
-            for (const part of parts) {
-              if (part.inlineData?.data) {
-                if (!audioBase64 && part.inlineData.mimeType) {
-                  mimeType = part.inlineData.mimeType;
-                }
-                audioBase64 += part.inlineData.data;
-              }
+        const responseStream = await ai.models.generateContentStream({ model: "lyria-3-clip-preview", contents: cleanMessage });
+        let audioBase64 = "";
+        let mimeType = "audio/wav";
+        for await (const chunk of responseStream) {
+          const parts = chunk.candidates?.[0]?.content?.parts || [];
+          for (const part of parts) {
+            if (part.inlineData?.data) {
+              if (!audioBase64 && part.inlineData.mimeType) mimeType = part.inlineData.mimeType;
+              audioBase64 += part.inlineData.data;
             }
           }
-
-          if (audioBase64) {
-            const audioDataUrl = `data:${mimeType};base64,${audioBase64}`;
-            const db = readDB();
-            generatedTrack = {
-              id: `ai-track-${Date.now()}`,
-              userId: generationOwner.id,
-              title: message.length > 28 ? message.slice(0, 28).trim() + "..." : message,
-              artist: generationArtistName,
-              album: "AI Chat Creation",
-              releaseType: "SINGLE",
-              releaseTitle: message.length > 28 ? message.slice(0, 28).trim() + "..." : message,
-              releaseId: `rel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-              genre: message.toLowerCase().includes("lofi") ? "Lofi" : message.toLowerCase().includes("synthwave") ? "Synthwave" : "Electronic",
-              duration: 30,
-              audioUrl: audioDataUrl,
-              coverUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
-              bpm: 120,
-              plays: "1",
-              createdAt: new Date().toISOString(),
-            };
-            db.tracks.unshift(generatedTrack);
-            writeDB(db);
-          }
-        } catch (genErr) {
-          console.warn("Auto Lyria music generation inside chat error, using audio generator fallback:", genErr);
-          const audioDataUrl = generateFallbackAudioWav(message, 10);
-          const db = readDB();
-          generatedTrack = {
-            id: `ai-track-${Date.now()}`,
-            userId: generationOwner.id,
-            title: message.length > 28 ? message.slice(0, 28).trim() + "..." : message,
-            artist: generationArtistName,
-            album: "AI Chat Creation",
-            releaseType: "SINGLE",
-            releaseTitle: message.length > 28 ? message.slice(0, 28).trim() + "..." : message,
-            releaseId: `rel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-            genre: message.toLowerCase().includes("lofi") ? "Lofi" : message.toLowerCase().includes("synthwave") ? "Synthwave" : "Electronic",
-            duration: 30,
-            audioUrl: audioDataUrl,
-            coverUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
-            bpm: 120,
-            plays: "1",
-            createdAt: new Date().toISOString(),
-          };
-          db.tracks.unshift(generatedTrack);
-          writeDB(db);
         }
+        if (!audioBase64) {
+          return res.status(404).json({ error: "The music provider returned no playable audio. No track was created." });
+        }
+
+        const db = await readDBAsync();
+        const currentOwner = db.users.find((user) => user.id === requestOwner!.id);
+        if (!currentOwner) return res.status(404).json({ error: "The signed-in artist profile could not be found." });
+        const generatedDuration = getWavDurationSeconds(audioBase64);
+        if (generatedDuration <= 0) {
+          return res.status(404).json({ error: "The music provider returned audio without valid duration metadata. No track was created." });
+        }
+        const audioUrl = await saveUploadedFile(audioBase64, mimeType, currentOwner.id, "ai_audio");
+        const title = cleanMessage.length > 60 ? `${cleanMessage.slice(0, 57).trim()}...` : cleanMessage;
+        generatedTrack = {
+          id: createEntityId("trk"),
+          userId: currentOwner.id,
+          title,
+          artist: (currentOwner.artistName || currentOwner.displayName || currentOwner.username).trim(),
+          album: title,
+          releaseType: "SINGLE",
+          releaseTitle: title,
+          releaseId: createEntityId("rel"),
+          genre: "",
+          duration: generatedDuration,
+          audioUrl,
+          coverUrl: currentOwner.avatarUrl || DEFAULT_AVATAR_URL,
+          plays: "0",
+          createdAt: new Date().toISOString(),
+        };
+        db.tracks.unshift(generatedTrack);
+        const ownerIndex = db.users.findIndex((user) => user.id === currentOwner.id);
+        db.users[ownerIndex] = { ...db.users[ownerIndex], isArtist: true };
+        await writeDBAsync(db);
       }
 
       const formattedHistory = Array.isArray(history)
-        ? history.map((item: any) => ({
-            role: item.role === "user" ? "user" : "model",
-            parts: [{ text: item.text || item.content || "" }],
-          }))
+        ? history
+            .slice(-40)
+            .flatMap((item: any) => {
+              if (!item || (item.role !== "user" && item.role !== "model")) return [];
+              const text = typeof item.text === "string"
+                ? item.text.trim()
+                : typeof item.content === "string"
+                  ? item.content.trim()
+                  : "";
+              if (!text) return [];
+              return [{ role: item.role, parts: [{ text: text.slice(0, 20_000) }] }];
+            })
         : [];
 
       const chat = ai.chats.create({
@@ -1764,8 +1998,9 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
         history: formattedHistory,
       });
 
-      const response = await chat.sendMessage({ message });
-      let replyText = response.text || "I'm listening, but couldn't generate a text response.";
+      const response = await chat.sendMessage({ message: cleanMessage });
+      let replyText = typeof response.text === "string" ? response.text.trim() : "";
+      if (!replyText) return res.status(404).json({ error: "The AI provider returned no text response." });
 
       // Surface the web sources Gemini actually grounded on (if any) as
       // structured data, so the client can render a proper "searched the
@@ -1798,18 +2033,18 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
 
       if (userId) {
         try {
-          const db = readDB();
+          const db = await readDBAsync();
           if (!db.chatHistories[userId]) {
             db.chatHistories[userId] = [];
           }
           const userMsg = {
-            id: `user-${Date.now()}`,
+            id: createEntityId("msg"),
             sender: "user" as const,
-            text: message.trim(),
+            text: cleanMessage,
             timestamp: new Date().toISOString(),
           };
           const aiMsg = {
-            id: `ai-${Date.now()}`,
+            id: createEntityId("msg"),
             sender: "ai" as const,
             text: replyText,
             timestamp: new Date().toISOString(),
@@ -1819,7 +2054,8 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
             sources,
           };
           db.chatHistories[userId].push(userMsg, aiMsg);
-          writeDB(db);
+          db.chatHistories[userId] = sanitizeChatHistory(db.chatHistories[userId], db.tracks);
+          await writeDBAsync(db);
         } catch (dbErr) {
           console.error("Error persisting user chat to DB:", dbErr);
         }
@@ -1828,7 +2064,7 @@ function generateFallbackAudioWav(prompt: string, durationSec = 12): string {
       return res.json({ reply: replyText, generatedTrack, webSearchUsed, searchQueries: webSearchQueries, sources });
     } catch (error: any) {
       console.error("Gemini API Chat Error:", error);
-      const { message: cleanMsg, rateLimited } = parseCleanErrorMessage(error, "chat");
+      const { message: cleanMsg, rateLimited } = parseCleanErrorMessage(error);
       return res.status(rateLimited ? 429 : 500).json({
         error: cleanMsg,
         rateLimited,

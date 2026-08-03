@@ -25,7 +25,7 @@ interface SearchArtistItem extends Partial<Artist>, Partial<UserProfile> {
   avatarUrl: string;
   bio?: string;
   genre?: string;
-  monthlyListeners?: string;
+  totalStreamsLabel?: string;
   verified?: boolean;
   isUser?: boolean;
 }
@@ -60,15 +60,13 @@ export const SearchView: React.FC<SearchViewProps> = ({
     setInternalQuery(val);
   };
 
-  const trendingSearches = [
-    'Midnight Horizon',
-    'Synthwave 80s',
-    'Aetheria',
-    'Cyberpunk 2077',
-    'Tokyo Lofi',
-    'Electronic',
-    'Chiptune',
-  ];
+  const trendingSearches = Array.from(
+    new Set([
+      ...initialTracks.flatMap((track) => [track.title, track.artist, track.genre]),
+      ...initialArtists.map((artist) => artist.name),
+      ...initialPlaylists.map((playlist) => playlist.title),
+    ].map((value) => value?.trim()).filter((value): value is string => Boolean(value)))
+  ).slice(0, 8);
 
   // Live query to Backend Search API (/api/search)
   useEffect(() => {
@@ -95,7 +93,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Combine Client-side filter fallback with Server API results
+  // Merge the current server snapshot with the live search response.
   const qLower = query.trim().toLowerCase();
 
   const localMatchedTracks = initialTracks.filter(
@@ -112,7 +110,8 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
   // Local user profile check for Artists/Users search
   const localMatchedUsers: SearchArtistItem[] = [];
-  if (userProfile) {
+  const currentUserIsArtist = Boolean(userProfile && (userProfile.isArtist || initialTracks.some((track) => track.userId === userProfile.id)));
+  if (userProfile && currentUserIsArtist) {
     if (
       userProfile.displayName?.toLowerCase().includes(qLower) ||
       userProfile.username?.toLowerCase().includes(qLower) ||
@@ -127,7 +126,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
         bannerUrl: userProfile.bannerUrl,
         bio: userProfile.artistBio || userProfile.bio,
         genre: userProfile.favoriteGenres?.[0] || '',
-        monthlyListeners: userProfile.monthlyListeners || '0 monthly listeners',
+        totalStreamsLabel: userProfile.totalStreamsLabel || '0 total streams',
         verified: userProfile.artistVerified === true,
         stats: userProfile.stats,
         instagramUrl: userProfile.instagramUrl,
@@ -149,11 +148,17 @@ export const SearchView: React.FC<SearchViewProps> = ({
   const matchedArtists: SearchArtistItem[] = apiResults?.artists
     ? Array.from(
         new Map(
-          [...localMatchedUsers, ...localMatchedArtists, ...apiResults.artists].map((a) => [a.id || a.name, a])
+          [...localMatchedUsers, ...localMatchedArtists, ...apiResults.artists]
+            .filter((a) => Boolean(a.id))
+            .map((a) => [a.id, a])
         ).values()
       )
     : Array.from(
-        new Map([...localMatchedUsers, ...localMatchedArtists].map((a) => [a.id || a.name, a])).values()
+        new Map(
+          [...localMatchedUsers, ...localMatchedArtists]
+            .filter((a) => Boolean(a.id))
+            .map((a) => [a.id, a])
+        ).values()
       );
 
   const localMatchedPlaylists = initialPlaylists.filter(
@@ -201,7 +206,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
       {/* Header & Search Bar */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">Global Search</h1>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight">Search</h1>
           {isSearching && (
             <div className="flex items-center space-x-2 text-xs text-[#D946EF] font-semibold animate-pulse">
               <div className="w-2 h-2 rounded-full bg-[#D946EF] animate-ping" />
@@ -216,7 +221,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
             type="text"
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
-            placeholder="Search tracks, artists, users, or playlists..."
+            placeholder="Search tracks, artists, or playlists..."
             className="w-full pl-12 pr-10 py-3 rounded-full bg-[#242424] border border-white/5 text-sm text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#A855F7] shadow-inner transition-all"
           />
           {query && (
@@ -254,12 +259,12 @@ export const SearchView: React.FC<SearchViewProps> = ({
         </div>
       )}
 
-      {/* Trending & Categories when empty */}
+      {/* Browse categories when search is empty */}
       {!query && (
         <div className="space-y-6">
           <div>
             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
-              Trending & Popular Searches
+              Explore the current catalog
             </h3>
             <div className="flex flex-wrap gap-2">
               {trendingSearches.map((tag, idx) => (
@@ -282,7 +287,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
               {[
                 { title: 'Synthwave & Cyber', color: 'from-purple-600 to-indigo-700', query: 'Synthwave' },
                 { title: 'Lo-Fi Chill Beats', color: 'from-fuchsia-600 to-pink-700', query: 'Lo-Fi' },
-                { title: 'Ambient & Spatial', color: 'from-indigo-600 to-purple-800', query: 'Ambient' },
+                { title: 'Ambient & Atmospheric', color: 'from-indigo-600 to-purple-800', query: 'Ambient' },
                 { title: 'Chiptune Retro', color: 'from-pink-600 to-rose-700', query: 'Chiptune' },
               ].map((cat, i) => (
                 <div
@@ -338,7 +343,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                           Song • <span 
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (onSelectArtist) onSelectArtist(topResult.item.artist);
+                              if (onSelectArtist) onSelectArtist(topResult.item.userId || '');
                             }}
                             className="text-white font-bold hover:underline hover:text-[#D946EF] cursor-pointer"
                           >
@@ -470,7 +475,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                             <p
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (onSelectArtist) onSelectArtist(track.artist);
+                                if (onSelectArtist) onSelectArtist(track.userId || '');
                               }}
                               className="text-xs text-zinc-400 truncate hover:underline hover:text-[#D946EF]"
                             >
@@ -523,7 +528,6 @@ export const SearchView: React.FC<SearchViewProps> = ({
                     <div
                       key={art.id || art.name}
                       data-artist-id={art.id}
-                      data-artist-name={art.name}
                       data-context-type="artist"
                       onClick={() => handleArtistClick(art)}
                       className="bg-[#18181a] border border-white/5 hover:border-[#D946EF]/40 hover:bg-[#222226] p-4 rounded-2xl text-center flex flex-col items-center group cursor-pointer transition-all shadow-md hover:shadow-xl"

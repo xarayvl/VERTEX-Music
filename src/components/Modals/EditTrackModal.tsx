@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Sparkles, Image, Disc, Music2, Edit3, ShieldAlert } from 'lucide-react';
 import { Track } from '../../types';
 
@@ -7,38 +7,23 @@ interface EditTrackModalProps {
   onClose: () => void;
   track: Track | null;
   userId?: string;
-  tracks?: Track[];
-  existingAlbums?: string[];
   onTrackUpdated: (updatedTrack: Track) => void;
 }
-
-const PRESET_COVERS: Record<string, string> = {
-  Synthwave: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80',
-  Cyberpunk: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
-  'Lofi / Chill': 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?auto=format&fit=crop&w=800&q=80',
-  Pop: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80',
-  'EDM / Dance': 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=800&q=80',
-  'Hip Hop / Trap': 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
-  Rock: 'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?auto=format&fit=crop&w=800&q=80',
-};
 
 export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   isOpen,
   onClose,
   track,
   userId,
-  tracks,
-  existingAlbums,
   onTrackUpdated,
 }) => {
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
-  const [releaseType, setReleaseType] = useState('Single');
-  const [albumSelect, setAlbumSelect] = useState('__NEW__');
-  const [customAlbumName, setCustomAlbumName] = useState('');
+  const [releaseType, setReleaseType] = useState<'Single' | 'EP' | 'Album'>('Single');
+  const [releaseTitle, setReleaseTitle] = useState('');
   const [copyright, setCopyright] = useState('');
   const [releaseYear, setReleaseYear] = useState<number>(new Date().getFullYear());
-  const [genre, setGenre] = useState('Synthwave');
+  const [genre, setGenre] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
   const [audioUrl, setAudioUrl] = useState(''); // only set when the user picks a NEW audio file to replace the existing one
   const [duration, setDuration] = useState<number | null>(null);
@@ -48,21 +33,12 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const defaultReleaseTypes = ['Single', 'EP', 'Album', 'Compilation', 'Live Album'];
-
-  const customAlbumList = useMemo(() => {
-    const list = (existingAlbums || [])
-      .concat(tracks?.map((t) => t.album).filter(Boolean) as string[])
-      .filter((name) => name && !defaultReleaseTypes.includes(name));
-    return Array.from(new Set(list));
-  }, [existingAlbums, tracks]);
-
   // Pre-fill form when track changes or modal opens
   useEffect(() => {
     if (track) {
       setTitle(track.title || '');
       setArtist(track.artist || '');
-      setGenre(track.genre || 'Synthwave');
+      setGenre(track.genre || '');
       setCoverUrl(track.coverUrl || '');
       setCopyright(track.copyright || '');
       setReleaseYear(track.releaseYear || (track.createdAt ? new Date(track.createdAt).getFullYear() : new Date().getFullYear()));
@@ -72,14 +48,14 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
       setNewFileSize('');
       setError(null);
 
-      const trackAlbum = track.album || 'Single';
-      if (defaultReleaseTypes.includes(trackAlbum) || customAlbumList.includes(trackAlbum)) {
-        setAlbumSelect(trackAlbum);
-        setCustomAlbumName('');
-      } else {
-        setAlbumSelect('__NEW__');
-        setCustomAlbumName(trackAlbum);
-      }
+      const normalizedReleaseType: 'Single' | 'EP' | 'Album' =
+        String(track.releaseType || '').toUpperCase() === 'EP'
+          ? 'EP'
+          : String(track.releaseType || '').toUpperCase() === 'ALBUM' || (track.album && track.album !== 'Single')
+            ? 'Album'
+            : 'Single';
+      setReleaseType(normalizedReleaseType);
+      setReleaseTitle(normalizedReleaseType === 'Single' ? '' : (track.releaseTitle || track.album || ''));
     }
   }, [track, isOpen]);
 
@@ -148,7 +124,11 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
       return;
     }
 
-    const finalAlbum = albumSelect === '__NEW__' ? (customAlbumName.trim() || 'Single') : albumSelect;
+    if (releaseType !== 'Single' && !releaseTitle.trim()) {
+      setError('A release title is required for an EP or album.');
+      return;
+    }
+    const finalAlbum = releaseType === 'Single' ? 'Single' : releaseTitle.trim();
 
     setLoading(true);
     setError(null);
@@ -160,17 +140,15 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const isDefaultReleaseType = defaultReleaseTypes.includes(albumSelect);
       const res = await fetch(`/api/tracks/${track.id}`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({
           userId,
           title: title.trim(),
-          artist: artist.trim(),
           album: finalAlbum,
-          releaseType: isDefaultReleaseType ? (albumSelect === 'Single' ? 'SINGLE' : (albumSelect === 'EP' ? 'EP' : 'ALBUM')) : 'ALBUM',
-          releaseTitle: (isDefaultReleaseType && albumSelect === 'Single') ? title.trim() : finalAlbum,
+          releaseType: releaseType.toUpperCase(),
+          releaseTitle: releaseType === 'Single' ? title.trim() : finalAlbum,
           genre,
           coverUrl: coverUrl.trim() || track.coverUrl,
           audioUrl: audioUrl || undefined, // only sent when a new file was picked; backend keeps existing audio otherwise
@@ -239,7 +217,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
             </div>
             <h3 className="text-base font-bold text-white">Ownership Authorization Required</h3>
             <p className="text-xs text-zinc-400 max-w-md mx-auto">
-              You are not authorized to edit this track. Only the original uploader (Owner ID: <span className="font-mono text-zinc-300">{track.userId || 'System'}</span>) can edit its metadata.
+              You are not authorized to edit this track. Only the original uploader (Owner ID: <span className="font-mono text-zinc-300">{track.userId}</span>) can edit its metadata.
             </p>
             <button
               onClick={onClose}
@@ -317,41 +295,24 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
-                  Album / Release Type
+                  Release Type
                 </label>
                 <select
-                  value={albumSelect}
-                  onChange={(e) => setAlbumSelect(e.target.value)}
+                  value={releaseType}
+                  onChange={(event) => setReleaseType(event.target.value as 'Single' | 'EP' | 'Album')}
                   className="w-full px-3 py-2.5 bg-[#282828] border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-[#D946EF]"
                 >
-                  <optgroup label="Release Types">
-                    <option value="Single">Single</option>
-                    <option value="EP">EP</option>
-                    <option value="Album">Album</option>
-                    <option value="Compilation">Compilation</option>
-                    <option value="Live Album">Live Album</option>
-                  </optgroup>
-                  {customAlbumList.length > 0 && (
-                    <optgroup label="Your Created Albums">
-                      {customAlbumList.map((alb) => (
-                        <option key={alb} value={alb}>
-                          {alb}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  <optgroup label="Custom Option">
-                    <option value="__NEW__">+ Create New Album...</option>
-                  </optgroup>
+                  <option value="Single">Single</option>
+                  <option value="EP">EP</option>
+                  <option value="Album">Album</option>
                 </select>
 
-                {albumSelect === '__NEW__' && (
+                {releaseType !== 'Single' && (
                   <input
                     type="text"
-                    autoFocus
-                    value={customAlbumName}
-                    onChange={(e) => setCustomAlbumName(e.target.value)}
-                    placeholder="Enter new album title..."
+                    value={releaseTitle}
+                    onChange={(event) => setReleaseTitle(event.target.value)}
+                    placeholder={releaseType === 'EP' ? 'Enter EP title...' : 'Enter album title...'}
                     className="mt-2 w-full px-3.5 py-2 bg-[#282828] border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
                   />
                 )}
@@ -366,6 +327,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                   onChange={(e) => setGenre(e.target.value)}
                   className="w-full px-3 py-2.5 bg-[#282828] border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-[#D946EF]"
                 >
+                  <option value="">No genre selected</option>
                   <option value="Synthwave">Synthwave</option>
                   <option value="Cyberpunk">Cyberpunk</option>
                   <option value="Lofi / Chill">Lofi / Chill</option>
@@ -417,7 +379,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                   type="text"
                   value={coverUrl}
                   onChange={(e) => setCoverUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
+                  placeholder="Paste a real image URL"
                   className="flex-1 px-3.5 py-2 bg-[#282828] border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
                 />
                 <label className="cursor-pointer px-3 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold flex items-center space-x-1.5 whitespace-nowrap transition-colors">
@@ -425,15 +387,6 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                   <span>Upload</span>
                   <input type="file" accept="image/*" onChange={handleCoverFileUpload} className="hidden" />
                 </label>
-                {PRESET_COVERS[genre] && (
-                  <button
-                    type="button"
-                    onClick={() => setCoverUrl(PRESET_COVERS[genre])}
-                    className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors"
-                  >
-                    Preset Artwork
-                  </button>
-                )}
               </div>
               {coverUrl && (
                 <div className="mt-2 flex items-center space-x-3 p-2 bg-black/40 rounded-xl border border-white/5">
@@ -442,8 +395,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                     alt="Cover preview"
                     className="w-10 h-10 object-cover rounded-lg border border-white/10"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?auto=format&fit=crop&w=800&q=80';
+                      e.currentTarget.style.display = 'none';
                     }}
                   />
                   <span className="text-xs text-zinc-400 truncate">Artwork Preview</span>

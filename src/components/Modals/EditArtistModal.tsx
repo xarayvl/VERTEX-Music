@@ -1,23 +1,21 @@
-import { getArtistStats } from "../../utils/artistUtils";
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  X,
+  Check,
+  Globe,
+  Image as ImageIcon,
+  Instagram,
+  Music,
+  Radio,
   ShieldCheck,
   Sparkles,
-  Upload,
-  Check,
-  Music,
-  Globe,
-  Instagram,
-  Twitter,
-  Radio,
-  Image as ImageIcon,
-  User,
-  Zap,
   Star,
-  MessageSquare,
+  Twitter,
+  Upload,
+  User,
+  X,
 } from 'lucide-react';
-import { Artist, UserProfile, Track } from '../../types';
+import { Artist, Track, UserProfile } from '../../types';
+import { getArtistStats } from '../../utils/artistUtils';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
 interface EditArtistModalProps {
@@ -31,8 +29,6 @@ interface EditArtistModalProps {
     avatarUrl: string;
     bannerUrl: string;
     genre: string;
-    artistVerified: boolean;
-    monthlyListeners: string;
     instagramUrl?: string;
     twitterUrl?: string;
     websiteUrl?: string;
@@ -41,6 +37,11 @@ interface EditArtistModalProps {
   }) => void;
 }
 
+const fieldClass =
+  'w-full rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-3.5 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10';
+
+const labelClass = 'mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400';
+
 export const EditArtistModal: React.FC<EditArtistModalProps> = ({
   isOpen,
   artist,
@@ -48,122 +49,97 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
   onClose,
   onSave,
 }) => {
-  if (!isOpen || !artist) return null;
-
-  const isUserProfile = 'email' in artist;
-
-  const initialName = isUserProfile
-    ? (artist as UserProfile).artistName || (artist as UserProfile).displayName
-    : (artist as Artist).name;
-
-  const initialAvatar = isUserProfile
-    ? ((artist as UserProfile).avatarUrl || DEFAULT_AVATAR_URL)
-    : ((artist as Artist).avatarUrl || DEFAULT_AVATAR_URL);
-
-  const initialBanner = isUserProfile
-    ? ((artist as UserProfile).bannerUrl || '')
-    : ((artist as Artist).bannerUrl || '');
-
-  const initialBio = isUserProfile
-    ? (artist as UserProfile).artistBio || (artist as UserProfile).bio || ''
-    : (artist as Artist).bio || '';
-
-  const initialVerified = isUserProfile
-    ? (artist as UserProfile).artistVerified === true
-    : (artist as Artist).verified === true;
-
-  const initialGenre = isUserProfile
-    ? (artist as UserProfile).favoriteGenres?.[0] || ''
-    : (artist as Artist).genre || '';
-
-  // Get unified stats from global helper
-  const { totalPlays: totalCalculatedPlays } = getArtistStats(artist, artistTracks);
-  const calculatedListenersStr = `${totalCalculatedPlays.toLocaleString()} monthly listeners`;
-
   const bannerFileInputRef = useRef<HTMLInputElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
 
-  const [avatarUrl, setAvatarUrl] = useState(initialAvatar);
-  const [bannerUrl, setBannerUrl] = useState(initialBanner);
-  const [artistBio, setArtistBio] = useState(initialBio);
-  const [genre, setGenre] = useState(initialGenre);
-  const [artistVerified, setArtistVerified] = useState(initialVerified);
-
-  const [instagramUrl, setInstagramUrl] = useState(artist.instagramUrl || '');
-  const [twitterUrl, setTwitterUrl] = useState(artist.twitterUrl || '');
-  const [websiteUrl, setWebsiteUrl] = useState(artist.websiteUrl || '');
-
-  const [artistPickTrackId, setArtistPickTrackId] = useState(artist.artistPickTrackId || (artistTracks[0]?.id || ''));
-  const [artistPickComment, setArtistPickComment] = useState(artist.artistPickComment || '');
-
+  const [avatarUrl, setAvatarUrl] = useState(DEFAULT_AVATAR_URL);
+  const [bannerUrl, setBannerUrl] = useState('');
+  const [artistBio, setArtistBio] = useState('');
+  const [genre, setGenre] = useState('');
+  const [instagramUrl, setInstagramUrl] = useState('');
+  const [twitterUrl, setTwitterUrl] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [artistPickTrackId, setArtistPickTrackId] = useState('');
+  const [artistPickComment, setArtistPickComment] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  const isUserProfile = Boolean(artist && 'email' in artist);
+  const artistName = artist
+    ? isUserProfile
+      ? (artist as UserProfile).artistName || (artist as UserProfile).displayName
+      : (artist as Artist).name
+    : '';
+  const artistVerified = artist
+    ? isUserProfile
+      ? (artist as UserProfile).artistVerified === true
+      : (artist as Artist).verified === true
+    : false;
+
   useEffect(() => {
-    if (artist) {
-      setAvatarUrl(initialAvatar);
-      setBannerUrl(initialBanner);
-      setArtistBio(initialBio);
-      setGenre(initialGenre);
-      setArtistVerified(initialVerified);
-      setInstagramUrl(artist.instagramUrl || '');
-      setTwitterUrl(artist.twitterUrl || '');
-      setWebsiteUrl(artist.websiteUrl || '');
-      setArtistPickTrackId(artist.artistPickTrackId || (artistTracks[0]?.id || ''));
-      setArtistPickComment(artist.artistPickComment || '');
-    }
-  }, [artist]);
+    if (!artist) return;
 
-  const presetBanners = [
-    { name: 'Neon Cyberpunk', url: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=1200&q=80' },
-    { name: 'Studio Console', url: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&w=1200&q=80' },
-    { name: 'Live Concert Stage', url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1200&q=80' },
-    { name: 'Synth Wave Sunset', url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80' },
-    { name: 'Vinyl Station', url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80' },
-  ];
+    const nextIsUserProfile = 'email' in artist;
+    setAvatarUrl(
+      (nextIsUserProfile ? (artist as UserProfile).avatarUrl : (artist as Artist).avatarUrl) ||
+        DEFAULT_AVATAR_URL
+    );
+    setBannerUrl(
+      (nextIsUserProfile ? (artist as UserProfile).bannerUrl : (artist as Artist).bannerUrl) || ''
+    );
+    setArtistBio(
+      (nextIsUserProfile
+        ? (artist as UserProfile).artistBio || (artist as UserProfile).bio
+        : (artist as Artist).bio) || ''
+    );
+    setGenre(
+      (nextIsUserProfile
+        ? (artist as UserProfile).favoriteGenres?.[0]
+        : (artist as Artist).genre) || ''
+    );
+    setInstagramUrl(artist.instagramUrl || '');
+    setTwitterUrl(artist.twitterUrl || '');
+    setWebsiteUrl(artist.websiteUrl || '');
+    setArtistPickTrackId(artist.artistPickTrackId || '');
+    setArtistPickComment(artist.artistPickComment || '');
+    setSavedSuccess(false);
+  }, [artist, isOpen]);
 
-  const presetAvatars = [
-    { name: 'Producer Avatar', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80' },
-    { name: 'DJ Cyber Head', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80' },
-    { name: 'Neon Artist', url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80' },
-  ];
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    },
+    []
+  );
 
-  const handleBannerFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setBannerUrl(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
+  if (!isOpen || !artist) return null;
+
+  const { totalPlays } = getArtistStats(artist, artistTracks);
+  const selectedPick = artistTracks.find((track) => track.id === artistPickTrackId);
+
+  const readImageFile = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    setter: React.Dispatch<React.SetStateAction<string>>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+      if (typeof loadEvent.target?.result === 'string') setter(loadEvent.target.result);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
   };
 
-  const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setAvatarUrl(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const finalListeners = calculatedListenersStr;
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
     onSave({
-      artistName: initialName, // Default account username, read-only
+      artistName,
       artistBio: artistBio.trim(),
-      avatarUrl: avatarUrl.trim() || initialAvatar,
+      avatarUrl: avatarUrl.trim() || DEFAULT_AVATAR_URL,
       bannerUrl: bannerUrl.trim(),
       genre: genre.trim(),
-      artistVerified,
-      monthlyListeners: finalListeners,
       instagramUrl: instagramUrl.trim(),
       twitterUrl: twitterUrl.trim(),
       websiteUrl: websiteUrl.trim(),
@@ -172,350 +148,336 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
     });
 
     setSavedSuccess(true);
-    setTimeout(() => {
+    if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => {
       setSavedSuccess(false);
       onClose();
     }, 600);
   };
 
   return (
-    <div className="workspace-screen absolute inset-0 z-[100] overflow-y-auto bg-[#121212] p-4 sm:p-6 lg:p-8">
-      <div
-        className="workspace-card mx-auto flex min-h-full w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#181818] shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="workspace-header sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-[#202020] px-5 py-4 sm:px-7">
-          <div className="flex items-center space-x-2.5">
-            <Sparkles className="w-5 h-5 text-[#D946EF]" />
-            <h2 className="text-lg font-black text-white tracking-tight">Edit Artist Profile</h2>
-            {artistVerified && (
-              <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Verified</span>
-              </span>
-            )}
+    <section className="workspace-screen min-h-full w-full bg-[#121212] text-white select-none">
+      <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
+        <header className="workspace-header flex items-start justify-between gap-5 border-b border-white/10 pb-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
+              <User className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
+                <Sparkles className="h-3.5 w-3.5" /> Artist workspace
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Edit artist profile</h1>
+                {artistVerified && (
+                  <span className="flex items-center gap-1 rounded-full border border-blue-400/25 bg-blue-500/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-blue-300">
+                    <ShieldCheck className="h-3.5 w-3.5" /> Verified
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-zinc-400 sm:text-sm">Shape how listeners see your identity, story and featured release.</p>
+            </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+            className="control-press rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white"
+            aria-label="Close artist profile editor"
           >
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
-        </div>
+        </header>
 
-        {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 space-y-6 p-5 sm:p-7">
-          {/* Default Account Username Badge (Non-editable as requested) */}
-          <div className="p-3.5 rounded-xl bg-[#222222] border border-white/10 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <User className="w-5 h-5 text-zinc-400" />
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                  Artist / Stage Name
-                </p>
-                <p className="text-sm font-black text-white">{initialName}</p>
+        <form onSubmit={handleSubmit} className="mt-7 grid items-start gap-6 lg:grid-cols-[0.88fr_1.12fr]">
+          <aside className="space-y-6 lg:sticky lg:top-6">
+            <div className="workspace-card section-reveal overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
+              <div className="relative aspect-[16/10] overflow-hidden rounded-[1.4rem] border border-white/10 bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827] shadow-2xl">
+                {bannerUrl.trim() && (
+                  <img
+                    key={bannerUrl}
+                    src={bannerUrl.trim()}
+                    alt="Artist banner preview"
+                    referrerPolicy="no-referrer"
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                    }}
+                    className="media-fade absolute inset-0 h-full w-full object-cover"
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 flex items-end gap-4 p-5">
+                  <div className="relative">
+                    <img
+                      key={avatarUrl}
+                      src={avatarUrl.trim() || DEFAULT_AVATAR_URL}
+                      alt={artistName}
+                      referrerPolicy="no-referrer"
+                      onError={(event) => {
+                        event.currentTarget.src = DEFAULT_AVATAR_URL;
+                      }}
+                      className="media-fade h-20 w-20 rounded-2xl border-2 border-white/40 object-cover shadow-xl sm:h-24 sm:w-24"
+                    />
+                    {artistVerified && (
+                      <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#181818] bg-blue-500">
+                        <Check className="h-4 w-4" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0 pb-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E9D5FF]">Live preview</p>
+                    <h2 className="mt-1 truncate text-2xl font-black sm:text-3xl">{artistName}</h2>
+                    <p className="mt-1 truncate text-xs font-semibold text-zinc-300">{genre.trim() || 'Add your primary genre'}</p>
+                  </div>
+                </div>
               </div>
-            </div>
-            <span className="text-[10px] font-bold text-zinc-400 bg-white/5 px-2.5 py-1 rounded-full border border-white/10">
-              Synced to Account
-            </span>
-          </div>
 
-          {/* Banner Image Editor & Presets */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-zinc-300 flex items-center space-x-2">
-                <ImageIcon className="w-4 h-4 text-[#D946EF]" />
-                <span>Artist Header Banner</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => bannerFileInputRef.current?.click()}
-                className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold transition-all"
-              >
-                <Upload className="w-3.5 h-3.5 text-[#D946EF]" />
-                <span>Upload Banner</span>
-              </button>
-              <input
-                ref={bannerFileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleBannerFileUpload}
-              />
-            </div>
-
-            {/* Live Banner Preview */}
-            <div
-              className="relative h-36 rounded-xl bg-cover bg-center overflow-hidden border border-white/10 flex items-end p-3 group shadow-inner bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827]"
-              style={bannerUrl ? { backgroundImage: `url(${bannerUrl})` } : undefined}
-            >
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-              <div className="relative z-10 flex items-center space-x-3">
-                <img
-                  src={avatarUrl}
-                  alt={initialName}
-                  className="w-12 h-12 rounded-full object-cover ring-2 ring-white/50 shadow-md"
-                />
-                <div>
-                  <p className="text-sm font-black text-white drop-shadow">{initialName}</p>
-                  <p className="text-[10px] text-zinc-300 drop-shadow">{genre}</p>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-4">
+                  <div className="flex items-center gap-2 text-zinc-400">
+                    <Radio className="h-4 w-4 text-[#D946EF]" />
+                    <span className="text-[10px] font-black uppercase tracking-wider">Total streams</span>
+                  </div>
+                  <p className="mt-2 text-xl font-black">{totalPlays.toLocaleString()}</p>
+                </div>
+                <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-4">
+                  <div className="flex items-center gap-2 text-zinc-400">
+                    <Music className="h-4 w-4 text-[#D946EF]" />
+                    <span className="text-[10px] font-black uppercase tracking-wider">Releases</span>
+                  </div>
+                  <p className="mt-2 text-xl font-black">{artistTracks.length.toLocaleString()}</p>
                 </div>
               </div>
             </div>
 
-            <input
-              type="text"
-              value={bannerUrl}
-              onChange={(e) => setBannerUrl(e.target.value)}
-              placeholder="Or paste custom Banner Image URL..."
-              className="w-full bg-[#242424] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-            />
-
-            {/* Banner Presets */}
-            <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-1">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase flex-shrink-0">Presets:</span>
-              {presetBanners.map((preset) => (
-                <button
-                  key={preset.name}
-                  type="button"
-                  onClick={() => setBannerUrl(preset.url)}
-                  className={`text-[10px] px-2.5 py-1 rounded-full whitespace-nowrap border transition-all ${
-                    bannerUrl === preset.url
-                      ? 'bg-[#D946EF] border-[#D946EF] text-white font-bold'
-                      : 'bg-white/5 border-white/10 text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  {preset.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ARTIST PICK EDIT SECTION */}
-          <div className="p-4 rounded-xl bg-[#222222] border border-white/10 space-y-3">
-            <div className="flex items-center space-x-2">
-              <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider">Artist Pick Showcase</h3>
-            </div>
-            <p className="text-[11px] text-zinc-400">
-              Highlight your favorite track or latest release at the top of your artist profile.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <div>
-                <label className="block text-[11px] font-bold text-zinc-300 mb-1">
-                  Select Featured Track
-                </label>
-                {artistTracks.length > 0 ? (
-                  <select
-                    value={artistPickTrackId}
-                    onChange={(e) => setArtistPickTrackId(e.target.value)}
-                    className="w-full bg-[#181818] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D946EF]"
-                  >
-                    {artistTracks.map((track) => (
-                      <option key={track.id} value={track.id}>
-                        {track.title} ({track.releaseTitle || (track.album === 'Single' ? track.title : track.album) || 'Single'})
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <p className="text-xs text-zinc-500 italic p-2 bg-[#181818] rounded-xl border border-white/5">
-                    No custom tracks uploaded yet.
+            <div className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-300">
+                  <Star className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Artist pick preview</p>
+                  <h3 className="mt-1 truncate text-sm font-black text-white">{selectedPick?.title || 'No featured track selected'}</h3>
+                  <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
+                    {artistPickComment.trim() || 'Choose a release and add a short note for your listeners.'}
                   </p>
-                )}
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <div className="space-y-6">
+            <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-7">
+              <div className="mb-6">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Visual identity</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight">Profile artwork</h2>
+              </div>
+
+              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#A855F7]/15 text-[#D8B4FE]">
+                      <User className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Artist / stage name</p>
+                      <p className="truncate text-sm font-black text-white">{artistName}</p>
+                    </div>
+                  </div>
+                  <span className="w-fit rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-400">Synced to account</span>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400">Avatar image</label>
+                    <button
+                      type="button"
+                      onClick={() => avatarFileInputRef.current?.click()}
+                      className="control-press flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-300 hover:bg-white/10 hover:text-white"
+                    >
+                      <Upload className="h-3.5 w-3.5" /> Upload
+                    </button>
+                    <input
+                      ref={avatarFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => readImageFile(event, setAvatarUrl)}
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={avatarUrl}
+                    onChange={(event) => setAvatarUrl(event.target.value)}
+                    placeholder="Paste avatar image URL"
+                    className={fieldClass}
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400">Header banner</label>
+                    <button
+                      type="button"
+                      onClick={() => bannerFileInputRef.current?.click()}
+                      className="control-press flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-300 hover:bg-white/10 hover:text-white"
+                    >
+                      <ImageIcon className="h-3.5 w-3.5" /> Upload
+                    </button>
+                    <input
+                      ref={bannerFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => readImageFile(event, setBannerUrl)}
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={bannerUrl}
+                    onChange={(event) => setBannerUrl(event.target.value)}
+                    placeholder="Paste banner image URL"
+                    className={fieldClass}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-5 sm:p-7">
+              <div className="mb-6">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Profile story</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight">About your sound</h2>
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-zinc-300 mb-1">
-                  Pick Headline / Note
+                <label className={labelClass}>Primary genre / style</label>
+                <input
+                  type="text"
+                  value={genre}
+                  onChange={(event) => setGenre(event.target.value)}
+                  placeholder="e.g. Synthwave / Cyberpunk"
+                  className={fieldClass}
+                />
+              </div>
+
+              <div className="mt-5">
+                <label className={labelClass}>Artist bio</label>
+                <textarea
+                  rows={5}
+                  value={artistBio}
+                  onChange={(event) => setArtistBio(event.target.value)}
+                  placeholder="Tell listeners about your story, influences and releases..."
+                  className={`${fieldClass} resize-none`}
+                />
+                <div className="mt-2 flex justify-end text-[10px] font-semibold text-zinc-600">{artistBio.length} characters</div>
+              </div>
+            </section>
+
+            <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-7">
+              <div className="mb-6 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-300">
+                  <Star className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Artist pick</p>
+                  <h2 className="mt-0.5 text-lg font-black">Feature a release</h2>
+                </div>
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Featured track</label>
+                  {artistTracks.length > 0 ? (
+                    <select
+                      value={artistPickTrackId}
+                      onChange={(event) => setArtistPickTrackId(event.target.value)}
+                      className={fieldClass}
+                    >
+                      <option value="">No featured track</option>
+                      {artistTracks.map((track) => (
+                        <option key={track.id} value={track.id}>
+                          {track.title} ({track.releaseTitle || (track.album === 'Single' ? track.title : track.album) || 'Single'})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.025] px-4 py-3.5 text-sm text-zinc-500">Upload a release before choosing an artist pick.</div>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Pick note</label>
+                  <input
+                    type="text"
+                    value={artistPickComment}
+                    onChange={(event) => setArtistPickComment(event.target.value)}
+                    placeholder="e.g. Listen to my latest single"
+                    className={fieldClass}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-7">
+              <div className="mb-6">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Social presence</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight">Links listeners can visit</h2>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <label className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 transition-all focus-within:border-pink-400/50 focus-within:bg-white/[0.06] focus-within:ring-4 focus-within:ring-pink-400/10">
+                  <Instagram className="h-4 w-4 shrink-0 text-pink-400" />
+                  <input
+                    type="text"
+                    value={instagramUrl}
+                    onChange={(event) => setInstagramUrl(event.target.value)}
+                    placeholder="Instagram"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
+                  />
                 </label>
-                <input
-                  type="text"
-                  value={artistPickComment}
-                  onChange={(e) => setArtistPickComment(e.target.value)}
-                  placeholder="e.g. Check out my new single!"
-                  className="w-full bg-[#181818] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Primary Genre & Avatar Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-zinc-300 mb-1">
-                Primary Genre / Style
-              </label>
-              <input
-                type="text"
-                value={genre}
-                onChange={(e) => setGenre(e.target.value)}
-                placeholder="e.g. Synthwave / Cyberpunk"
-                className="w-full bg-[#242424] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold text-zinc-300">
-                  Avatar Image URL
+                <label className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 transition-all focus-within:border-sky-400/50 focus-within:bg-white/[0.06] focus-within:ring-4 focus-within:ring-sky-400/10">
+                  <Twitter className="h-4 w-4 shrink-0 text-sky-400" />
+                  <input
+                    type="text"
+                    value={twitterUrl}
+                    onChange={(event) => setTwitterUrl(event.target.value)}
+                    placeholder="Twitter / X"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
+                  />
                 </label>
-                <button
-                  type="button"
-                  onClick={() => avatarFileInputRef.current?.click()}
-                  className="text-[10px] text-[#D946EF] hover:underline font-bold"
-                >
-                  Upload File
-                </button>
-                <input
-                  ref={avatarFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleAvatarFileUpload}
-                />
+                <label className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 transition-all focus-within:border-[#C084FC]/50 focus-within:bg-white/[0.06] focus-within:ring-4 focus-within:ring-[#A855F7]/10">
+                  <Globe className="h-4 w-4 shrink-0 text-[#D8B4FE]" />
+                  <input
+                    type="text"
+                    value={websiteUrl}
+                    onChange={(event) => setWebsiteUrl(event.target.value)}
+                    placeholder="Website"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
+                  />
+                </label>
               </div>
-              <input
-                type="text"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="Paste Avatar image URL..."
-                className="w-full bg-[#242424] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-              />
-              <div className="flex items-center gap-2 pt-1.5">
-                <span className="text-[10px] text-zinc-500 font-bold uppercase">Presets:</span>
-                {presetAvatars.map((preset) => (
-                  <button
-                    key={preset.name}
-                    type="button"
-                    onClick={() => setAvatarUrl(preset.url)}
-                    className="w-6 h-6 rounded-full overflow-hidden border border-white/20 hover:scale-110 transition-transform"
-                    title={preset.name}
-                  >
-                    <img src={preset.url} alt={preset.name} className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
+            </section>
+
+            <div className="workspace-card section-reveal flex flex-col-reverse gap-3 rounded-3xl border border-white/10 bg-[#181818] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="control-press rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-zinc-300 hover:bg-white/10 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savedSuccess}
+                className="control-press flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-6 py-3 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savedSuccess ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                {savedSuccess ? 'Profile saved' : 'Save profile'}
+              </button>
             </div>
-          </div>
-
-          {/* Artist Bio */}
-          <div>
-            <label className="block text-xs font-bold text-zinc-300 mb-1">
-              Artist Bio / About Story
-            </label>
-            <textarea
-              rows={3}
-              value={artistBio}
-              onChange={(e) => setArtistBio(e.target.value)}
-              placeholder="Tell your listeners about your story, instruments, and music releases..."
-              className="w-full bg-[#242424] border border-white/10 rounded-xl p-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF] resize-none"
-            />
-          </div>
-
-          {/* Monthly Listeners Stats (read-only, always calculated from real plays) */}
-          <div className="p-4 rounded-xl bg-[#222222] border border-white/10 space-y-3">
-            <div className="flex items-center space-x-2">
-              <Radio className="w-4 h-4 text-[#D946EF]" />
-              <span className="text-xs font-bold text-white">Monthly Listeners Stats</span>
-            </div>
-            <div className="p-3 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between text-xs">
-              <span className="text-zinc-400">Calculated from total track streams:</span>
-              <span className="font-mono font-bold text-[#D946EF]">{calculatedListenersStr}</span>
-            </div>
-          </div>
-
-          {/* Verified Badge Toggle */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#222222] border border-white/10">
-            <div className="flex items-center space-x-2.5">
-              <ShieldCheck className="w-5 h-5 text-blue-400" />
-              <div>
-                <p className="text-xs font-bold text-white">Verified Artist Status</p>
-                <p className="text-[10px] text-zinc-400">Display blue verified shield on artist profile</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setArtistVerified(!artistVerified)}
-              className={`w-11 h-6 rounded-full transition-colors p-0.5 flex items-center ${
-                artistVerified ? 'bg-blue-500 justify-end' : 'bg-zinc-700 justify-start'
-              }`}
-            >
-              <div className="w-5 h-5 rounded-full bg-white shadow-md" />
-            </button>
-          </div>
-
-          {/* Social Links */}
-          <div className="space-y-3">
-            <label className="text-xs font-bold text-zinc-300">Social Links & Web</label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="flex items-center space-x-2 bg-[#242424] border border-white/10 rounded-xl px-3 py-2">
-                <Instagram className="w-4 h-4 text-pink-400 flex-shrink-0" />
-                <input
-                  type="text"
-                  value={instagramUrl}
-                  onChange={(e) => setInstagramUrl(e.target.value)}
-                  placeholder="@instagram"
-                  className="w-full bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center space-x-2 bg-[#242424] border border-white/10 rounded-xl px-3 py-2">
-                <Twitter className="w-4 h-4 text-sky-400 flex-shrink-0" />
-                <input
-                  type="text"
-                  value={twitterUrl}
-                  onChange={(e) => setTwitterUrl(e.target.value)}
-                  placeholder="@twitter"
-                  className="w-full bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center space-x-2 bg-[#242424] border border-white/10 rounded-xl px-3 py-2">
-                <Globe className="w-4 h-4 text-[#D946EF] flex-shrink-0" />
-                <input
-                  type="text"
-                  value={websiteUrl}
-                  onChange={(e) => setWebsiteUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="pt-4 border-t border-white/10 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-full text-xs font-bold text-zinc-400 hover:text-white transition-colors"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              disabled={savedSuccess}
-              className="px-6 py-2.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider transition-all flex items-center space-x-2 shadow-lg"
-            >
-              {savedSuccess ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  <span>Saved!</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>Save Profile</span>
-                </>
-              )}
-            </button>
           </div>
         </form>
       </div>
-    </div>
+    </section>
   );
 };

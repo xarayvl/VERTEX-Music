@@ -19,10 +19,10 @@ import { ArtistView } from './components/Views/ArtistView';
 import { AlbumView } from './components/Views/AlbumView';
 
 import { AudioEQModal } from './components/Modals/AudioEQModal';
-import { NewPlaylistModal } from './components/Modals/NewPlaylistModal';
+import { NewPlaylistModal, NewPlaylistDraft } from './components/Modals/NewPlaylistModal';
 import { EditPlaylistModal } from './components/Modals/EditPlaylistModal';
 import { DeviceSelectorModal } from './components/Modals/DeviceSelectorModal';
-import { ProfileAndPremiumModal } from './components/Modals/ProfileAndPremiumModal';
+import { ProfileModal } from './components/Modals/ProfileModal';
 import { AddTrackModal } from './components/Modals/AddTrackModal';
 import { EditTrackModal } from './components/Modals/EditTrackModal';
 import { AuthModal } from './components/Modals/AuthModal';
@@ -34,17 +34,16 @@ import { DEFAULT_AVATAR_URL } from './utils/profilePlaceholders';
 
 const normalizePublicArtist = (raw: any): Artist => ({
   id: String(raw?.id || ''),
-  name: String(raw?.name || raw?.artistName || raw?.displayName || raw?.username || 'Unknown artist'),
+  name: String(raw?.name || raw?.artistName || raw?.displayName || raw?.username || ''),
   username: raw?.username ? String(raw.username) : undefined,
   displayName: raw?.displayName ? String(raw.displayName) : undefined,
   avatarUrl: String(raw?.avatarUrl || DEFAULT_AVATAR_URL),
   bannerUrl: raw?.bannerUrl ? String(raw.bannerUrl) : '',
   bio: raw?.artistBio ? String(raw.artistBio) : raw?.bio ? String(raw.bio) : '',
   genre: raw?.genre ? String(raw.genre) : Array.isArray(raw?.favoriteGenres) ? String(raw.favoriteGenres[0] || '') : '',
-  monthlyListeners: String(raw?.monthlyListeners || '0 monthly listeners'),
+  totalStreamsLabel: String(raw?.totalStreamsLabel || '0 total streams'),
   verified: raw?.verified === true || raw?.artistVerified === true,
-  isUser: raw?.isUser === true || typeof raw?.email === 'string',
-  isSynthetic: raw?.isSynthetic === true,
+  isUser: true,
   stats: raw?.stats
     ? {
         hoursListened: Number(raw.stats.hoursListened) || 0,
@@ -72,24 +71,15 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
-  // User Profile State with local storage persistence
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
-    try {
-      const saved = localStorage.getItem('vertex_music_user_profile');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.displayName) return parsed;
-      }
-    } catch (e) {
-      console.error('Error loading saved profile:', e);
-    }
-    return null;
-  });
+  // The session token may persist, but the profile itself is always loaded from
+  // the server so stale or forged localStorage profile data cannot grant UI ownership.
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   // Media Data State
   const [tracks, setTracks] = useState<Track[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [artists, setArtists] = useState<Artist[]>([]);
+  const [serverDataLoaded, setServerDataLoaded] = useState(false);
 
   // Followed Artists State (User-Scoped)
   const [followedArtistIds, setFollowedArtistIds] = useState<string[]>([]);
@@ -160,46 +150,17 @@ export default function App() {
     });
   };
 
-  // Prune "Recently Played" whenever the authoritative tracks list changes
-  // (e.g. after a track delete, or an admin "wipe all tracks" action).
-  // recentlyPlayed is cached in localStorage as full Track snapshots, so
-  // without this it would keep showing tracks that no longer exist on the
-  // server / were deleted by their owner.
+  // Recently played is server-authoritative. Keep only records still present after a refresh.
   useEffect(() => {
-    if (!userProfile?.id) return;
-    setRecentlyPlayed((prev) => {
-      if (prev.length === 0) return prev;
-      const existingIds = new Set(tracks.map((t) => t.id));
-      const pruned = prev.filter((t) => existingIds.has(t.id));
-      if (pruned.length !== prev.length) {
-        try {
-          localStorage.setItem(`vertex_recently_played_${userProfile.id}`, JSON.stringify(pruned));
-        } catch {
-          // ignore
-        }
-        return pruned;
-      }
-      return prev;
-    });
-  }, [tracks, userProfile?.id]);
+    const byId = new Map(tracks.map((track) => [track.id, track]));
+    setRecentlyPlayed((previous) => previous.map((track) => byId.get(track.id)).filter((track): track is Track => Boolean(track)));
+  }, [tracks]);
 
-  // Sync recentlyPlayed whenever track plays
+  // Update the visible list immediately while the play endpoint persists the same order.
   useEffect(() => {
-    if (isPlaying && currentTrack) {
-      setRecentlyPlayed((prev) => {
-        const filtered = prev.filter((t) => t.id !== currentTrack.id);
-        const updated = [currentTrack, ...filtered].slice(0, 15);
-        if (userProfile?.id) {
-          try {
-            localStorage.setItem(`vertex_recently_played_${userProfile.id}`, JSON.stringify(updated));
-          } catch {
-            // ignore
-          }
-        }
-        return updated;
-      });
-    }
-  }, [isPlaying, currentTrack?.id, userProfile?.id]);
+    if (!isPlaying || !currentTrack) return;
+    setRecentlyPlayed((previous) => [currentTrack, ...previous.filter((track) => track.id !== currentTrack.id)].slice(0, 50));
+  }, [isPlaying, currentTrack?.id]);
 
   // Resizable Sidebar Panel Width State (Persisted in localStorage with min/max constraints)
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -421,11 +382,10 @@ export default function App() {
     }
 
     // 3. Check for Artist Context
-    const artistElem = targetElement.closest('[data-artist-id], [data-artist-name]') as HTMLElement | null;
+    const artistElem = targetElement.closest('[data-artist-id]') as HTMLElement | null;
     if (artistElem) {
       const artistId = artistElem.getAttribute('data-artist-id');
-      const artistName = artistElem.getAttribute('data-artist-name');
-      const foundArtist = artists.find((a) => a.id === artistId || a.name === artistName);
+      const foundArtist = artists.find((artist) => artist.id === artistId);
       if (foundArtist) {
         setContextMenuTarget({
           x: e.clientX,
@@ -503,67 +463,27 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!userProfile) {
+    if (serverDataLoaded && !userProfile) {
       setIsAuthModalOpen(true);
     }
-  }, [userProfile]);
-
-  useEffect(() => {
-    if (userProfile) {
-      try {
-        localStorage.setItem('vertex_music_user_profile', JSON.stringify(userProfile));
-      } catch (e) {
-        console.error('Error saving profile:', e);
-      }
-    } else {
-      localStorage.removeItem('vertex_music_user_profile');
-    }
-  }, [userProfile]);
+  }, [serverDataLoaded, userProfile]);
 
   const getAuthHeaders = (): Record<string, string> => {
     const token = localStorage.getItem('vertex_session_token');
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  // Load user-scoped state when logged-in user changes
+  // Clear account-scoped state while the server fetches the newly active account.
   useEffect(() => {
-    if (!userProfile?.id) {
-      setFollowedArtistIds([]);
-      setRecentlyPlayed([]);
-      setSelectedArtist(null);
-      setIsArtistLoading(false);
-      setArtistLoadError(null);
-      return;
-    }
+    setFollowedArtistIds([]);
+    setRecentlyPlayed([]);
     setSelectedArtist(null);
     setIsArtistLoading(false);
     setArtistLoadError(null);
-    try {
-      const savedFollowed = localStorage.getItem(`vertex_followed_artists_${userProfile.id}`);
-      if (savedFollowed) {
-        const parsed = JSON.parse(savedFollowed);
-        if (Array.isArray(parsed)) setFollowedArtistIds(parsed);
-        else setFollowedArtistIds([]);
-      } else {
-        setFollowedArtistIds([]);
-      }
-
-      const savedRecent = localStorage.getItem(`vertex_recently_played_${userProfile.id}`);
-      if (savedRecent) {
-        const parsed = JSON.parse(savedRecent);
-        if (Array.isArray(parsed)) setRecentlyPlayed(parsed);
-        else setRecentlyPlayed([]);
-      } else {
-        setRecentlyPlayed([]);
-      }
-    } catch {
-      setFollowedArtistIds([]);
-      setRecentlyPlayed([]);
-    }
   }, [userProfile?.id]);
 
   // Hydrate any followed artist that isn't already in the local `artists`
-  // cache. `followedArtistIds` is restored from localStorage per-account,
+  // cache. `followedArtistIds` is restored from the authenticated server state,
   // but the matching artist objects (banner, bio, stats) only ever lived in
   // this same browser's in-memory `artists` state — so after logging out
   // and into a different account, a followed *real user* artist has an id
@@ -612,53 +532,31 @@ export default function App() {
       const res = await fetch(`/api/data`, { headers });
       if (res.ok) {
         const data = await res.json();
-        if (data.token) {
-          localStorage.setItem('vertex_session_token', data.token);
-        }
-        if (data.tracks && Array.isArray(data.tracks) && data.tracks.length > 0) {
-          const likedIds: string[] = data.likedTrackIds || [];
-          setTracks(
-            data.tracks.map((t: Track) => ({
-              ...t,
-              isLiked: likedIds.includes(t.id),
-            }))
-          );
-        }
-        if (data.playlists && Array.isArray(data.playlists)) {
-          setPlaylists(data.playlists);
-        }
-        if (Array.isArray(data.artists)) {
-          setArtists(data.artists.map(normalizePublicArtist));
-        }
-        if (!includeChatAndUser) return;
-        if (data.chatHistory && Array.isArray(data.chatHistory) && data.chatHistory.length > 0) {
-          setChatMessages(data.chatHistory);
-        } else if (userProfile?.id) {
-          try {
-            const saved = localStorage.getItem(`vertex_music_chat_history_${userProfile.id}`);
-            if (saved) {
-              const parsed = JSON.parse(saved);
-              if (Array.isArray(parsed) && parsed.length > 0) setChatMessages(parsed);
-            } else {
-              setChatMessages([
-                {
-                  id: `welcome-${Date.now()}`,
-                  sender: 'ai',
-                  text: `Hello ${userProfile.displayName || 'there'}! I'm **VERTEX Music AI**, your personal DJ and assistant. Ask me for recommendations, playlists, or music history!`,
-                  timestamp: new Date().toISOString(),
-                },
-              ]);
-            }
-          } catch (e) {
-            // ignore
+        const serverTracks: Track[] = Array.isArray(data.tracks) ? data.tracks : [];
+        const likedIds: string[] = Array.isArray(data.likedTrackIds) ? data.likedTrackIds : [];
+        setTracks(serverTracks.map((track) => ({ ...track, isLiked: likedIds.includes(track.id) })));
+        setPlaylists(Array.isArray(data.playlists) ? data.playlists : []);
+        setArtists(Array.isArray(data.artists) ? data.artists.map(normalizePublicArtist).filter((artist: Artist) => artist.id && artist.name) : []);
+        setFollowedArtistIds(Array.isArray(data.followedArtistIds) ? data.followedArtistIds : []);
+        const recentIds: string[] = Array.isArray(data.recentTrackIds) ? data.recentTrackIds : [];
+        const trackById = new Map(serverTracks.map((track) => [track.id, track]));
+        setRecentlyPlayed(recentIds.map((id) => trackById.get(id)).filter((track): track is Track => Boolean(track)));
+
+        if (includeChatAndUser) {
+          setChatMessages(Array.isArray(data.chatHistory) ? data.chatHistory : []);
+          if (data.user) {
+            setUserProfile((previous) => (previous ? { ...previous, ...data.user } : data.user));
+          } else if (token) {
+            localStorage.removeItem('vertex_session_token');
+            setUserProfile(null);
+            setIsAuthModalOpen(true);
           }
-        }
-        if (data.user) {
-          setUserProfile((prev) => (prev ? { ...prev, ...data.user } : data.user));
         }
       }
     } catch (err) {
       console.error('Error syncing server data:', err);
+    } finally {
+      setServerDataLoaded(true);
     }
   }, [userProfile?.id]);
 
@@ -690,6 +588,10 @@ export default function App() {
   }, [fetchServerData]);
 
   const handleLogout = () => {
+    const token = localStorage.getItem('vertex_session_token');
+    if (token) {
+      fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
+    }
     audioEngine.pause();
     setIsPlaying(false);
     setCurrentTrack(null);
@@ -697,20 +599,12 @@ export default function App() {
     setFollowedArtistIds([]);
     setRecentlyPlayed([]);
     setTracks((prev) => prev.map((t) => ({ ...t, isLiked: false })));
-    setChatMessages([
-      {
-        id: `welcome-${Date.now()}`,
-        sender: 'ai',
-        text: "Hello! I'm **VERTEX Music AI**, your personal VERTEX Music DJ and music assistant. Log in to access your personal recommendations and chat session!",
-        timestamp: new Date().toISOString(),
-      },
-    ]);
+    setChatMessages([]);
     try {
       localStorage.removeItem('vertex_session_token');
-      localStorage.removeItem('vertex_music_user_profile');
       localStorage.removeItem('vertex_music_chat_history');
       Object.keys(localStorage).forEach((key) => {
-        if (key.startsWith('vertex_music_') || key.startsWith('vertex_followed_artists') || key.startsWith('vertex_recently_played')) {
+        if (key.startsWith('vertex_music_')) {
           localStorage.removeItem(key);
         }
       });
@@ -721,11 +615,7 @@ export default function App() {
   };
 
   // Fires when the server rejects a request because the session token is
-  // missing/expired/unknown (e.g. the server process restarted and lost its
-  // in-memory session table). Without this, the UI would keep showing the
-  // person as "logged in" — because that's tracked separately via the cached
-  // vertex_music_user_profile in localStorage — while every authenticated
-  // action silently 401s. This clears the stale client-side session state,
+  // missing/expired/unknown. This clears the client-side session state,
   // tells the person what happened, and reopens the login modal so they can
   // get a fresh token in one step.
   const handleSessionExpired = React.useCallback(() => {
@@ -805,11 +695,6 @@ export default function App() {
     if (token) {
       localStorage.setItem('vertex_session_token', token);
     }
-    try {
-      localStorage.setItem('vertex_music_user_profile', JSON.stringify(user));
-    } catch (e) {
-      console.error('Error saving user profile:', e);
-    }
     showToast(`Welcome back, ${user.displayName || user.username}!`);
   };
 
@@ -826,19 +711,11 @@ export default function App() {
   });
 
   // Persistent Chat History State (Scoped to current user)
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
-    {
-      id: 'welcome-1',
-      sender: 'ai',
-      text: "Hello! I'm **VERTEX Music AI**, your personal VERTEX Music DJ and music assistant. Ask me to recommend songs, curate playlist concepts, explain genres, or analyze musical moods!",
-      timestamp: new Date().toISOString(),
-    },
-  ]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
     if (!userProfile?.id) return;
     try {
-      localStorage.setItem(`vertex_music_chat_history_${userProfile.id}`, JSON.stringify(chatMessages));
       fetch(`/api/chat-history/${userProfile.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -986,45 +863,46 @@ export default function App() {
     audioEngine.setVolume(volume);
   }, [volume]);
 
-  // Helper to record track play
+  // Record only a server-confirmed play. A stale/missing track returns 404 and
+  // is removed from the client catalog instead of being kept alive as fallback data.
   const recordTrackPlay = (track: Track) => {
-    setUserProfile((prev) => {
-      if (!prev) return null;
-      const currentStats = prev.stats || {
-        hoursListened: 0,
-        secondsListened: 0,
-        tracksPlayed: 0,
-        topGenre: 'N/A',
-        playlistsCreated: 0,
-        followersCount: 0,
-        followingCount: 0,
-      };
-      return {
-        ...prev,
-        stats: {
-          ...currentStats,
-          tracksPlayed: (currentStats.tracksPlayed || 0) + 1,
-        },
-      };
-    });
-
-    setTracks((prevTracks) =>
-      prevTracks.map((t) => {
-        if (t.id === track.id) {
-          const currentPlays = parseInt(t.plays || '0', 10) || 0;
-          return { ...t, plays: (currentPlays + 1).toString() };
-        }
-        return t;
-      })
-    );
-
-    // Persist the play count (and this listener's tracksPlayed stat) to the
-    // backend so it survives redeploys and is reflected in Upstash instead
-    // of only living in React state / localStorage.
     fetch(`/api/tracks/${track.id}/play`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    }).catch((err) => console.error('Failed to persist track play:', err));
+    })
+      .then(async (response) => {
+        if (response.status === 404) {
+          setTracks((items) => items.filter((item) => item.id !== track.id));
+          setRecentlyPlayed((items) => items.filter((item) => item.id !== track.id));
+          setQueue((items) => items.filter((item) => item.id !== track.id));
+          setCurrentTrack((current) => {
+            if (current?.id === track.id) {
+              setIsPlaying(false);
+              return null;
+            }
+            return current;
+          });
+          showToast('This track no longer exists.');
+          return;
+        }
+        if (!response.ok) throw new Error(`Play request failed (${response.status})`);
+        const data = await response.json();
+        setTracks((items) => items.map((item) => item.id === track.id ? { ...item, plays: String(data.plays || item.plays || '0') } : item));
+        setUserProfile((profile) => profile ? {
+          ...profile,
+          stats: {
+            ...(profile.stats || {
+              hoursListened: 0,
+              secondsListened: 0,
+              tracksPlayed: 0,
+              topGenre: 'N/A',
+              playlistsCreated: 0,
+            }),
+            tracksPlayed: (profile.stats?.tracksPlayed || 0) + 1,
+          },
+        } : null);
+      })
+      .catch((error) => console.error('Failed to persist track play:', error));
   };
 
   // Periodically persist cumulative listening-time stats (seconds/hours
@@ -1175,22 +1053,41 @@ export default function App() {
     audioEngine.seek(newSeconds, currentTrack);
   };
 
-  const handleToggleLike = (trackId: string) => {
-    setTracks((prev) => {
-      const updated = prev.map((t) => (t.id === trackId ? { ...t, isLiked: !t.isLiked } : t));
-      if (userProfile?.id) {
-        const likedIds = updated.filter((t) => t.isLiked).map((t) => t.id);
-        fetch(`/api/user-state/${userProfile.id}/liked-tracks`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-          body: JSON.stringify({ likedTrackIds: likedIds }),
-        }).catch((e) => console.error('Error syncing liked tracks:', e));
-      }
-      return updated;
-    });
+  const handleToggleLike = async (trackId: string) => {
+    const target = tracks.find((track) => track.id === trackId);
+    if (!target) return showToast('404 — Track not found.');
+    if (!userProfile) return showToast('Sign in to save tracks.');
 
-    if (currentTrack?.id === trackId) {
-      setCurrentTrack((prev) => (prev ? { ...prev, isLiked: !prev.isLiked } : null));
+    const previousTracks = tracks;
+    const previousCurrentTrack = currentTrack;
+    const nextTracks = tracks.map((track) =>
+      track.id === trackId ? { ...track, isLiked: !track.isLiked } : track
+    );
+    const nextCurrentTrack = currentTrack?.id === trackId
+      ? { ...currentTrack, isLiked: !currentTrack.isLiked }
+      : currentTrack;
+
+    setTracks(nextTracks);
+    setCurrentTrack(nextCurrentTrack);
+
+    try {
+      const likedTrackIds = nextTracks.filter((track) => track.isLiked).map((track) => track.id);
+      const response = await fetch(`/api/user-state/${userProfile.id}/liked-tracks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ likedTrackIds }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setTracks(previousTracks);
+        setCurrentTrack(previousCurrentTrack);
+        showToast(data?.error || 'Could not update liked tracks.');
+      }
+    } catch (error) {
+      console.error('Error syncing liked tracks:', error);
+      setTracks(previousTracks);
+      setCurrentTrack(previousCurrentTrack);
+      showToast('Could not update liked tracks.');
     }
   };
 
@@ -1310,97 +1207,106 @@ export default function App() {
     handleSelectTab('playlist');
   };
 
-  const handleUpdatePlaylist = (updatedPl: Playlist) => {
-    setPlaylists((prev) => prev.map((p) => (p.id === updatedPl.id ? updatedPl : p)));
-    if (userProfile?.id) {
-      fetch(`/api/playlists/${updatedPl.id}`, {
+  const handleUpdatePlaylist = async (updatedPlaylist: Playlist) => {
+    const existing = playlists.find((playlist) => playlist.id === updatedPlaylist.id);
+    if (!existing) return showToast('404 — Playlist not found.');
+    if (!userProfile || existing.userId !== userProfile.id) return showToast('Only the playlist owner can edit it.');
+
+    try {
+      const response = await fetch(`/api/playlists/${updatedPlaylist.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(updatedPl),
-      }).catch((e) => console.error('Error updating playlist on server:', e));
+        body: JSON.stringify({
+          title: updatedPlaylist.title,
+          description: updatedPlaylist.description,
+          coverUrl: updatedPlaylist.coverUrl,
+          trackIds: updatedPlaylist.trackIds,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.playlist) return showToast(data?.error || 'Playlist update failed.');
+      setPlaylists((previous) => previous.map((playlist) => (playlist.id === data.playlist.id ? data.playlist : playlist)));
+    } catch (error) {
+      console.error('Error updating playlist:', error);
+      showToast('Playlist update failed.');
     }
   };
 
-  const handleDeletePlaylist = (playlistId: string) => {
-    setPlaylists((prev) => prev.filter((p) => p.id !== playlistId));
-    if (selectedPlaylistId === playlistId) {
-      setSelectedPlaylistId(null);
-      handleGoBack();
+  const handleDeletePlaylist = async (playlistId: string) => {
+    const target = playlists.find((playlist) => playlist.id === playlistId);
+    if (!target) return showToast('404 — Playlist not found.');
+    if (!userProfile || target.userId !== userProfile.id) return showToast('Only the playlist owner can delete it.');
+
+    try {
+      const response = await fetch(`/api/playlists/${playlistId}`, { method: 'DELETE', headers: getAuthHeaders() });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) return showToast(data?.error || 'Playlist delete failed.');
+      setPlaylists((previous) => previous.filter((playlist) => playlist.id !== playlistId));
+      if (selectedPlaylistId === playlistId) {
+        setSelectedPlaylistId(null);
+        handleGoBack();
+      }
+    } catch (error) {
+      console.error('Error deleting playlist:', error);
+      showToast('Playlist delete failed.');
     }
-    if (userProfile?.id) {
-      fetch(`/api/playlists/${playlistId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-      }).catch((e) => console.error('Error deleting playlist on server:', e));
+  };
+
+  const updatePlaylistTracks = async (playlistId: string, nextTrackIds: string[]) => {
+    const target = playlists.find((playlist) => playlist.id === playlistId);
+    if (!target) return showToast('404 — Playlist not found.');
+    if (!userProfile || target.userId !== userProfile.id) return showToast('Only the playlist owner can change its tracks.');
+
+    try {
+      const response = await fetch(`/api/playlists/${playlistId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ trackIds: nextTrackIds }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.playlist) return showToast(data?.error || 'Playlist update failed.');
+      setPlaylists((previous) => previous.map((playlist) => (playlist.id === playlistId ? data.playlist : playlist)));
+    } catch (error) {
+      console.error('Error changing playlist tracks:', error);
+      showToast('Playlist update failed.');
     }
   };
 
   const handleAddTrackToPlaylist = (playlistId: string, trackId: string) => {
-    setPlaylists((prev) =>
-      prev.map((p) => {
-        if (p.id === playlistId && !p.trackIds.includes(trackId)) {
-          const newTrackIds = [...p.trackIds, trackId];
-          const updated = {
-            ...p,
-            trackIds: newTrackIds,
-            trackCount: newTrackIds.length,
-          };
-          if (userProfile?.id) {
-            fetch(`/api/playlists/${playlistId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-              body: JSON.stringify({ trackIds: newTrackIds }),
-            }).catch((e) => console.error('Error adding track to playlist on server:', e));
-          }
-          return updated;
-        }
-        return p;
-      })
-    );
+    const target = playlists.find((playlist) => playlist.id === playlistId);
+    if (!target) return showToast('404 — Playlist not found.');
+    if (!tracks.some((track) => track.id === trackId)) return showToast('404 — Track not found.');
+    if (target.trackIds.includes(trackId)) return;
+    void updatePlaylistTracks(playlistId, [...target.trackIds, trackId]);
   };
 
   const handleRemoveTrackFromPlaylist = (playlistId: string, trackId: string) => {
-    setPlaylists((prev) =>
-      prev.map((p) => {
-        if (p.id === playlistId) {
-          const newTrackIds = p.trackIds.filter((id) => id !== trackId);
-          const updated = {
-            ...p,
-            trackIds: newTrackIds,
-            trackCount: newTrackIds.length,
-          };
-          if (userProfile?.id) {
-            fetch(`/api/playlists/${playlistId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-              body: JSON.stringify({ trackIds: newTrackIds }),
-            }).catch((e) => console.error('Error removing track from playlist on server:', e));
-          }
-          return updated;
-        }
-        return p;
-      })
-    );
+    const target = playlists.find((playlist) => playlist.id === playlistId);
+    if (!target) return showToast('404 — Playlist not found.');
+    void updatePlaylistTracks(playlistId, target.trackIds.filter((id) => id !== trackId));
   };
 
-  const handleCreatePlaylist = async (newPl: Playlist) => {
-    const plWithUser = {
-      ...newPl,
-      userId: userProfile?.id || '',
-    };
-    setPlaylists((prev) => [plWithUser, ...prev]);
-    setSelectedPlaylistId(plWithUser.id);
-    handleSelectTab('playlist');
-    if (userProfile?.id) {
-      try {
-        await fetch('/api/playlists', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-          body: JSON.stringify(plWithUser),
-        });
-      } catch (e) {
-        console.error('Error creating playlist on server:', e);
-      }
+  const handleCreatePlaylist = async (draft: NewPlaylistDraft) => {
+    if (!userProfile) return showToast('Sign in to create a playlist.');
+    try {
+      const response = await fetch('/api/playlists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          title: draft.title,
+          description: draft.description,
+          coverUrl: draft.coverUrl,
+          trackIds: draft.trackIds,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.playlist) return showToast(data?.error || 'Playlist creation failed.');
+      setPlaylists((previous) => [data.playlist, ...previous.filter((playlist) => playlist.id !== data.playlist.id)]);
+      setSelectedPlaylistId(data.playlist.id);
+      handleSelectTab('playlist');
+    } catch (error) {
+      console.error('Error creating playlist:', error);
+      showToast('Playlist creation failed.');
     }
   };
 
@@ -1415,7 +1321,7 @@ export default function App() {
 
   const resolveArtistByIdFromServer = React.useCallback(
     async (id: string): Promise<Artist | null> => {
-      if (!id || id === 'public' || id.startsWith('artist-')) return null;
+      if (!id) return null;
       try {
         const res = await fetch(`/api/users/${encodeURIComponent(id)}`);
         if (!res.ok) return null;
@@ -1432,137 +1338,47 @@ export default function App() {
     [upsertArtist]
   );
 
-  const resolveArtistByNameFromServer = React.useCallback(
-    async (name: string): Promise<Artist | null> => {
-      const cleanName = name.trim();
-      if (!cleanName) return null;
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(cleanName)}`);
-        if (!res.ok) return null;
-        const data = await res.json();
-        if (!Array.isArray(data?.artists) || data.artists.length === 0) return null;
-        const normalizedName = cleanName.toLocaleLowerCase();
-        const exact =
-          data.artists.find(
-            (candidate: any) =>
-              candidate?.name?.toLocaleLowerCase() === normalizedName ||
-              candidate?.username?.toLocaleLowerCase() === normalizedName ||
-              candidate?.displayName?.toLocaleLowerCase() === normalizedName
-          ) || data.artists[0];
-        if (!exact) return null;
-        const artist = normalizePublicArtist(exact);
-        upsertArtist(artist);
-        return artist;
-      } catch (error) {
-        console.error('Error resolving artist profile by name:', error);
-        return null;
-      }
-    },
-    [upsertArtist]
-  );
-
   const handleSelectArtist = async (input: Artist | UserProfile | string) => {
     const requestId = ++artistRequestIdRef.current;
+    handleSelectTab('artist');
+    setSelectedArtist(null);
     setArtistLoadError(null);
+    setIsArtistLoading(true);
 
-    const requestedName =
-      typeof input === 'string'
-        ? input.trim()
-        : 'email' in input
-          ? input.artistName || input.displayName || input.username
-          : input.name;
+    const requestedId = (typeof input === 'string' ? input : input.id).trim();
+    const requestedLabel = typeof input === 'string'
+      ? input.trim()
+      : 'email' in input
+        ? input.artistName || input.displayName || input.username
+        : input.name;
 
-    const sameNameBelongsToAnotherAccount = Boolean(
-      typeof input === 'string' &&
-        tracks.some(
-          (track) =>
-            track.artist.toLocaleLowerCase() === input.toLocaleLowerCase() &&
-            track.userId &&
-            track.userId !== 'public' &&
-            track.userId !== userProfile?.id
-        )
-    );
-    const isOwnProfile = Boolean(
-      userProfile &&
-        (typeof input !== 'string'
-          ? input.id === userProfile.id
-          : !sameNameBelongsToAnotherAccount &&
-            requestedName &&
-            [userProfile.artistName, userProfile.displayName, userProfile.username]
-              .filter(Boolean)
-              .some((name) => name!.toLocaleLowerCase() === requestedName.toLocaleLowerCase()))
-    );
-
-    if (isOwnProfile && userProfile) {
-      setSelectedArtist(userProfile);
+    if (!requestedId) {
+      setArtistLoadError('404 — Artist not found.');
       setIsArtistLoading(false);
-      handleSelectTab('artist');
       return;
     }
 
-    handleSelectTab('artist');
-
-    const objectCandidate = typeof input === 'string' ? null : input;
-    const cachedCandidate =
-      typeof input === 'string'
-        ? artists.find(
-            (artist) =>
-              artist.id === input ||
-              artist.name.toLocaleLowerCase() === input.toLocaleLowerCase() ||
-              artist.username?.toLocaleLowerCase() === input.toLocaleLowerCase()
-          ) || null
-        : null;
-    const candidate = objectCandidate || cachedCandidate;
-
-    if (candidate) {
-      const normalizedCandidate = 'email' in candidate ? candidate : normalizePublicArtist(candidate);
-      setSelectedArtist(normalizedCandidate);
-    } else {
-      setSelectedArtist(null);
-    }
-    setIsArtistLoading(true);
-
-    let resolved: Artist | null = null;
-
-    const candidateId = candidate?.id;
-    if (candidateId && candidateId !== 'public') {
-      resolved = await resolveArtistByIdFromServer(candidateId);
+    if (userProfile?.id === requestedId) {
+      setSelectedArtist(userProfile);
+      setIsArtistLoading(false);
+      return;
     }
 
-    if (!resolved && typeof input === 'string') {
-      const matchingTrack = tracks.find(
-        (track) =>
-          track.artist.toLocaleLowerCase() === input.toLocaleLowerCase() &&
-          track.userId &&
-          track.userId !== 'public'
-      );
-      if (matchingTrack?.userId) {
-        resolved = await resolveArtistByIdFromServer(matchingTrack.userId);
-      }
-    }
-
-    if (!resolved && requestedName) {
-      resolved = await resolveArtistByNameFromServer(requestedName);
-    }
+    // Artist identity is immutable and server-owned. Display names, usernames,
+    // and track labels are presentation data and must never be used as an
+    // ownership fallback. Legacy name-only links therefore resolve to 404.
+    const resolved = await resolveArtistByIdFromServer(requestedId);
 
     if (requestId !== artistRequestIdRef.current) return;
-
-    if (resolved) {
-      setSelectedArtist(resolved);
-      setArtistLoadError(
-        resolved.isSynthetic ? 'This catalog artist is not linked to a registered user profile.' : null
-      );
-    } else if (candidate) {
-      const normalizedCandidate = 'email' in candidate ? candidate : normalizePublicArtist(candidate);
-      setSelectedArtist(normalizedCandidate);
-      if (!('email' in normalizedCandidate) && normalizedCandidate.isSynthetic) {
-        setArtistLoadError('This catalog artist is not linked to a registered user profile.');
-      }
-    } else {
+    if (!resolved) {
       setSelectedArtist(null);
-      setArtistLoadError(`No registered artist profile was found for “${requestedName || 'this artist'}”.`);
+      setArtistLoadError(`404 — No registered artist profile was found for “${requestedLabel || 'this artist'}”.`);
+      setIsArtistLoading(false);
+      return;
     }
 
+    setSelectedArtist(resolved);
+    setArtistLoadError(null);
     setIsArtistLoading(false);
   };
 
@@ -1584,7 +1400,7 @@ export default function App() {
     }
 
     if (trackMatch) {
-      if (tracks.length === 0) return; // wait for tracks to load
+      if (!serverDataLoaded) return;
       deepLinkResolvedRef.current = true;
       const track = tracks.find((t) => t.id === trackMatch[1]);
       if (track) {
@@ -1595,7 +1411,7 @@ export default function App() {
       }
       window.history.replaceState({}, '', '/');
     } else if (playlistMatch) {
-      if (playlists.length === 0) return; // wait for playlists to load
+      if (!serverDataLoaded) return;
       deepLinkResolvedRef.current = true;
       const playlist = playlists.find((p) => p.id === playlistMatch[1]);
       if (playlist) {
@@ -1610,175 +1426,118 @@ export default function App() {
       window.history.replaceState({}, '', '/');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks, playlists]);
+  }, [tracks, playlists, serverDataLoaded]);
 
   const handleSelectAlbum = (track: Track) => {
     setSelectedAlbumTrack(track);
     handleSelectTab('album');
   };
 
-  // Same root cause as the ArtistView/sidebar issue, different screen: the
-  // "Now Playing" sidebar also reads the artist's banner/avatar from the
-  // local `artists` cache. If the currently playing track is by a real
-  // artist whose data was never synced into this session (e.g. you're on a
-  // different account than the one that uploaded/owns it), it silently
-  // falls back to generic placeholder art. Resolve it from the server the
-  // same way an artist-page visit does.
+  // Resolve the current track's real owner by immutable userId only.
   useEffect(() => {
-    if (!currentTrack?.artist) return;
-    const name = currentTrack.artist;
-    const alreadyKnown =
-      artists.some((a) => a.name.toLowerCase() === name.toLowerCase()) ||
-      (userProfile?.isArtist &&
-        (userProfile.displayName?.toLowerCase() === name.toLowerCase() ||
-          userProfile.artistName?.toLowerCase() === name.toLowerCase() ||
-          userProfile.username?.toLowerCase() === name.toLowerCase()));
-    if (alreadyKnown) return;
-    if (currentTrack.userId && currentTrack.userId !== 'public') {
-      resolveArtistByIdFromServer(currentTrack.userId);
-    } else {
-      resolveArtistByNameFromServer(name);
-    }
-  }, [
-    currentTrack?.artist,
-    currentTrack?.userId,
-    artists,
-    userProfile,
-    resolveArtistByIdFromServer,
-    resolveArtistByNameFromServer,
-  ]);
+    if (!currentTrack?.userId) return;
+    if (currentTrack.userId === userProfile?.id || artists.some((artist) => artist.id === currentTrack.userId)) return;
+    void resolveArtistByIdFromServer(currentTrack.userId);
+  }, [currentTrack?.userId, artists, userProfile?.id, resolveArtistByIdFromServer]);
 
   const handleDeleteTrack = async (trackId: string) => {
-    // Keep a snapshot so we can roll back the optimistic update if the server rejects the delete.
-    const previousTracks = tracks;
-    const wasCurrentTrack = currentTrack?.id === trackId;
-
-    setTracks((prev) => prev.filter((t) => t.id !== trackId));
-    if (wasCurrentTrack) {
-      handleNextTrack();
+    const target = tracks.find((track) => track.id === trackId);
+    if (!target) return showToast('404 — Track not found.');
+    if (!userProfile || target.userId !== userProfile.id) {
+      return showToast('Only the track owner can delete it.');
     }
 
     try {
       const res = await fetch(`/api/tracks/${trackId}`, { method: 'DELETE', headers: getAuthHeaders() });
-      let payload: any = null;
-      try {
-        payload = await res.json();
-      } catch {
-        // no JSON body
-      }
-
+      const payload = await res.json().catch(() => null);
       if (!res.ok || payload?.success === false) {
-        // Server refused the delete (e.g. not the owner, session expired) — roll back the UI.
-        setTracks(previousTracks);
-        showToast(payload?.error || 'Failed to delete track. Please try again.');
+        showToast(payload?.error || 'Failed to delete track.');
         return;
       }
 
-      showToast('Track deleted from user folder');
-    } catch (e) {
-      console.error('Error deleting track:', e);
-      // Network/unexpected error — also roll back so the UI doesn't lie about the track being gone.
-      setTracks(previousTracks);
-      showToast('Failed to delete track. Please check your connection and try again.');
+      setTracks((previous) => previous.filter((track) => track.id !== trackId));
+      setQueue((previous) => previous.filter((track) => track.id !== trackId));
+      setPlaylists((previous) => previous.map((playlist) => ({
+        ...playlist,
+        trackIds: playlist.trackIds.filter((id) => id !== trackId),
+        trackCount: playlist.trackIds.filter((id) => id !== trackId).length,
+      })));
+      setRecentlyPlayed((previous) => previous.filter((track) => track.id !== trackId));
+      if (currentTrack?.id === trackId) {
+        audioEngine.pause();
+        setIsPlaying(false);
+        setCurrentTrack(null);
+      }
+      showToast('Track deleted.');
+    } catch (error) {
+      console.error('Error deleting track:', error);
+      showToast('Failed to delete track. Please check your connection.');
     }
   };
 
   const handleWipeAllTracks = async () => {
+    if (!userProfile) return showToast('Sign in first.');
     try {
-      audioEngine.pause();
-      setIsPlaying(false);
-      setCurrentTrack(null);
-      setTracks([]);
-      setQueue([]);
-      setSelectedAlbumTrack(null);
-
-      setPlaylists((prev) => prev.map((p) => ({ ...p, trackIds: [], trackCount: 0 })));
-
-      const res = await fetch('/api/tracks/wipe', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-      });
-
-      if (res.ok) {
-        showToast('All uploaded songs wiped successfully.');
-      } else {
-        showToast('Wiped songs locally.');
+      const response = await fetch('/api/tracks/wipe', { method: 'POST', headers: getAuthHeaders() });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) return showToast(data?.error || 'Track cleanup failed.');
+      const deletedIds = new Set<string>(Array.isArray(data?.deletedTrackIds) ? data.deletedTrackIds : []);
+      setTracks((previous) => previous.filter((track) => !deletedIds.has(track.id)));
+      setQueue((previous) => previous.filter((track) => !deletedIds.has(track.id)));
+      setPlaylists((previous) => previous.map((playlist) => ({
+        ...playlist,
+        trackIds: playlist.trackIds.filter((trackId) => !deletedIds.has(trackId)),
+        trackCount: playlist.trackIds.filter((trackId) => !deletedIds.has(trackId)).length,
+      })));
+      if (currentTrack && deletedIds.has(currentTrack.id)) {
+        audioEngine.pause();
+        setIsPlaying(false);
+        setCurrentTrack(null);
       }
-    } catch (e) {
-      console.error('Error wiping tracks:', e);
-      showToast('All uploaded songs wiped locally.');
+      showToast(`${deletedIds.size} owned track removed.`);
+    } catch (error) {
+      console.error('Error wiping owned tracks:', error);
+      showToast('Track cleanup failed.');
     }
   };
 
-  const handleToggleFollowArtist = (artistToToggle: Artist | UserProfile) => {
-    const normalizedTarget = normalizePublicArtist(artistToToggle);
-    if (normalizedTarget.isSynthetic || normalizedTarget.isUser !== true) {
-      showToast('This catalog artist is not linked to a followable user profile.');
-      return;
+  const handleToggleFollowArtist = async (artistToToggle: Artist | UserProfile) => {
+    const target = normalizePublicArtist(artistToToggle);
+    if (!userProfile || !target.id || target.id === userProfile.id) return;
+    const action = followedArtistIds.includes(target.id) ? 'unfollow' : 'follow';
+
+    try {
+      const response = await fetch(`/api/users/${target.id}/follow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ action }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) return showToast(data?.error || 'Follow action failed.');
+
+      setFollowedArtistIds(Array.isArray(data.followedArtistIds) ? data.followedArtistIds : []);
+      setUserProfile((previous) => previous ? {
+        ...previous,
+        stats: { ...previous.stats, followingCount: Number(data.followingCount) || 0 },
+      } : previous);
+      const confirmed: Artist = {
+        ...target,
+        stats: {
+          hoursListened: target.stats?.hoursListened || 0,
+          secondsListened: target.stats?.secondsListened || 0,
+          tracksPlayed: target.stats?.tracksPlayed || 0,
+          topGenre: target.stats?.topGenre || 'N/A',
+          playlistsCreated: target.stats?.playlistsCreated || 0,
+          followingCount: target.stats?.followingCount || 0,
+          followersCount: Number(data.followersCount) || 0,
+        },
+      };
+      upsertArtist(confirmed);
+      setSelectedArtist((current) => current?.id === target.id ? { ...current, stats: confirmed.stats! } : current);
+    } catch (error) {
+      console.error('Error updating follow relation:', error);
+      showToast('Follow action failed.');
     }
-    if (!userProfile || normalizedTarget.id === userProfile.id) return;
-
-    const artistId = normalizedTarget.id;
-    const isCurrentlyFollowing = followedArtistIds.includes(artistId);
-    const delta = isCurrentlyFollowing ? -1 : 1;
-
-    setFollowedArtistIds((prev) => {
-      const next = isCurrentlyFollowing ? prev.filter((id) => id !== artistId) : [artistId, ...prev];
-      try {
-        localStorage.setItem(`vertex_followed_artists_${userProfile.id}`, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
-
-    const updatedProfile: UserProfile = {
-      ...userProfile,
-      stats: {
-        ...userProfile.stats,
-        followingCount: Math.max(0, (userProfile.stats?.followingCount || 0) + delta),
-      },
-    };
-    setUserProfile(updatedProfile);
-    fetch(`/api/users/${userProfile.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-      body: JSON.stringify(updatedProfile),
-    }).catch((error) => console.error('Error updating following count:', error));
-
-    const optimisticTarget: Artist = {
-      ...normalizedTarget,
-      stats: {
-        hoursListened: normalizedTarget.stats?.hoursListened || 0,
-        secondsListened: normalizedTarget.stats?.secondsListened || 0,
-        tracksPlayed: normalizedTarget.stats?.tracksPlayed || 0,
-        topGenre: normalizedTarget.stats?.topGenre || 'N/A',
-        playlistsCreated: normalizedTarget.stats?.playlistsCreated || 0,
-        followingCount: normalizedTarget.stats?.followingCount || 0,
-        followersCount: Math.max(0, (normalizedTarget.stats?.followersCount || 0) + delta),
-      },
-    };
-    upsertArtist(optimisticTarget);
-    setSelectedArtist((current) =>
-      current && current.id === artistId ? { ...current, stats: optimisticTarget.stats! } : current
-    );
-
-    fetch(`/api/users/${artistId}/follow`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-      body: JSON.stringify({ action: isCurrentlyFollowing ? 'unfollow' : 'follow' }),
-    })
-      .then(async (res) => ({ ok: res.ok, data: await res.json().catch(() => null) }))
-      .then(({ ok, data }) => {
-        if (!ok || typeof data?.followersCount !== 'number') return;
-        const confirmed: Artist = {
-          ...optimisticTarget,
-          stats: { ...optimisticTarget.stats!, followersCount: data.followersCount },
-        };
-        upsertArtist(confirmed);
-        setSelectedArtist((current) =>
-          current && current.id === artistId ? { ...current, stats: confirmed.stats! } : current
-        );
-      })
-      .catch((error) => console.error('Error updating target followers count:', error));
   };
 
   const handleUpdateArtist = async (updatedData: {
@@ -1787,8 +1546,6 @@ export default function App() {
     avatarUrl: string;
     bannerUrl: string;
     genre: string;
-    artistVerified: boolean;
-    monthlyListeners: string;
     instagramUrl?: string;
     twitterUrl?: string;
     websiteUrl?: string;
@@ -1812,8 +1569,6 @@ export default function App() {
       favoriteGenres: genre
         ? [genre, ...(userProfile.favoriteGenres || []).filter((item) => item !== genre)]
         : userProfile.favoriteGenres || [],
-      artistVerified: updatedData.artistVerified === true,
-      monthlyListeners: updatedData.monthlyListeners || '0 monthly listeners',
       instagramUrl: updatedData.instagramUrl,
       twitterUrl: updatedData.twitterUrl,
       websiteUrl: updatedData.websiteUrl,
@@ -1821,9 +1576,8 @@ export default function App() {
       artistPickComment: updatedData.artistPickComment,
     };
 
-    setUserProfile(updatedProfile);
-    setSelectedArtist(updatedProfile);
-    upsertArtist(normalizePublicArtist(updatedProfile));
+    const previousProfile = userProfile;
+    const previousArtist = selectedArtist;
 
     try {
       const res = await fetch(`/api/users/${userProfile.id}`, {
@@ -1833,6 +1587,8 @@ export default function App() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success || !data.user) {
+        setUserProfile(previousProfile);
+        setSelectedArtist(previousArtist);
         showToast(data?.error || 'Could not save artist profile changes — please try again.');
         return;
       }
@@ -1844,37 +1600,42 @@ export default function App() {
       showToast('Artist profile saved successfully!');
     } catch (error) {
       console.error('Failed to sync artist profile update with server:', error);
+      setUserProfile(previousProfile);
+      setSelectedArtist(previousArtist);
       showToast('Could not save artist profile changes — please try again.');
     }
   };
 
   const handleUpdateUserProfile = async (updated: UserProfile) => {
-    setUserProfile(updated);
-    if (updated.isArtist) {
-      upsertArtist(normalizePublicArtist(updated));
+    if (!userProfile || updated.id !== userProfile.id) {
+      showToast('You can only edit your own profile.');
+      return;
     }
-    if (updated.id) {
-      try {
-        const res = await fetch(`/api/users/${updated.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-          body: JSON.stringify(updated),
-        });
-        const data = await res.json().catch(() => null);
-        // Swap in the server-persisted (R2/CDN) URLs so we're not left holding
-        // huge base64 data: URLs in state / localStorage after an image upload.
-        if (data?.success && data.user) {
-          const persisted = { ...updated, ...data.user } as UserProfile;
-          setUserProfile(persisted);
-          if (persisted.isArtist) upsertArtist(normalizePublicArtist(persisted));
-        }
-      } catch (err) {
-        console.error('Failed to update user profile on server:', err);
+
+    try {
+      const res = await fetch(`/api/users/${updated.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify(updated),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success || !data.user) {
+        showToast(data?.error || 'Profile update failed.');
+        return;
       }
+      const persisted = { ...userProfile, ...data.user } as UserProfile;
+      setUserProfile(persisted);
+      if (persisted.isArtist) upsertArtist(normalizePublicArtist(persisted));
+    } catch (error) {
+      console.error('Failed to update user profile on server:', error);
+      showToast('Profile update failed.');
     }
   };
 
   const progressFraction = currentTrack?.duration ? currentTimeSeconds / currentTrack.duration : 0;
+  const ownedPlaylists = userProfile ? playlists.filter((playlist) => playlist.userId === userProfile.id) : [];
+  const selectedPlaylist = playlists.find((playlist) => playlist.id === selectedPlaylistId) || null;
+  const canManageSelectedPlaylist = Boolean(userProfile && selectedPlaylist?.userId === userProfile.id);
   const isWorkspacePanelOpen = isEQOpen || isNewPlaylistOpen || isAddTrackOpen;
 
   return (
@@ -1901,7 +1662,7 @@ export default function App() {
           <SpotifySidebar
             activeTab={activeTab}
             onSelectTab={handleSelectTab}
-            playlists={playlists}
+            playlists={ownedPlaylists}
             artists={artists.filter((a) => followedArtistIds.includes(a.id))}
             tracks={tracks}
             onSelectPlaylist={handleSelectPlaylist}
@@ -1911,6 +1672,7 @@ export default function App() {
             onOpenProfileModal={handleOpenProfileModal}
             recentlyPlayed={recentlyPlayed}
             onSelectAlbum={handleSelectAlbum}
+            onSelectArtist={handleSelectArtist}
           />
         </div>
 
@@ -2049,7 +1811,6 @@ export default function App() {
               <div key={activeTab} className="view-transition">
                 {activeTab === 'home' && (
               <HomeView
-                tracks={tracks}
                 playlists={playlists}
                 albums={[]}
                 currentTrackId={currentTrack?.id}
@@ -2069,7 +1830,6 @@ export default function App() {
 
             {activeTab === 'browse' && (
               <BrowseView
-                tracks={tracks}
                 playlists={playlists}
                 artists={artists}
                 onPlayTrack={handlePlayTrack}
@@ -2081,7 +1841,6 @@ export default function App() {
 
             {activeTab === 'search' && (
               <SearchView
-                tracks={tracks}
                 playlists={playlists}
                 artists={artists}
                 userProfile={userProfile}
@@ -2097,7 +1856,7 @@ export default function App() {
             {activeTab === 'library' && (
               <LibraryView
                 tracks={tracks}
-                playlists={playlists}
+                playlists={ownedPlaylists}
                 artists={artists.filter((a) => followedArtistIds.includes(a.id))}
                 onPlayTrack={handlePlayTrack}
                 onPlayPlaylist={handlePlayPlaylist}
@@ -2113,9 +1872,10 @@ export default function App() {
 
             {activeTab === 'playlist' && (
               <PlaylistView
-                playlist={playlists.find((p) => p.id === selectedPlaylistId) || playlists[0]}
+                playlist={selectedPlaylist}
+                canManage={canManageSelectedPlaylist}
                 allTracks={tracks}
-                currentTrackId={currentTrack.id}
+                currentTrackId={currentTrack?.id}
                 isPlaying={isPlaying}
                 onPlayTrack={handlePlayTrack}
                 onPlayPlaylist={handlePlayPlaylist}
@@ -2129,7 +1889,6 @@ export default function App() {
 
             {activeTab === 'chat' && (
               <ChatView
-                tracks={tracks}
                 playlists={playlists}
                 messages={chatMessages}
                 onUpdateMessages={setChatMessages}
@@ -2144,10 +1903,10 @@ export default function App() {
               <ProfileView
                 userProfile={userProfile}
                 onUpdateProfile={handleUpdateUserProfile}
-                tracks={tracks}
                 playlists={playlists}
                 recentlyPlayed={recentlyPlayed}
                 onPlayTrack={handlePlayTrack}
+                onToggleLike={handleToggleLike}
                 onLogout={handleLogout}
                 onOpenAuthModal={() => setIsAuthModalOpen(true)}
                 onSelectArtist={handleSelectArtist}
@@ -2191,7 +1950,7 @@ export default function App() {
                 onSelectArtist={handleSelectArtist}
                 onGoBack={handleGoBack}
                 userProfile={userProfile}
-                playlists={playlists}
+                playlists={ownedPlaylists}
                 onAddToQueue={(tr) => setQueue((prev) => [...prev, tr])}
                 onAddToPlaylist={handleAddTrackToPlaylist}
                 onOpenNewPlaylist={() => openWorkspacePanel('playlist')}
@@ -2242,10 +2001,9 @@ export default function App() {
               currentTrack={currentTrack}
               isPlaying={isPlaying}
               artists={artists}
-              playlists={playlists}
+              playlists={ownedPlaylists}
               userProfile={userProfile}
               allTracks={tracks}
-              queue={queue}
               onClose={() => setIsRightSidebarOpen(false)}
               onToggleLike={handleToggleLike}
               onSelectArtist={handleSelectArtist}
@@ -2316,7 +2074,7 @@ export default function App() {
 
       <EditPlaylistModal
         isOpen={isEditPlaylistOpen}
-        playlist={playlists.find((p) => p.id === selectedPlaylistId) || null}
+        playlist={canManageSelectedPlaylist ? selectedPlaylist : null}
         onClose={() => setIsEditPlaylistOpen(false)}
         onSavePlaylist={handleUpdatePlaylist}
       />
@@ -2328,12 +2086,12 @@ export default function App() {
         onSelectDevice={setActiveDeviceName}
       />
 
-      <ProfileAndPremiumModal
+      <ProfileModal
         isOpen={isProfileModalOpen}
         userProfile={userProfile}
         onClose={() => setIsProfileModalOpen(false)}
         onUpdateProfile={handleUpdateUserProfile}
-        recentTracks={tracks.slice(0, 5)}
+        recentTracks={recentlyPlayed.slice(0, 5)}
         onPlayTrack={handlePlayTrack}
         onLogout={handleLogout}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
@@ -2350,7 +2108,6 @@ export default function App() {
         onClose={() => setEditingTrack(null)}
         track={editingTrack}
         userId={userProfile?.id}
-        tracks={tracks}
         onTrackUpdated={(updated) => {
           setTracks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
           if (currentTrack?.id === updated.id) {
@@ -2364,7 +2121,7 @@ export default function App() {
       <ContextMenu
         target={contextMenuTarget}
         onClose={() => setContextMenuTarget(null)}
-        playlists={playlists}
+        playlists={ownedPlaylists}
         isPlaying={isPlaying}
         currentTrack={currentTrack}
         currentUserId={userProfile?.id}

@@ -17,7 +17,8 @@ import {
 import { Playlist, Track } from '../../types';
 
 interface PlaylistViewProps {
-  playlist: Playlist;
+  playlist: Playlist | null;
+  canManage: boolean;
   allTracks: Track[];
   currentTrackId?: string;
   isPlaying: boolean;
@@ -32,6 +33,7 @@ interface PlaylistViewProps {
 
 export const PlaylistView: React.FC<PlaylistViewProps> = ({
   playlist,
+  canManage,
   allTracks,
   currentTrackId,
   isPlaying,
@@ -45,6 +47,18 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
 }) => {
   const [songSearchQuery, setSongSearchQuery] = useState('');
   const [showAddSection, setShowAddSection] = useState(false);
+
+  if (!playlist) {
+    return (
+      <div className="min-h-[55vh] flex items-center justify-center p-8">
+        <div className="text-center space-y-3">
+          <p className="text-5xl font-black text-white">404</p>
+          <h2 className="text-xl font-bold text-white">Playlist not found</h2>
+          <p className="text-sm text-zinc-400">This playlist does not exist or has been removed.</p>
+        </div>
+      </div>
+    );
+  }
 
   // Resolve tracks inside this playlist
   const playlistTracks = playlist.trackIds
@@ -82,13 +96,15 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
-          <button
-            onClick={onOpenEditModal}
-            className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white font-bold text-xs gap-1.5 transition-opacity backdrop-blur-xs"
-          >
-            <Edit3 className="w-4 h-4" />
-            <span>Edit Cover</span>
-          </button>
+          {canManage && (
+            <button
+              onClick={onOpenEditModal}
+              className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white font-bold text-xs gap-1.5 transition-opacity"
+            >
+              <Edit3 className="w-4 h-4" />
+              <span>Edit Cover</span>
+            </button>
+          )}
         </div>
 
         {/* Playlist Metadata Info */}
@@ -101,9 +117,9 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             {playlist.title}
           </h1>
 
-          <p className="text-sm text-zinc-300 line-clamp-2 leading-relaxed pt-1">
-            {playlist.description || 'Custom playlist on VERTEX Music.'}
-          </p>
+          {playlist.description && (
+            <p className="text-sm text-zinc-300 line-clamp-2 leading-relaxed pt-1">{playlist.description}</p>
+          )}
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400 pt-2 font-medium">
             <span className="text-white font-bold flex items-center gap-1">
@@ -115,24 +131,6 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
               <Clock className="w-3.5 h-3.5" />
               {durationMinutes} min
             </span>
-            <span>•</span>
-            <span className="flex items-center gap-1 text-pink-400">
-              <Heart className="w-3.5 h-3.5 fill-pink-400" />
-              {playlist.likes} likes
-            </span>
-
-            {playlist.tags && playlist.tags.length > 0 && (
-              <div className="flex items-center gap-1.5 ml-2">
-                {playlist.tags.map((tag, idx) => (
-                  <span
-                    key={idx}
-                    className="px-2 py-0.5 rounded-full bg-white/10 text-zinc-300 text-[10px] font-mono border border-white/10"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -170,30 +168,32 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             <Shuffle className="w-5 h-5" />
           </button>
 
-          {/* Edit Playlist Details Button */}
-          <button
-            onClick={onOpenEditModal}
-            className="flex items-center space-x-2 px-4 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors border border-white/10"
-          >
-            <Edit3 className="w-4 h-4 text-[#D946EF]" />
-            <span>Edit Details</span>
-          </button>
-
-          {/* Add Songs Toggle Button */}
-          <button
-            onClick={() => setShowAddSection(!showAddSection)}
-            className={`flex items-center space-x-2 px-4 py-2.5 rounded-full font-bold text-xs transition-colors border ${
-              showAddSection
-                ? 'bg-[#A855F7] text-white border-[#A855F7]'
-                : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
-            }`}
-          >
-            <ListPlus className="w-4 h-4" />
-            <span>{showAddSection ? 'Hide Song Suggestions' : 'Add Songs'}</span>
-          </button>
+          {canManage && (
+            <>
+              <button
+                onClick={onOpenEditModal}
+                className="flex items-center space-x-2 px-4 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors border border-white/10"
+              >
+                <Edit3 className="w-4 h-4 text-[#D946EF]" />
+                <span>Edit Details</span>
+              </button>
+              <button
+                onClick={() => setShowAddSection(!showAddSection)}
+                className={`flex items-center space-x-2 px-4 py-2.5 rounded-full font-bold text-xs transition-colors border ${
+                  showAddSection
+                    ? 'bg-[#A855F7] text-white border-[#A855F7]'
+                    : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
+                }`}
+              >
+                <ListPlus className="w-4 h-4" />
+                <span>{showAddSection ? 'Hide Songs' : 'Add Songs'}</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Delete Playlist Button */}
+        {canManage && (
         <button
           onClick={() => {
             if (
@@ -209,6 +209,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
           <Trash2 className="w-4 h-4" />
           <span>Delete Playlist</span>
         </button>
+        )}
       </div>
 
       {/* Playlist Tracklist Table */}
@@ -234,6 +235,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             <p className="text-xs text-zinc-400 max-w-sm mx-auto">
               Find songs from the library below and click "+ Add to Playlist" to build your custom mix.
             </p>
+            {canManage && (
             <button
               onClick={() => setShowAddSection(true)}
               className="mt-2 inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white font-bold text-xs shadow-lg"
@@ -241,6 +243,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
               <Plus className="w-4 h-4 stroke-[3]" />
               <span>Add Songs Now</span>
             </button>
+            )}
           </div>
         ) : (
           /* Table Rows */
@@ -339,16 +342,18 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                     </span>
 
                     {/* Remove Track from Playlist */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveTrackFromPlaylist(playlist.id, track.id);
-                      }}
-                      className="p-1 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                      title="Remove from playlist"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {canManage && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveTrackFromPlaylist(playlist.id, track.id);
+                        }}
+                        className="p-1 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Remove from playlist"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -358,12 +363,12 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
       </div>
 
       {/* Add Songs to Playlist Drawer / Section */}
-      {(showAddSection || playlistTracks.length === 0) && (
+      {canManage && (showAddSection || playlistTracks.length === 0) && (
         <div className="bg-[#181818] rounded-2xl p-6 border border-white/10 shadow-xl space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-extrabold text-white tracking-tight">
-                Recommended Songs for "{playlist.title}"
+                Songs available for "{playlist.title}"
               </h3>
               <p className="text-xs text-zinc-400">
                 Browse available tracks from your audio engine library to add to this playlist.

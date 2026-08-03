@@ -1,6 +1,6 @@
 {
   "name": "VERTEX Music",
-  "description": "High-density VERTEX Music web app with dual sidebar layout, interactive ambient mouse spotlight, global search, audio synth engine, and persistent playback control bar.",
+  "description": "Server-backed music library with authenticated profiles, artist ownership, playlists, uploads, playback, EQ, search, and optional AI features.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -19,7 +19,7 @@ export interface ReleaseGroup {
  * separate ones. Tracks uploaded as part of the same album/EP share a
  * `releaseId` (and, for older data, a common non-"Single" `album` name) —
  * both are used as grouping keys so this works for freshly uploaded and
- * legacy mock data alike.
+ * older persisted releases alike.
  */
 export function groupTracksByRelease(tracks: Track[]): ReleaseGroup[] {
   const groups = new Map<string, Track[]>();
@@ -62,48 +62,22 @@ export function groupTracksByRelease(tracks: Track[]): ReleaseGroup[] {
 }
 
 export function getArtistStats(artist: Artist | UserProfile | null | undefined, allTracks: Track[]) {
-  if (!artist) return { totalPlays: 0, monthlyListenersStr: '0 monthly listeners', artistName: '', artistTracks: [] };
+  if (!artist) return { totalPlays: 0, totalStreamsLabel: '0 total streams', artistName: '', artistTracks: [] };
 
   const isUserProfile = 'email' in artist;
-  
-  let artistName = '';
-  if (!isUserProfile) {
-    artistName = (artist as Artist).name;
-  } else {
-    const p = artist as UserProfile;
-    artistName = p.artistName || p.displayName || p.username || (p.email ? p.email.split('@')[0] : 'Artist');
-  }
-
-  const artistTracks = allTracks.filter((t) => {
-    const isRegisteredUserArtist = isUserProfile || (!isUserProfile && (artist as Artist).isUser === true);
-    if (isRegisteredUserArtist && t.userId && t.userId !== 'public') {
-      return t.userId === artist.id;
-    }
-    return Boolean(artistName && t.artist && t.artist.toLowerCase() === artistName.toLowerCase());
-  });
-
-  const totalArtistPlays = artistTracks.reduce(
-    (acc, t) => acc + (parseInt(t.plays || '0', 10) || 0),
+  const artistName = isUserProfile
+    ? ((artist as UserProfile).artistName || (artist as UserProfile).displayName || (artist as UserProfile).username)
+    : (artist as Artist).name;
+  const artistTracks = allTracks.filter((track) => track.userId === artist.id);
+  const totalPlays = artistTracks.reduce(
+    (total, track) => total + (Number.parseInt(track.plays || '0', 10) || 0),
     0
   );
 
-  const calculatedListenersStr = `${totalArtistPlays.toLocaleString()} monthly listeners`;
-
-  const rawMonthlyListeners = isUserProfile
-    ? (artist as UserProfile).monthlyListeners
-    : (artist as Artist).monthlyListeners;
-
-  const rawListenerCount = Number.parseInt(String(rawMonthlyListeners || '').replace(/[^0-9]/g, ''), 10) || 0;
-  const monthlyListenersStr = rawListenerCount > 0
-    ? String(rawMonthlyListeners)
-    : totalArtistPlays > 0
-      ? calculatedListenersStr
-      : '0 monthly listeners';
-
   return {
-    totalPlays: totalArtistPlays,
-    monthlyListenersStr,
+    totalPlays,
+    totalStreamsLabel: `${totalPlays.toLocaleString()} total streams`,
     artistName,
-    artistTracks
+    artistTracks,
   };
 }

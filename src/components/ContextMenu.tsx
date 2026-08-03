@@ -350,17 +350,18 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             <span>Copy Playlist Link</span>
           </button>
 
-          <button
-            onClick={() => {
-              onDeletePlaylist(activePlaylist.id);
-              showToast(`Deleted "${activePlaylist.title}"`);
-              onClose();
-            }}
-            className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Delete Playlist</span>
-          </button>
+          {currentUserId && activePlaylist.userId === currentUserId && (
+            <button
+              onClick={() => {
+                onDeletePlaylist(activePlaylist.id);
+                onClose();
+              }}
+              className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Delete Playlist</span>
+            </button>
+          )}
 
           <div className="h-[1px] bg-white/10 my-1" />
         </div>

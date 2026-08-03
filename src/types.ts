@@ -17,42 +17,35 @@ export interface UserProfile {
   email: string;
   avatarUrl: string;
   bio: string;
-  membershipTier: string; // e.g. "Free Hi-Res Member"
-  memberSince: string;
+  createdAt?: string;
   favoriteGenres: string[];
   isArtist?: boolean;
   artistName?: string;
   artistBio?: string;
   artistVerified?: boolean;
   bannerUrl?: string;
-  monthlyListeners?: string;
+  totalStreamsLabel?: string;
   instagramUrl?: string;
   twitterUrl?: string;
   websiteUrl?: string;
   artistPickTrackId?: string;
   artistPickComment?: string;
   stats: UserStats;
-  settings?: {
-    losslessAudio: boolean;
-    autoplay: boolean;
-    audioNormalization: boolean;
-    offlineDownloads: boolean;
-  };
 }
 
 export interface Track {
   id: string;
-  userId?: string;
+  userId: string;
   title: string;
   artist: string;
   album: string;
   coverUrl: string;
-  audioUrl?: string; // MP3 / Audio file URL or base64 data URL
+  audioUrl: string; // Real playable audio URL
   duration: number; // in seconds
   genre: string;
-  accentColor: string; // e.g. '#5E5CE6'
-  secondaryColor: string; // e.g. '#FF375F'
-  bpm: number;
+  accentColor?: string;
+  secondaryColor?: string;
+  bpm?: number;
   scale?: string; // synth scale preset for web audio
   plays?: string;
   isLiked?: boolean;
@@ -78,13 +71,11 @@ export interface Album {
 
 export interface Playlist {
   id: string;
-  userId?: string;
+  userId: string;
   title: string;
   description: string;
   coverUrl: string;
   trackCount: number;
-  likes: string;
-  tags: string[];
   trackIds: string[];
 }
 
@@ -96,11 +87,10 @@ export interface Artist {
   avatarUrl: string;
   bannerUrl?: string;
   bio?: string;
-  monthlyListeners: string;
+  totalStreamsLabel: string;
   verified: boolean;
   genre: string;
   isUser?: boolean;
-  isSynthetic?: boolean;
   stats?: UserStats;
   instagramUrl?: string;
   twitterUrl?: string;

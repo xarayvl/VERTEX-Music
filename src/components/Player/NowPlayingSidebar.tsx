@@ -12,7 +12,6 @@ interface NowPlayingSidebarProps {
   playlists: Playlist[];
   userProfile?: UserProfile | null;
   allTracks: Track[];
-  queue?: Track[];
   onClose: () => void;
   onToggleLike: (trackId: string) => void;
   onSelectArtist: (artist: Artist | UserProfile | string) => void;
@@ -28,7 +27,6 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
   playlists,
   userProfile,
   allTracks,
-  queue = [],
   onClose,
   onToggleLike,
   onSelectArtist,
@@ -68,35 +66,14 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
     );
   }
 
-  // Resolve the artist to display. We only ever treat `userProfile` as the
-  // artist when they are genuinely marked as an artist (isArtist) AND their
-  // name matches this track's artist — otherwise a random listener whose
-  // display name happens to match would incorrectly be shown as "the
-  // artist". But when it IS them, prefer their own live profile over the
-  // `artists` directory: that directory can hold a stale cached copy (e.g.
-  // synced before their most recent banner/avatar edit), so checking it
-  // first could show outdated artwork here even though the edit already
-  // saved successfully.
-  let displayObj: Artist | UserProfile | null = null;
-
-  if (
-    userProfile &&
-    userProfile.isArtist &&
-    ((currentTrack.userId && currentTrack.userId === userProfile.id) ||
-      userProfile.displayName?.toLowerCase() === currentTrack.artist.toLowerCase() ||
-      userProfile.artistName?.toLowerCase() === currentTrack.artist.toLowerCase() ||
-      userProfile.username?.toLowerCase() === currentTrack.artist.toLowerCase())
-  ) {
-    displayObj = userProfile;
-  } else {
-    displayObj =
-      artists.find((a) => currentTrack.userId && currentTrack.userId !== 'public' && a.id === currentTrack.userId) ||
-      artists.find((a) => a.name.toLowerCase() === currentTrack.artist.toLowerCase()) ||
-      null;
-  }
+  // Artist identity is resolved exclusively through the immutable owner ID.
+  const displayObj: Artist | UserProfile | null =
+    currentTrack.userId && userProfile?.id === currentTrack.userId
+      ? userProfile
+      : artists.find((artist) => artist.id === currentTrack.userId) || null;
 
   const stats = getArtistStats(displayObj, allTracks);
-  const artistListeners = stats.monthlyListenersStr;
+  const artistStreams = stats.totalStreamsLabel;
   const finalDisplayName = displayObj ? stats.artistName : currentTrack.artist;
 
   const isUserProfileDisplay = !!displayObj && 'email' in displayObj;
@@ -114,24 +91,14 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
 
   const isVerified = displayObj ? ('verified' in displayObj ? displayObj.verified : displayObj.artistVerified) : false;
 
-  // Determine active playlist from queue context
-  let activePlaylist: Playlist | undefined;
-  if (queue.length > 0) {
-    activePlaylist = playlists.find(p => p.trackIds.length === queue.length && p.trackIds.every((id, idx) => id === queue[idx]?.id));
-  }
-
-  // Render parent release / playlist or album name
-  let releaseContextText = "PLAYING FROM ALBUM";
-  let releaseName = currentTrack.releaseTitle || currentTrack.album;
-  
-  if (!releaseName || releaseName === 'Single') {
-    releaseName = currentTrack.title;
-  }
-
-  if (activePlaylist) {
-    releaseContextText = "PLAYING FROM PLAYLIST";
-    releaseName = activePlaylist.title;
-  }
+  // Queue order alone is not enough to identify the playback source.
+  // Showing a playlist name by comparing arrays caused unrelated queues with
+  // the same tracks to be attributed to the wrong playlist.
+  const releaseContextText = currentTrack.releaseType === 'SINGLE' || currentTrack.album === 'Single'
+    ? 'PLAYING FROM SINGLE'
+    : 'PLAYING FROM RELEASE';
+  const releaseName = currentTrack.releaseTitle ||
+    (currentTrack.album && currentTrack.album !== 'Single' ? currentTrack.album : currentTrack.title);
 
   return (
     <aside className="w-full h-full flex-shrink-0 flex flex-col select-none text-zinc-300 relative z-20">
@@ -174,10 +141,10 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
           {/* Track Title and Artist Details */}
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-extrabold text-white truncate leading-tight tracking-tight hover:text-[#D946EF] cursor-pointer" onClick={() => onSelectArtist(displayObj || finalDisplayName)}>
+              <h2 className="text-lg font-extrabold text-white truncate leading-tight tracking-tight hover:text-[#D946EF] cursor-pointer" onClick={() => onSelectArtist(displayObj || currentTrack.userId || '')}>
                 {currentTrack.title}
               </h2>
-              <p className="text-sm text-zinc-400 truncate mt-1 hover:text-[#D946EF] hover:underline cursor-pointer" onClick={() => onSelectArtist(displayObj || finalDisplayName)}>
+              <p className="text-sm text-zinc-400 truncate mt-1 hover:text-[#D946EF] hover:underline cursor-pointer" onClick={() => onSelectArtist(displayObj || currentTrack.userId || '')}>
                 {finalDisplayName}
               </p>
             </div>
@@ -274,11 +241,11 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
             {/* Artist Info Body */}
             <div className="p-4 space-y-3">
               <div>
-                <h4 className="font-extrabold text-white text-base tracking-tight truncate hover:underline cursor-pointer" onClick={() => onSelectArtist(finalDisplayName)}>
+                <h4 className="font-extrabold text-white text-base tracking-tight truncate hover:underline cursor-pointer" onClick={() => onSelectArtist(displayObj || currentTrack.userId || '')}>
                   {finalDisplayName}
                 </h4>
                 <p className="text-[11px] text-zinc-400 font-medium mt-0.5">
-                  {artistListeners}
+                  {artistStreams}
                 </p>
               </div>
 
@@ -289,7 +256,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
               )}
 
               <button
-                onClick={() => onSelectArtist(finalDisplayName)}
+                onClick={() => onSelectArtist(displayObj || currentTrack.userId || '')}
                 className="w-full flex items-center justify-center space-x-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all hover:border-white/20 active:scale-95"
               >
                 <span>Go to Artist Page</span>
