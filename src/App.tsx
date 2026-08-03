@@ -286,6 +286,56 @@ export default function App() {
     };
   }, [isResizingSidebar, isResizingRightSidebar]);
 
+  // Keeps the latest sidebar layout available to the window-resize handler
+  // below without re-subscribing that listener on every drag.
+  const sidebarLayoutRef = useRef({ sidebarWidth, rightSidebarWidth, isRightSidebarOpen });
+  useEffect(() => {
+    sidebarLayoutRef.current = { sidebarWidth, rightSidebarWidth, isRightSidebarOpen };
+  });
+
+  // Re-clamp both resizable sidebars whenever the browser window itself is
+  // resized. Sidebar widths are dragged (up to 520px / 450px) and cached in
+  // localStorage, so without this, a width saved on a wide monitor stayed
+  // fixed after shrinking the window — squeezing the main content area
+  // into a sliver (or negative space) and making the whole layout look
+  // broken instead of scaling down cleanly like the rest of the app.
+  useEffect(() => {
+    const MIN_MAIN_CONTENT = 360;
+
+    const clampToViewport = () => {
+      if (window.innerWidth < 768) return; // sidebars are hidden below md anyway
+      const { sidebarWidth: left, rightSidebarWidth: right, isRightSidebarOpen: rightOpen } =
+        sidebarLayoutRef.current;
+      const rightBudget = rightOpen ? right : 0;
+      const available = window.innerWidth - MIN_MAIN_CONTENT;
+      if (left + rightBudget <= available) return; // plenty of room, nothing to do
+
+      const nextLeft = Math.max(180, Math.min(left, available - (rightOpen ? 280 : 0)));
+      const nextRight = rightOpen ? Math.max(280, Math.min(right, available - nextLeft)) : right;
+
+      if (nextLeft !== left) {
+        setSidebarWidth(nextLeft);
+        try {
+          localStorage.setItem('vertex_sidebar_width', nextLeft.toString());
+        } catch {
+          // ignore storage access errors
+        }
+      }
+      if (rightOpen && nextRight !== right) {
+        setRightSidebarWidth(nextRight);
+        try {
+          localStorage.setItem('vertex_right_sidebar_width', nextRight.toString());
+        } catch {
+          // ignore storage access errors
+        }
+      }
+    };
+
+    clampToViewport();
+    window.addEventListener('resize', clampToViewport);
+    return () => window.removeEventListener('resize', clampToViewport);
+  }, []);
+
   const handleStartResizing = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -799,9 +849,18 @@ export default function App() {
     queue,
     repeatMode,
     isShuffle,
+    currentTimeSeconds,
     handleNextTrack: () => {},
     handlePrevTrack: () => {},
+    handleTogglePlay: () => {},
+    handleToggleLike: (_trackId: string) => {},
+    handleSelectTab: (_tab: TabType) => {},
   });
+
+  // Remembers the volume level from just before a keyboard "Mute" (M) so
+  // it can be restored on unmute, without needing volume in the effect's
+  // dependency array.
+  const prevVolumeRef = useRef(volume);
 
   // Handle Navigation Tab Switch
   const handleSelectTab = (tab: TabType) => {
@@ -1088,8 +1147,12 @@ export default function App() {
       queue,
       repeatMode,
       isShuffle,
+      currentTimeSeconds,
       handleNextTrack,
       handlePrevTrack,
+      handleTogglePlay,
+      handleToggleLike,
+      handleSelectTab,
     };
   });
 
@@ -1118,6 +1181,109 @@ export default function App() {
       setCurrentTrack((prev) => (prev ? { ...prev, isLiked: !prev.isLiked } : null));
     }
   };
+
+  // Spotify-style desktop keyboard shortcuts. Mounted once and reads
+  // everything it needs from playbackRef (kept fresh above) so it never
+  // sees stale state without having to re-subscribe on every keystroke.
+  //   Space              Play / Pause
+  //   ←  /  →            Seek -5s / +5s
+  //   Ctrl/Cmd + ←  /  → Previous / Next track
+  //   ↑  /  ↓            Volume up / down
+  //   M                  Mute / unmute
+  //   L                  Like / unlike current track
+  //   Ctrl/Cmd + K       Jump to Search
+  useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!target || !(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+
+      // Ctrl/Cmd combos first, before the plain-key switch below.
+      if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowRight') {
+        e.preventDefault();
+        playbackRef.current.handleNextTrack();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        playbackRef.current.handlePrevTrack();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        playbackRef.current.handleSelectTab('search');
+        return;
+      }
+      // Don't hijack any other browser/OS shortcut combos.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      switch (e.key) {
+        case ' ':
+        case 'Spacebar': {
+          e.preventDefault();
+          playbackRef.current.handleTogglePlay();
+          break;
+        }
+        case 'ArrowRight': {
+          const track = playbackRef.current.currentTrack;
+          if (!track) break;
+          e.preventDefault();
+          const nextSeconds = Math.min(track.duration || 0, playbackRef.current.currentTimeSeconds + 5);
+          setCurrentTimeSeconds(nextSeconds);
+          audioEngine.seek(nextSeconds, track);
+          break;
+        }
+        case 'ArrowLeft': {
+          const track = playbackRef.current.currentTrack;
+          if (!track) break;
+          e.preventDefault();
+          const nextSeconds = Math.max(0, playbackRef.current.currentTimeSeconds - 5);
+          setCurrentTimeSeconds(nextSeconds);
+          audioEngine.seek(nextSeconds, track);
+          break;
+        }
+        case 'ArrowUp': {
+          e.preventDefault();
+          setVolume((v) => Math.min(1, Math.round((v + 0.05) * 100) / 100));
+          break;
+        }
+        case 'ArrowDown': {
+          e.preventDefault();
+          setVolume((v) => Math.max(0, Math.round((v - 0.05) * 100) / 100));
+          break;
+        }
+        case 'm':
+        case 'M': {
+          e.preventDefault();
+          setVolume((v) => {
+            if (v > 0) {
+              prevVolumeRef.current = v;
+              return 0;
+            }
+            return prevVolumeRef.current || 0.7;
+          });
+          break;
+        }
+        case 'l':
+        case 'L': {
+          const track = playbackRef.current.currentTrack;
+          if (!track) break;
+          e.preventDefault();
+          playbackRef.current.handleToggleLike(track.id);
+          break;
+        }
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handlePlayPlaylist = (playlist: Playlist) => {
     const playlistTracks = tracks.filter((t) => playlist.trackIds.includes(t.id));

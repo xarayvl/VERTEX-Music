@@ -879,6 +879,54 @@ async function startServer() {
     }
   });
 
+  // Persist cumulative listening-time stats (seconds/hours listened).
+  // The client pings this every ~15s while a track is playing so the
+  // "hours listened" stat on the profile is real and survives redeploys
+  // instead of only living in local React state / localStorage.
+  app.post("/api/users/:userId/listening-stats", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      if (!verifyUserOwnership(req, userId)) {
+        return res.status(403).json({ error: "Forbidden: Unauthorized user session." });
+      }
+
+      const { secondsListened, hoursListened } = req.body as {
+        secondsListened?: number;
+        hoursListened?: number;
+      };
+
+      const db = await readDBAsync();
+      const index = db.users.findIndex((u) => u.id === userId);
+      if (index === -1) {
+        return res.status(404).json({ error: "User not found." });
+      }
+
+      db.users[index] = {
+        ...db.users[index],
+        stats: {
+          hoursListened: 0,
+          tracksPlayed: 0,
+          topGenre: "N/A",
+          playlistsCreated: 0,
+          ...db.users[index].stats,
+          secondsListened: Number.isFinite(secondsListened)
+            ? Number(secondsListened)
+            : db.users[index].stats?.secondsListened || 0,
+          hoursListened: Number.isFinite(hoursListened)
+            ? Number(hoursListened)
+            : db.users[index].stats?.hoursListened || 0,
+        },
+      };
+
+      writeDB(db);
+
+      return res.json({ success: true, stats: db.users[index].stats });
+    } catch (error: any) {
+      console.error("Persist Listening Stats Error:", error);
+      return res.status(500).json({ error: "Failed to persist listening stats." });
+    }
+  });
+
   // Add Custom Track & Store Audio File to User Directory / Cloudflare R2
   app.post("/api/tracks", async (req, res) => {
     try {
@@ -1050,6 +1098,54 @@ async function startServer() {
     } catch (error: any) {
       console.error("Update Track Error:", error);
       return res.status(500).json({ error: "Failed to update track." });
+    }
+  });
+
+  // Record a track play. The client fires this every time a track starts
+  // playing so the "N plays" count shown on tracks/artists is real and
+  // survives redeploys (persisted to disk / Upstash) instead of only
+  // living in local React state, which used to reset on every refresh.
+  app.post("/api/tracks/:id/play", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const db = await readDBAsync();
+
+      const trackIndex = db.tracks.findIndex((t) => t.id === id);
+      if (trackIndex === -1) {
+        return res.status(404).json({ error: "Track not found." });
+      }
+
+      const currentPlays = Number.parseInt(db.tracks[trackIndex].plays || "0", 10) || 0;
+      const nextPlays = (currentPlays + 1).toString();
+      db.tracks[trackIndex] = { ...db.tracks[trackIndex], plays: nextPlays };
+
+      // Also bump the listener's own "tracks played" stat, if they're
+      // logged in. The frontend comment on this call claims it persists
+      // this stat, so make that true instead of only updating the track.
+      const sessionUserId = getUserIdFromToken(req);
+      if (sessionUserId) {
+        const userIndex = db.users.findIndex((u) => u.id === sessionUserId);
+        if (userIndex !== -1) {
+          db.users[userIndex] = {
+            ...db.users[userIndex],
+            stats: {
+              hoursListened: 0,
+              tracksPlayed: 0,
+              topGenre: "N/A",
+              playlistsCreated: 0,
+              ...db.users[userIndex].stats,
+              tracksPlayed: (db.users[userIndex].stats?.tracksPlayed || 0) + 1,
+            },
+          };
+        }
+      }
+
+      writeDB(db);
+
+      return res.json({ success: true, plays: nextPlays });
+    } catch (error: any) {
+      console.error("Record Track Play Error:", error);
+      return res.status(500).json({ error: "Failed to record track play." });
     }
   });
 
