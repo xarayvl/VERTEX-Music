@@ -3,6 +3,7 @@
 # 🎵 VERTEX Music
 
 **A full-stack, music streaming platform with real accounts, real storage, and AI-generated music.**
+*Made with Gemini, Claude, ChatGPT.*
 
 [![Status](https://img.shields.io/badge/status-private%20%2F%20not%20public-critical)](#-private-project--not-open-for-public-use-or-contribution)
 [![Made with React](https://img.shields.io/badge/Made%20with-React%2018-61DAFB?logo=react&logoColor=white)](#tech-stack)
