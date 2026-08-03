@@ -2,9 +2,9 @@
 
 # 🎵 VERTEX Music
 
-**A full-stack, music streaming platform with real accounts, real storage, and AI-generated music using Lyria AI.**
+**A full-stack, Spotify-inspired music streaming platform with real accounts, real storage, and AI-generated music.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
+[![Status](https://img.shields.io/badge/status-private%20%2F%20not%20public-critical)](#-private-project--not-open-for-public-use-or-contribution)
 [![Made with React](https://img.shields.io/badge/Made%20with-React%2018-61DAFB?logo=react&logoColor=white)](#tech-stack)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](#tech-stack)
 [![Powered by Gemini](https://img.shields.io/badge/AI-Gemini%20%2F%20Lyria-8E75B2)](#-ai-features)
@@ -13,11 +13,16 @@
 
 <br/>
 
+> ## 🔒 Private Project — Not Open for Public Use or Contribution
+> This is a **single-developer project**, not an open-source or community codebase. It is **not currently intended for public release, redistribution, or deployment**, and it is **not open to outside contributions, pull requests, or forks**. Please don't copy, modify, or redistribute this code without explicit permission from the owner.
+
+<br/>
+
 ## About VERTEX Music
 
-VERTEX Music is a music web app with a working Express + TypeScript backend behind it — not just a UI mockup. It has real user accounts (bcrypt-hashed passwords, sessions), persistent storage for tracks/playlists/users, file uploads for audio and cover art, and a built-in AI DJ/chat assistant plus AI music generation powered by Google's Gemini and Lyria models.
+VERTEX Music is a Spotify-style music web app with a working Express + TypeScript backend behind it — not just a UI mockup. It has real user accounts (bcrypt-hashed passwords, sessions), persistent storage for tracks/playlists/users, file uploads for audio and cover art, and a built-in AI DJ/chat assistant plus AI music generation powered by Google's Gemini and Lyria models.
 
-> **Note:** The codebase's internal package name / working title is `sonora` (visible in `index.html` and the project directory) — the app itself, and the AI assistant embedded in it ("VERTEX Music AI"), are branded **VERTEX Music**. VERTEX Music is an independent project and is **not affiliated with any major music streaming service**.
+> **Note:** The codebase's internal package name / working title is `sonora` (visible in `index.html` and the project directory) — the app itself, and the AI assistant embedded in it ("VERTEX Music AI"), are branded **VERTEX Music**. VERTEX Music is an independent project and is **not affiliated with Spotify AB**.
 
 <br/>
 
@@ -120,7 +125,7 @@ UPSTASH_REDIS_REST_TOKEN=
 
 > ⚠️ **Never commit real passwords, API keys, or secret tokens to GitHub.**
 
-Only `GEMINI_API_KEY` is strictly required to run the app locally with AI features enabled. Without R2 / Upstash credentials, Sonora still works fully — it just stores data and files locally instead of in the cloud.
+Only `GEMINI_API_KEY` is strictly required to run the app locally with AI features enabled. Without R2 / Upstash credentials, VERTEX Music still works fully — it just stores data and files locally instead of in the cloud.
 
 <br/>
 
@@ -140,26 +145,26 @@ Only `GEMINI_API_KEY` is strictly required to run the app locally with AI featur
 ## 📁 Project Structure
 
 ```
-vertex-music/          # working directory name may still show as "sonora" locally
-├── server.ts                 # Express app: auth, tracks, playlists, search, AI chat & music gen
+vertex-music/                    # working directory name may still show as "sonora" locally
+├── server.ts                    # Express app: auth, tracks, playlists, search, AI chat & music gen
 ├── server/
-│   └── db.ts                  # Upstash Redis client + local-disk fallback persistence layer
+│   └── db.ts                    # Upstash Redis client + local-disk fallback persistence layer
 ├── data/
-│   └── db.json                 # Local fallback database file
+│   └── db.json                  # Local fallback database file
 ├── src/
 │   ├── audio/
-│   │   └── audioEngine.ts     # Web Audio API playback engine (EQ, analyser, gain)
+│   │   └── audioEngine.ts       # Web Audio API playback engine (EQ, analyser, gain)
 │   ├── components/
-│   │   ├── Modals/            # Auth, add/edit track, playlist, EQ, device selector, profile, etc.
-│   │   ├── Navigation/        # Sidebar, top header, mobile bottom tab bar
-│   │   ├── Player/            # Playback bar, mini player, now-playing sidebar, visualizer
-│   │   └── Views/              # Home, Search, Browse, Library, Artist, Album, Playlist, Chat, Profile
-│   ├── data/                   # Static browse category data
-│   ├── utils/                  # Artist utilities, cover colors, profile placeholders
-│   ├── types.ts                # Shared TypeScript types
-│   ├── App.tsx                 # Root application component & view routing
-│   └── main.tsx                # Client entry point
-├── firestore.rules             # Firestore security rules (scaffold; not currently wired up)
+│   │   ├── Modals/              # Auth, add/edit track, playlist, EQ, device selector, profile, etc.
+│   │   ├── Navigation/          # Sidebar, top header, mobile bottom tab bar
+│   │   ├── Player/              # Playback bar, mini player, now-playing sidebar, visualizer
+│   │   └── Views/                # Home, Search, Browse, Library, Artist, Album, Playlist, Chat, Profile
+│   ├── data/                    # Static browse category data
+│   ├── utils/                   # Artist utilities, cover colors, profile placeholders
+│   ├── types.ts                 # Shared TypeScript types
+│   ├── App.tsx                  # Root application component & view routing
+│   └── main.tsx                 # Client entry point
+├── firestore.rules              # Firestore security rules (scaffold; not currently wired up)
 ├── .env.example
 ├── package.json
 └── vite.config.ts
@@ -195,228 +200,10 @@ VERTEX Music is an independent educational and portfolio project. It does not cl
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+This is a **private, closed project**. All rights reserved — no license is granted for reuse, redistribution, or modification by anyone other than the project owner.
 
 <div align="center">
 
 Made with ❤️ for music lovers.
-
-</div><div align="center">
-
-# 🎵 VERTEX Music
-
-**A modern, Spotify-inspired music streaming experience**
-
-Discover music, explore artists, build playlists, and enjoy a clean, responsive interface designed for desktop and mobile.
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
-[![Status](https://img.shields.io/badge/status-active%20development-brightgreen)](#project-status)
-[![Made with Node.JS](https://img.shields.io/badge/Made%20with-React-61DAFB?logo=react&logoColor=white)](#tech-stack)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-blueviolet.svg)](#contributing)
-
-[Features](#-features) · [Getting Started](#-getting-started) · [Tech Stack](#-tech-stack) · [Contributing](#-contributing)
-
-</div>
-
-<br/>
-
-## 📸 Preview
-
-<div align="center">
-
-![VERTEX Music Preview](./assets/vertex-preview.png)
-
-<sub>Replace this with a real screenshot or demo GIF once available.</sub>
-
-</div>
-
-> **Note:** VERTEX Music is an independent project and is **not affiliated with Spotify AB**.
-
-<br/>
-
-## ✨ Features
-
-<table>
-<tr>
-<td width="50%" valign="top">
-
-**Core Experience**
-- 🎨 Modern, dark-themed music streaming UI
-- 📱 Fully responsive — desktop & mobile
-- 🔍 Music search
-- 🎤 Artist profile pages
-- 💿 Album & track pages
-- 👤 User profiles
-
-</td>
-<td width="50%" valign="top">
-
-**Playback & Library**
-- 📚 Personal music library
-- 📝 Playlist creation & management
-- ❤️ Favorites and liked songs
-- ⏱️ Recently played tracks
-- 🎧 Playback controls & queue view
-- 🧭 Sidebar navigation with smooth transitions
-
-</td>
-</tr>
-</table>
-
-<details>
-<summary><strong>🛣️ Planned Features</strong></summary>
-<br/>
-
-- 🔐 User authentication
-- 🔄 Real-time synchronized playback
-- 🎼 Lyrics support
-- 📊 Audio visualizer
-- 🤝 Collaborative playlists
-- 👥 Social activity & friend system
-- ✅ Artist verification system
-- 🎯 Personalized recommendations
-- 📈 Listening statistics
-- 📴 Offline playback
-- 🖥️ Desktop application
-- 🌐 Progressive Web App support
-
-</details>
-
-<br/>
-
-## 🛠️ Tech Stack
-
-> Update this section to match the technologies actually used in your project.
-
-| Area | Technology |
-|------|------------|
-| **Frontend** | React · JavaScript / TypeScript |
-| **Styling** | CSS · Tailwind CSS |
-| **Backend** | Node.js · Express |
-| **Database** | PostgreSQL · MongoDB |
-| **Authentication** | JWT · OAuth |
-| **Deployment** | Vercel · Render |
-
-<br/>
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-Make sure you have the following installed:
-
-- [Node.js](https://nodejs.org/)
-- npm, pnpm, or Yarn
-- [Git](https://git-scm.com/)
-
-### Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/vertex-music.git
-
-# 2. Open the project directory
-cd vertex-music
-
-# 3. Install dependencies
-npm install
-
-# 4. Start the development server
-npm run dev
-```
-
-Then open the local URL shown in your terminal. 🎉
-
-### Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-VITE_API_URL=http://localhost:3000
-```
-
-Add any other API keys, database URLs, or authentication secrets required by your project.
-
-> ⚠️ **Never commit real passwords, private API keys, or secret tokens to GitHub.**
-
-<br/>
-
-## 📜 Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Starts the development server |
-| `npm run build` | Creates a production build |
-| `npm run preview` | Previews the production build |
-| `npm run lint` | Checks the project for code issues |
-
-<br/>
-
-## 📁 Project Structure
-
-```
-vertex-music/
-├── public/
-├── src/
-│   ├── assets/
-│   ├── components/
-│   ├── pages/
-│   ├── services/
-│   ├── hooks/
-│   ├── context/
-│   ├── styles/
-│   ├── App.jsx
-│   └── main.jsx
-├── .env.example
-├── package.json
-└── README.md
-```
-
-<br/>
-
-## 🧭 Project Status
-
-VERTEX Music is currently **under active development**. Features, designs, and project structure may change as development continues.
-
-<br/>
-
-## 🤝 Contributing
-
-Contributions, bug reports, and feature suggestions are welcome!
-
-1. **Fork** the repository
-2. **Create** a new branch
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-3. **Commit** your changes
-   ```bash
-   git commit -m "Add your feature"
-   ```
-4. **Push** the branch
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-5. **Open** a pull request
-
-<br/>
-
-## ⚖️ Disclaimer
-
-VERTEX Music is an independent educational and portfolio project. The project does not claim ownership of third-party music, album artwork, artist images, trademarks, or branding. Any external media used during development should be properly licensed or replaced before public distribution.
-
-<br/>
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
-
-<br/>
-
-<div align="center">
-
-Made with ❤️ for music lovers.
-
-**VERTEX Music**
 
 </div>
