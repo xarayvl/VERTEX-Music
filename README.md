@@ -17,7 +17,7 @@
 
 VERTEX Music is a music web app with a working Express + TypeScript backend behind it — not just a UI mockup. It has real user accounts (bcrypt-hashed passwords, sessions), persistent storage for tracks/playlists/users, file uploads for audio and cover art, and a built-in AI DJ/chat assistant plus AI music generation powered by Google's Gemini and Lyria models.
 
-> **Note:** The codebase's internal package name / working title is `sonora` (visible in `index.html` and the project directory) — the app itself, and the AI assistant embedded in it ("VERTEX Music AI"), are branded **VERTEX Music**. VERTEX Music is an independent project and is **not affiliated with any major music streaming service.**.
+> **Note:** The codebase's internal package name / working title is `sonora` (visible in `index.html` and the project directory) — the app itself, and the AI assistant embedded in it ("VERTEX Music AI"), are branded **VERTEX Music**. VERTEX Music is an independent project and is **not affiliated with any major music streaming service**.
 
 <br/>
 
