@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Search, SlidersHorizontal, Bot, Crown, User, Settings, ExternalLink, LogOut, Check, ChevronDown, Sparkles, Music } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, SlidersHorizontal, Bot, Crown, User, ExternalLink, LogOut, Check, ChevronDown, Sparkles, Music } from 'lucide-react';
 import { TabType, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
@@ -146,11 +146,11 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
         {onOpenAddTrackModal && (
           <button
             onClick={onOpenAddTrackModal}
-            title="Add Song"
-            className="hidden sm:flex items-center space-x-1.5 px-2.5 lg:px-3 py-1.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white text-xs font-extrabold shadow-md hover:opacity-90 active:scale-95 transition-all flex-shrink-0"
+            title="Upload"
+            className="flex items-center space-x-1.5 px-2 py-1.5 text-white/80 hover:text-white text-xs font-extrabold hover:drop-shadow-[0_0_8px_rgba(217,70,239,0.85)] active:scale-95 transition-all flex-shrink-0"
           >
-            <span aria-hidden="true">+</span>
-            <span className="hidden lg:inline">Add Song</span>
+            <span aria-hidden="true" className="text-[#D946EF] text-base leading-none">+</span>
+            <span className="hidden lg:inline">Upload</span>
           </button>
         )}
 
@@ -217,7 +217,6 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                   onClick={() => {
                     setIsMenuOpen(false);
                     onSelectTab('profile');
-                    if (onOpenProfileModal) onOpenProfileModal();
                   }}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-zinc-200 hover:text-white hover:bg-white/10 rounded-md transition-colors"
                 >
@@ -238,17 +237,6 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                     <SlidersHorizontal className="w-4 h-4 text-[#D946EF]" />
                     <span>Audio Equalizer</span>
                   </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    onSelectTab('profile');
-                  }}
-                  className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:text-white hover:bg-white/10 rounded-md transition-colors"
-                >
-                  <Settings className="w-4 h-4 text-zinc-400" />
-                  <span>Account Settings</span>
                 </button>
 
                 <div className="my-1 border-t border-white/10" />

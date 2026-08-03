@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Library, Plus, Heart, Play, Grid, List, Music, Disc } from 'lucide-react';
+import { Library, Plus, Heart, Play, Grid, List, Disc } from 'lucide-react';
 import { Track, Playlist, Artist } from '../../types';
 
 interface LibraryViewProps {
@@ -48,10 +48,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           {onOpenAddTrackModal && (
             <button
               onClick={onOpenAddTrackModal}
-              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs transition-all active:scale-95 border border-white/10"
+              className="flex items-center space-x-1.5 px-2 py-2 text-white/80 hover:text-white font-extrabold text-xs transition-all active:scale-95 hover:drop-shadow-[0_0_8px_rgba(217,70,239,0.85)]"
             >
-              <Music className="w-3.5 h-3.5 text-[#D946EF]" />
-              <span>Add Song</span>
+              <span aria-hidden="true" className="text-[#D946EF]">+</span>
+              <span>Upload</span>
             </button>
           )}
 

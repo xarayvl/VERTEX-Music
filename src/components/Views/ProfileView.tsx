@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   User,
   Edit3,
@@ -78,6 +78,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [avatarUrl, setAvatarUrl] = useState(userProfile?.avatarUrl || '');
   const [favoriteGenres, setFavoriteGenres] = useState<string[]>(userProfile?.favoriteGenres || []);
   const [newGenre, setNewGenre] = useState('');
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [isReadingAvatarFile, setIsReadingAvatarFile] = useState(false);
 
   // Audio & App Preferences state
   const [settings, setSettings] = useState({
@@ -105,6 +107,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       url: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=800&q=80',
     },
   ];
+
+  const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      e.target.value = '';
+      return;
+    }
+    setIsReadingAvatarFile(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) setAvatarUrl(result);
+      setIsReadingAvatarFile(false);
+    };
+    reader.onerror = () => setIsReadingAvatarFile(false);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -394,10 +415,31 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 />
               </div>
 
-              {/* Avatar Presets */}
+              {/* Avatar Upload / Presets */}
               <div>
-                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                  Choose Preset Avatar
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                    Profile Photo
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    disabled={isReadingAvatarFile}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-[11px] font-bold text-white transition-colors disabled:opacity-50"
+                  >
+                    <Upload className="w-3 h-3" />
+                    <span>{isReadingAvatarFile ? 'Reading...' : 'Upload Your Own Photo'}</span>
+                  </button>
+                  <input
+                    ref={avatarFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarFileUpload}
+                    className="hidden"
+                  />
+                </div>
+                <label className="block text-[11px] text-zinc-500 mb-2">
+                  Or choose a preset:
                 </label>
                 <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
                   {presetAvatars.map((av, i) => (

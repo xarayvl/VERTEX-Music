@@ -274,15 +274,15 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
               </div>
               <div>
                 <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
-                  Artist Name *
+                  Artist Name
                 </label>
                 <input
                   type="text"
-                  required
                   value={artist}
-                  onChange={(e) => setArtist(e.target.value)}
-                  placeholder="Artist name"
-                  className="w-full px-3.5 py-2.5 bg-[#282828] border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
+                  disabled
+                  readOnly
+                  title="Artist name can't be changed here."
+                  className="w-full px-3.5 py-2.5 bg-[#1e1e1e] border border-white/5 rounded-xl text-sm text-zinc-400 cursor-not-allowed"
                 />
               </div>
             </div>
