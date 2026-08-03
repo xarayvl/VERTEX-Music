@@ -330,7 +330,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       {/* Sub-Navigation Bar */}
-      <div className="sticky top-0 z-20 -mx-6 px-6 py-3.5 bg-[#121212] border-b border-white/10 flex items-center space-x-2 mt-0 mb-6 shadow-md">
+      <div className="-mx-6 px-6 py-3.5 bg-[#121212] border-b border-white/10 flex items-center space-x-2 mt-0 mb-6">
         <button
           onClick={() => setActiveSubTab('overview')}
           className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${

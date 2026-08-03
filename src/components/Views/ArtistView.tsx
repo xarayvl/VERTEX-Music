@@ -48,7 +48,8 @@ interface ArtistViewProps {
     artistPickTrackId?: string;
     artistPickComment?: string;
   }) => void;
-  onShufflePlay?: (tracks: Track[]) => void;
+  isShuffle?: boolean;
+  onToggleShuffle?: (tracks: Track[]) => void;
   isFollowing?: boolean;
   onToggleFollow?: (artist: Artist | UserProfile) => void;
   isLoading?: boolean;
@@ -67,7 +68,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   onGoBack,
   userProfile,
   onUpdateArtist,
-  onShufflePlay,
+  isShuffle = false,
+  onToggleShuffle,
   isFollowing = false,
   onToggleFollow,
   isLoading = false,
@@ -302,24 +304,16 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
 
         {/* Shuffle Button */}
         <button
-          onClick={() => {
-            if (displayTracks.length === 0) return;
-            if (onShufflePlay) {
-              onShufflePlay(displayTracks);
-            } else {
-              // Fallback if no dedicated handler was wired up: pick a
-              // genuinely random track rather than always track 0, so this
-              // doesn't just re-toggle-pause whatever's already playing.
-              const pool =
-                isPlaying && currentTrackId && displayTracks.length > 1
-                  ? displayTracks.filter((t) => t.id !== currentTrackId)
-                  : displayTracks;
-              const randomTrack = pool[Math.floor(Math.random() * pool.length)];
-              onPlayTrack(randomTrack);
-            }
-          }}
-          className="p-3 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
-          title="Shuffle Play"
+          onClick={() => onToggleShuffle?.(displayTracks)}
+          disabled={displayTracks.length === 0 || !onToggleShuffle}
+          className={`p-3 rounded-full hover:bg-white/10 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            isShuffle
+              ? 'text-[#D946EF] hover:text-[#E879F9]'
+              : 'text-zinc-400 hover:text-white'
+          }`}
+          title={isShuffle ? 'Disable Shuffle' : 'Enable Shuffle'}
+          aria-label={isShuffle ? 'Disable shuffle' : 'Enable shuffle'}
+          aria-pressed={isShuffle}
         >
           <Shuffle className="w-6 h-6" />
         </button>

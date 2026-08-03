@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import {
-  SlidersHorizontal,
   ChevronDown,
-  Disc,
+  Disc3,
+  Heart,
+  Pause,
+  Play,
   Radio,
+  SkipBack,
+  SkipForward,
+  SlidersHorizontal,
+  Sparkles,
+  UserRound,
+  Waves,
 } from 'lucide-react';
 import { Track } from '../../types';
 import { AudioVisualizer } from '../Player/AudioVisualizer';
@@ -14,21 +22,39 @@ interface SongScreenModalProps {
   onClose: () => void;
   currentTrack: Track | null;
   isPlaying: boolean;
+  currentTimeSeconds: number;
+  onTogglePlay: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+  onSeek: (fraction: number) => void;
+  onToggleLike: (trackId: string) => void;
   onOpenEQ?: () => void;
+  onSelectArtist?: (artistId: string) => void;
+  onSelectAlbum?: (track: Track) => void;
 }
+
+const formatTime = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
 
 export const SongScreenModal: React.FC<SongScreenModalProps> = ({
   isOpen,
   onClose,
   currentTrack,
   isPlaying,
+  currentTimeSeconds,
+  onTogglePlay,
+  onNext,
+  onPrev,
+  onSeek,
+  onToggleLike,
   onOpenEQ,
+  onSelectArtist,
+  onSelectAlbum,
 }) => {
-  // Live palette pulled from the actual cover art pixels, so the background
-  // atmosphere and EQ bars always match this specific track's artwork —
-  // rather than the accentColor/secondaryColor track fields, which are
-  // never populated by the upload flow and so are always undefined for
-  // real user-uploaded music.
   const [palette, setPalette] = useState<CoverPalette>({
     accent: currentTrack?.accentColor || '#A855F7',
     secondary: currentTrack?.secondaryColor || '#D946EF',
@@ -44,116 +70,222 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
     return () => {
       cancelled = true;
     };
-    // Re-run whenever the track (and therefore its cover) changes.
   }, [currentTrack?.coverUrl]);
 
   if (!isOpen || !currentTrack) return null;
 
+  const releaseName = currentTrack.releaseTitle || currentTrack.album || currentTrack.title;
+  const releaseType = (currentTrack.releaseType || 'Single').toUpperCase();
+  const progress = currentTrack.duration > 0
+    ? Math.min(1, Math.max(0, currentTimeSeconds / currentTrack.duration))
+    : 0;
+
   return (
-    <div className="w-full h-full min-h-[500px] flex flex-col justify-between bg-[#0b0b12] text-white p-6 sm:p-8 rounded-2xl border border-white/10 select-none overflow-y-auto relative shadow-2xl animate-in fade-in duration-200">
-      {/* Dynamic Background Atmosphere — fills the entire screen and
-          crossfades to the new cover's palette whenever the track changes */}
-      <div
-        key={currentTrack.coverUrl}
-        className="absolute inset-0 -z-10 overflow-hidden pointer-events-none animate-in fade-in duration-1000"
-      >
-        <div
-          className="absolute inset-0 opacity-35 scale-110 transition-[background] duration-1000"
-          style={{
-            background: `radial-gradient(circle at 50% 20%, ${palette.accent} 0%, ${palette.secondary} 45%, ${palette.ambient} 75%, #000000 100%)`,
-          }}
-        />
-        {/* Base wash so the gradient still fully covers the corners at wide/short viewport ratios */}
-        <div
-          className="absolute inset-0 opacity-90 transition-[background] duration-1000"
-          style={{ background: `linear-gradient(180deg, ${palette.ambient}55 0%, #0b0b12 85%)` }}
-        />
-      </div>
-
-      {/* Top Navigation Bar */}
-      <div className="flex items-center justify-between w-full max-w-5xl mx-auto z-20">
-        <button
-          onClick={onClose}
-          className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-zinc-300 hover:text-white transition-all hover:scale-105 active:scale-95"
-          title="Minimize View"
-        >
-          <ChevronDown className="w-6 h-6" />
-        </button>
-
-        <div className="flex flex-col items-center gap-1.5">
-          <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-[#171717] px-3 py-1">
-            <Radio className="w-3 h-3 text-[#D946EF]" />
-            <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-200">
-              Playing from {currentTrack.releaseType || 'Single'} · {currentTrack.album || currentTrack.title}
-            </p>
-          </div>
-          <p className="text-[10px] font-bold text-[#C084FC] tracking-wide">VERTEX Web Player</p>
-        </div>
-
-        {onOpenEQ ? (
-          <button
-            onClick={onOpenEQ}
-            className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-zinc-300 hover:text-white transition-all hover:scale-105 active:scale-95"
-            title="Audio Equalizer"
-          >
-            <SlidersHorizontal className="w-5 h-5" />
-          </button>
-        ) : (
-          <div className="w-10" />
-        )}
-      </div>
-
-      {/* Main Screen Content Grid */}
-      <div className="w-full max-w-4xl mx-auto my-auto py-8 grid grid-cols-1 md:grid-cols-2 gap-10 items-center z-20">
-        {/* Left: Album Artwork with Rotating Vinyl animation */}
-        <div className="flex justify-center items-center">
-          <div className="relative group w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96">
-            {/* Soft Glow */}
+    <section className="workspace-screen min-h-full w-full bg-[#121212] text-white select-none">
+      <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
+        <header className="workspace-header flex items-start justify-between gap-5 border-b border-white/10 pb-6">
+          <div className="flex min-w-0 items-center gap-4">
             <div
-              className="absolute -inset-3 rounded-3xl opacity-30 transition-all duration-700 group-hover:opacity-55"
-              style={{
-                background: `linear-gradient(135deg, ${palette.accent}, ${palette.secondary})`,
-              }}
+              className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl shadow-[0_12px_34px_rgba(168,85,247,0.28)]"
+              style={{ background: `linear-gradient(135deg, ${palette.accent}, ${palette.secondary})` }}
+            >
+              <Radio className="h-6 w-6" />
+            </div>
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
+                <Sparkles className="h-3.5 w-3.5" /> Now playing
+              </div>
+              <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">{currentTrack.title}</h1>
+              <p className="mt-1 truncate text-xs text-zinc-400 sm:text-sm">
+                Playing from {releaseType.toLowerCase()} · {releaseName}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="control-press rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white"
+            aria-label="Minimize now playing"
+            title="Minimize Now Playing"
+          >
+            <ChevronDown className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="mt-7 grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
+          <article
+            className="workspace-card relative overflow-hidden rounded-3xl border border-white/10 p-5 shadow-2xl sm:p-7"
+            style={{
+              background: `linear-gradient(145deg, ${palette.ambient}, #181818 62%, #111111)`,
+            }}
+          >
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 h-40 opacity-35"
+              style={{ background: `radial-gradient(circle at 50% 0%, ${palette.accent}, transparent 68%)` }}
             />
 
-            {/* Album Cover Card */}
-            <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)] border border-white/10 bg-zinc-900">
+            <div className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-[1.75rem] border border-white/15 bg-[#0f0f0f] shadow-[0_28px_70px_rgba(0,0,0,0.55)]">
               <img
+                key={currentTrack.coverUrl}
                 src={currentTrack.coverUrl}
                 alt={currentTrack.title}
                 referrerPolicy="no-referrer"
-                className={`w-full h-full object-cover transition-transform duration-700 ${
-                  isPlaying ? 'scale-105' : 'scale-100'
-                }`}
+                className="media-fade h-full w-full object-cover"
               />
-
-              {/* Vinyl Spin Badge indicator */}
-              <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/75 px-3 py-1 text-[10px] font-bold text-white">
-                <Disc className={`w-3.5 h-3.5 text-[#D946EF] ${isPlaying ? 'animate-spin' : ''}`} />
-                <span>{isPlaying ? 'Playing' : 'Paused'}</span>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-5">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-300">{releaseType}</p>
+                  <p className="mt-1 truncate text-lg font-black text-white">{releaseName}</p>
+                </div>
+                <span className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-white/15 bg-black/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white">
+                  <span className={`h-1.5 w-1.5 rounded-full bg-[#E879F9] ${isPlaying ? 'animate-live-pulse' : ''}`} />
+                  {isPlaying ? 'Playing' : 'Paused'}
+                </span>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Right: clean EQ visualizer — playback progress stays in the persistent player bar. */}
-        <div className="workspace-card section-reveal flex min-h-[320px] flex-col justify-between rounded-3xl border border-white/10 bg-[#171717] p-6 shadow-2xl sm:p-8">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">Live audio EQ</p>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-white">Spectrum</h2>
-            <p className="mt-1 text-xs text-zinc-400">The main player below already handles seeking and playback controls.</p>
-          </div>
-          <div className="mt-8 flex h-48 items-end justify-center overflow-hidden rounded-2xl border border-white/[0.08] bg-black/[0.25] px-4 pb-4">
-            <AudioVisualizer
-              isPlaying={isPlaying}
-              accentColor={palette.accent}
-              secondaryColor={palette.secondary}
-              height={176}
-            />
-          </div>
+            <div className="relative mt-5 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => onSelectArtist?.(currentTrack.userId)}
+                disabled={!onSelectArtist}
+                className="control-press flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left hover:bg-white/[0.07] disabled:cursor-default"
+              >
+                <UserRound className="h-4 w-4 flex-shrink-0 text-[#E879F9]" />
+                <span className="min-w-0">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-zinc-500">Artist</span>
+                  <span className="block truncate text-xs font-bold text-white">{currentTrack.artist}</span>
+                </span>
+              </button>
+              <button
+                onClick={() => onSelectAlbum?.(currentTrack)}
+                disabled={!onSelectAlbum}
+                className="control-press flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left hover:bg-white/[0.07] disabled:cursor-default"
+              >
+                <Disc3 className="h-4 w-4 flex-shrink-0 text-[#C084FC]" />
+                <span className="min-w-0">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-zinc-500">Release</span>
+                  <span className="block truncate text-xs font-bold text-white">{releaseName}</span>
+                </span>
+              </button>
+            </div>
+          </article>
+
+          <article className="workspace-card flex flex-col rounded-3xl border border-white/10 bg-gradient-to-b from-[#211827] to-[#181818] p-5 shadow-2xl sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">Listening session</p>
+                <h2 className="mt-2 truncate text-3xl font-black tracking-tight text-white sm:text-4xl">{currentTrack.title}</h2>
+                <button
+                  onClick={() => onSelectArtist?.(currentTrack.userId)}
+                  className="mt-2 truncate text-sm font-bold text-zinc-400 transition-colors hover:text-[#E879F9]"
+                >
+                  {currentTrack.artist}
+                </button>
+              </div>
+              <button
+                onClick={() => onToggleLike(currentTrack.id)}
+                className={`control-press flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border transition-colors ${
+                  currentTrack.isLiked
+                    ? 'border-[#D946EF]/40 bg-[#D946EF]/15 text-[#E879F9]'
+                    : 'border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
+                }`}
+                title={currentTrack.isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+              >
+                <Heart className={`h-5 w-5 ${currentTrack.isLiked ? 'fill-current' : ''}`} />
+              </button>
+            </div>
+
+            <div className="mt-8 rounded-3xl border border-white/[0.08] bg-black/20 p-5">
+              <div className="flex items-center justify-center gap-5">
+                <button
+                  onClick={onPrev}
+                  className="control-press rounded-full p-3 text-zinc-300 hover:bg-white/[0.07] hover:text-white"
+                  title="Previous track"
+                >
+                  <SkipBack className="h-5 w-5 fill-current" />
+                </button>
+                <button
+                  onClick={onTogglePlay}
+                  className="control-press flex h-16 w-16 items-center justify-center rounded-full text-black shadow-[0_14px_34px_rgba(0,0,0,0.35)] hover:brightness-110"
+                  style={{ background: `linear-gradient(135deg, ${palette.accent}, ${palette.secondary})` }}
+                  title={isPlaying ? 'Pause' : 'Play'}
+                >
+                  {isPlaying ? (
+                    <Pause className="h-7 w-7 fill-current" />
+                  ) : (
+                    <Play className="ml-1 h-7 w-7 fill-current" />
+                  )}
+                </button>
+                <button
+                  onClick={onNext}
+                  className="control-press rounded-full p-3 text-zinc-300 hover:bg-white/[0.07] hover:text-white"
+                  title="Next track"
+                >
+                  <SkipForward className="h-5 w-5 fill-current" />
+                </button>
+              </div>
+
+              <div className="mt-6 flex items-center gap-3 font-mono text-[10px] text-zinc-500">
+                <span className="w-9 text-right">{formatTime(currentTimeSeconds)}</span>
+                <div className="group relative flex flex-1 items-center py-2">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full transition-[width] duration-100"
+                      style={{
+                        width: `${progress * 100}%`,
+                        background: `linear-gradient(90deg, ${palette.accent}, ${palette.secondary})`,
+                      }}
+                    />
+                  </div>
+                  <div
+                    className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 rounded-full bg-white opacity-0 shadow-md transition-opacity group-hover:opacity-100"
+                    style={{ left: `${progress * 100}%` }}
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.001}
+                    value={progress}
+                    onChange={(event) => onSeek(Number(event.target.value))}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    aria-label="Track progress"
+                  />
+                </div>
+                <span className="w-9">{formatTime(currentTrack.duration)}</span>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-1 flex-col rounded-3xl border border-white/[0.08] bg-[#101010]/60 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
+                    <Waves className="h-4 w-4 text-[#D946EF]" /> Live spectrum
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500">Audio activity for the current track</p>
+                </div>
+                {onOpenEQ && (
+                  <button
+                    onClick={onOpenEQ}
+                    className="control-press flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-300 hover:bg-white/10 hover:text-white"
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" /> Equalizer
+                  </button>
+                )}
+              </div>
+              <div className="mt-5 flex min-h-40 flex-1 items-end justify-center overflow-hidden rounded-2xl border border-white/[0.06] bg-black/30 px-4 pb-3">
+                <AudioVisualizer
+                  isPlaying={isPlaying}
+                  accentColor={palette.accent}
+                  secondaryColor={palette.secondary}
+                  height={154}
+                  maxHeightRatio={0.82}
+                />
+              </div>
+            </div>
+          </article>
         </div>
       </div>
-
-    </div>
+    </section>
   );
 };

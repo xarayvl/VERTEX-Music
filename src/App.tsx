@@ -961,28 +961,12 @@ export default function App() {
     }
   };
 
-  // Dedicated shuffle-play handler for a track list (currently used by the
-  // artist page's Shuffle button). Deliberately does NOT go through
-  // handlePlayTrack, which toggles pause when you "play" the track that's
-  // already current — that's exactly what made Shuffle silently stop
-  // playback whenever it happened to land on the currently-playing track.
-  // This always ends in isPlaying = true, picks a track different from the
-  // current one when possible, sets the queue to this track list so
-  // Next/Prev shuffle within it too, and turns shuffle mode on.
-  const handleShufflePlayTracks = (trackList: Track[]) => {
+  // The artist-page shuffle control only changes playback order. It must not
+  // interrupt, restart, or replace the track that is currently playing.
+  const handleToggleShuffleForTracks = (trackList: Track[]) => {
     if (trackList.length === 0) return;
-    let pool = trackList;
-    if (currentTrack && trackList.length > 1) {
-      const withoutCurrent = trackList.filter((t) => t.id !== currentTrack.id);
-      if (withoutCurrent.length > 0) pool = withoutCurrent;
-    }
-    const randomTrack = pool[Math.floor(Math.random() * pool.length)];
-    setIsShuffle(true);
     setQueue(trackList);
-    setCurrentTrack(randomTrack);
-    setCurrentTimeSeconds(0);
-    setIsPlaying(true);
-    recordTrackPlay(randomTrack);
+    setIsShuffle((enabled) => !enabled);
   };
 
   const handleNextTrack = () => {
@@ -1804,7 +1788,21 @@ export default function App() {
                 onClose={() => setIsSongScreenOpen(false)}
                 currentTrack={currentTrack}
                 isPlaying={isPlaying}
+                currentTimeSeconds={currentTimeSeconds}
+                onTogglePlay={handleTogglePlay}
+                onNext={handleNextTrack}
+                onPrev={handlePrevTrack}
+                onSeek={handleSeek}
+                onToggleLike={handleToggleLike}
                 onOpenEQ={() => openWorkspacePanel('eq')}
+                onSelectArtist={(artistId) => {
+                  setIsSongScreenOpen(false);
+                  handleSelectArtist(artistId);
+                }}
+                onSelectAlbum={(track) => {
+                  setIsSongScreenOpen(false);
+                  handleSelectAlbum(track);
+                }}
               />
             ) : (
               <div key={activeTab} className="view-transition">
@@ -1933,7 +1931,8 @@ export default function App() {
                 currentTrackId={currentTrack?.id}
                 isPlaying={isPlaying}
                 onPlayTrack={handlePlayTrack}
-                onShufflePlay={handleShufflePlayTracks}
+                isShuffle={isShuffle}
+                onToggleShuffle={handleToggleShuffleForTracks}
                 onToggleLike={handleToggleLike}
                 onSelectArtist={handleSelectArtist}
                 onSelectAlbum={handleSelectAlbum}

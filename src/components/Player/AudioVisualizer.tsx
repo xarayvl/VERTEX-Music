@@ -8,6 +8,7 @@ interface AudioVisualizerProps {
   height?: number;
   barCount?: number;
   variant?: 'bars' | 'wave' | 'minimal';
+  maxHeightRatio?: number;
 }
 
 export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
@@ -17,6 +18,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
   height = 80,
   barCount = 28,
   variant = 'bars',
+  maxHeightRatio = 0.9,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -70,12 +72,16 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
         const gap = 4;
         const totalGap = gap * (barCount - 1);
         const barWidth = Math.max(2, (width - totalGap) / barCount);
+        // Reserve headroom inside the visualizer so full-volume peaks and
+        // their glow dots never visually collide with or cross the frame.
+        const heightRatio = Math.min(0.96, Math.max(0.35, maxHeightRatio));
+        const maxBarHeight = h * heightRatio;
 
         for (let i = 0; i < barCount; i++) {
           // sample frequency value
           const dataVal = freqData[i % freqData.length] || 12;
           const normalized = isPlaying ? Math.min(1, Math.max(0.08, dataVal / 255)) : 0.08;
-          const barHeight = Math.max(4, normalized * h);
+          const barHeight = Math.min(maxBarHeight, Math.max(4, normalized * maxBarHeight));
 
           const x = i * (barWidth + gap);
           const y = h - barHeight;
@@ -152,7 +158,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
       cancelAnimationFrame(animId);
       resizeObserver.disconnect();
     };
-  }, [isPlaying, accentColor, secondaryColor, barCount, variant, height]);
+  }, [isPlaying, accentColor, secondaryColor, barCount, variant, height, maxHeightRatio]);
 
   return (
     <canvas

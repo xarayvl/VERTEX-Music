@@ -268,11 +268,11 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
 
           {/* Recently Played List */}
           {recentlyPlayed && recentlyPlayed.length > 0 && (
-            <div className="pt-2 pb-1 border-t border-white/5 mt-1">
+            <div className="pt-3 pb-1 mt-1">
               <p className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider px-2 mb-1">
                 Recently Played
               </p>
-              <div className="space-y-0.5 max-h-48 overflow-y-auto custom-scrollbar">
+              <div className="space-y-0.5">
                 {recentlyPlayed.map((track) => (
                   <div
                     key={`sidebar-recent-${track.id}`}

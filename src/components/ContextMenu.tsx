@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Play,
   Pause,
@@ -104,27 +104,30 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const [showPlaylistSubmenu, setShowPlaylistSubmenu] = useState(false);
   const [adjustedPos, setAdjustedPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!target) return;
 
-    // Calculate position to prevent menu overflow outside viewport
-    const menuWidth = 240;
-    const menuHeight = 360;
-    const padding = 12;
-
-    let posX = target.x;
-    let posY = target.y;
-
-    if (posX + menuWidth > window.innerWidth - padding) {
-      posX = Math.max(padding, window.innerWidth - menuWidth - padding);
-    }
-
-    if (posY + menuHeight > window.innerHeight - padding) {
-      posY = Math.max(padding, window.innerHeight - menuHeight - padding);
-    }
-
-    setAdjustedPos({ x: posX, y: posY });
     setShowPlaylistSubmenu(false);
+
+    const updatePosition = () => {
+      const menu = menuRef.current;
+      if (!menu) return;
+
+      const padding = 12;
+      const menuWidth = menu.offsetWidth;
+      const menuHeight = Math.min(menu.scrollHeight, window.innerHeight - padding * 2);
+      const maxX = Math.max(padding, window.innerWidth - menuWidth - padding);
+      const maxY = Math.max(padding, window.innerHeight - menuHeight - padding);
+
+      setAdjustedPos({
+        x: Math.min(Math.max(padding, target.x), maxX),
+        y: Math.min(Math.max(padding, target.y), maxY),
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    return () => window.removeEventListener('resize', updatePosition);
   }, [target]);
 
   // Click outside to close & Escape key
@@ -165,7 +168,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     <div
       ref={menuRef}
       style={{ top: `${adjustedPos.y}px`, left: `${adjustedPos.x}px` }}
-      className="fixed z-50 w-60 bg-[#161618]/95 backdrop-blur-2xl border border-white/12 shadow-[0_20px_50px_rgba(0,0,0,0.85)] rounded-2xl py-2 px-1 text-zinc-200 text-xs font-medium animate-in fade-in zoom-in-95 duration-150 select-none overflow-visible"
+      className="fixed z-50 w-60 max-h-[calc(100dvh-24px)] overflow-y-auto overflow-x-hidden custom-scrollbar bg-[#161618] border border-white/12 shadow-[0_20px_50px_rgba(0,0,0,0.85)] rounded-2xl py-2 px-1 text-zinc-200 text-xs font-medium animate-in fade-in zoom-in-95 duration-150 select-none"
     >
       {/* Header Info Banner */}
       <div className="px-3 py-1.5 mb-1.5 border-b border-white/10 flex items-center justify-between text-[11px] text-zinc-400">
@@ -261,7 +264,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             {showPlaylistSubmenu && (
               <div
                 onMouseLeave={() => setShowPlaylistSubmenu(false)}
-                className="absolute left-full top-0 ml-1 w-48 bg-[#18181b]/95 backdrop-blur-2xl border border-white/12 shadow-2xl rounded-xl py-1 px-1 z-50 text-xs space-y-0.5 animate-in fade-in duration-100"
+                className="mt-1 max-h-48 overflow-y-auto custom-scrollbar bg-[#202023] border border-white/10 rounded-xl py-1 px-1 text-xs space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150"
               >
                 <button
                   onClick={() => {
