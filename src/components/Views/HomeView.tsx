@@ -155,7 +155,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </span>
 
               {/* Hover Floating VERTEX Music Purple/Pink Play Button */}
-              <div className={`w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-xl transform transition-all duration-200 flex-shrink-0 ml-2 ${
+              <div className={`mobile-card-action w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-xl transform transition-all duration-200 flex-shrink-0 ml-2 ${
                 item.type === 'track' && 'trackId' in item && item.trackId === currentTrackId && isPlaying
                   ? 'opacity-100 translate-y-0'
                   : 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0'
@@ -219,7 +219,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
-                  <div className="absolute right-2 bottom-2 w-11 h-11 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transform translate-y-3 group-hover:translate-y-0 transition-all duration-200">
+                  <div className="mobile-card-action absolute right-2 bottom-2 w-11 h-11 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transform translate-y-3 group-hover:translate-y-0 transition-all duration-200">
                     <Play className="w-5 h-5 fill-white ml-0.5" />
                   </div>
                 </div>
@@ -279,7 +279,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                       e.stopPropagation();
                       onPlayTrack(track);
                     }}
-                    className={`absolute right-2 bottom-2 w-11 h-11 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl transition-all duration-200 transform ${
+                    className={`mobile-card-action absolute right-2 bottom-2 w-11 h-11 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl transition-all duration-200 transform ${
                       isThisTrackPlaying
                         ? 'opacity-100 translate-y-0'
                         : 'opacity-0 group-hover:opacity-100 translate-y-3 group-hover:translate-y-0'

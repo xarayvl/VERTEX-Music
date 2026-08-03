@@ -565,7 +565,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                         e.stopPropagation();
                         onPlayTrack(group.representative);
                       }}
-                      className={`absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl transition-all transform ${
+                      className={`mobile-card-action absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl transition-all transform ${
                         isThisGroupPlaying
                           ? 'opacity-100 translate-y-0'
                           : 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0'

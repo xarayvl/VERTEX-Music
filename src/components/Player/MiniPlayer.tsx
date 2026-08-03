@@ -24,12 +24,12 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
 }) => {
   if (!currentTrack) return null;
   return (
-    <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-30 w-[92%] max-w-md transition-all duration-300">
+    <div className="mobile-mini-player fixed inset-x-2 z-30 mx-auto max-w-md transition-all duration-300">
       <div
         data-track-id={currentTrack.id}
         data-context-type="track"
         onClick={onOpenSongScreen}
-        className="group relative overflow-hidden backdrop-blur-2xl bg-zinc-900/85 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.7)] rounded-2xl p-2.5 flex items-center justify-between hover:bg-zinc-900/95 transition-all active:scale-[0.99] cursor-pointer"
+        className="group relative flex min-h-[64px] items-center justify-between overflow-hidden rounded-[20px] border border-white/[0.12] bg-zinc-900/90 p-2 shadow-[0_16px_36px_rgba(0,0,0,0.7)] backdrop-blur-2xl transition-all hover:bg-zinc-900/95 active:scale-[0.99] cursor-pointer"
       >
         {/* Progress bar top border */}
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-white/10">
@@ -46,8 +46,8 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
         />
 
         {/* Track Artwork & Metadata */}
-        <div className="flex items-center space-x-3 z-10 min-w-0 flex-1 pr-2">
-          <div className="relative w-11 h-11 rounded-xl overflow-hidden shadow-md flex-shrink-0 border border-white/15">
+        <div className="z-10 flex min-w-0 flex-1 items-center space-x-2.5 pr-1.5">
+          <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-[14px] border border-white/15 shadow-md">
             <img
               src={currentTrack.coverUrl}
               alt={currentTrack.title}
@@ -72,10 +72,10 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
         </div>
 
         {/* Player Controls */}
-        <div className="flex items-center space-x-2 z-10 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="z-10 flex flex-shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => onToggleLike(currentTrack.id)}
-            className="p-1.5 text-zinc-400 hover:text-rose-400 transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-rose-400"
             title="Like track"
           >
             <Heart
@@ -87,7 +87,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
 
           <button
             onClick={onTogglePlay}
-            className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black shadow-lg transition-all hover:scale-105 active:scale-95"
             title={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
@@ -99,7 +99,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
 
           <button
             onClick={onNext}
-            className="p-1.5 text-zinc-300 hover:text-white transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
             title="Next Track"
           >
             <SkipForward className="w-4.5 h-4.5" />

@@ -418,7 +418,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                         e.stopPropagation();
                         onPlayTrack(topResult.item);
                       }}
-                      className={`absolute right-5 bottom-5 w-12 h-12 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl transform transition-all duration-200 cursor-pointer ${
+                      className={`mobile-card-action absolute right-5 bottom-5 w-12 h-12 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl transform transition-all duration-200 cursor-pointer ${
                         isTopResultPlaying
                           ? 'opacity-100 translate-y-0'
                           : 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0'

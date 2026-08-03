@@ -1625,7 +1625,7 @@ export default function App() {
   return (
     <div
       onContextMenu={handleContextMenu}
-      className="h-screen w-screen bg-black text-zinc-100 font-sans flex flex-col overflow-hidden p-2 gap-2 select-none relative"
+      className="h-[100dvh] w-screen bg-black text-zinc-100 font-sans flex flex-col overflow-hidden p-0 gap-0 select-none relative md:h-screen md:p-2 md:gap-2"
     >
       {/* Interactive Radial Spotlight following mouse cursor & current track accent color */}
       <div
@@ -1730,7 +1730,7 @@ export default function App() {
         )}
 
         {/* Central VERTEX Music View Container */}
-        <main className="flex-1 bg-[#121212] rounded-xl flex flex-col min-w-0 overflow-hidden border border-white/[0.04] shadow-2xl relative">
+        <main className="flex-1 bg-[#121212] flex flex-col min-w-0 overflow-hidden border-0 shadow-2xl relative md:rounded-xl md:border md:border-white/[0.04]">
           {/* Top Header Navigation Bar */}
           <SpotifyTopHeader
             activeTab={activeTab}
@@ -1754,8 +1754,12 @@ export default function App() {
 
           {/* Scrollable View Content */}
           <div
-            className={`relative flex-1 overflow-y-auto custom-scrollbar ${
-              isWorkspacePanelOpen ? 'p-0 pb-40 md:pb-24' : 'px-3 pt-4 pb-44 sm:px-6 md:pb-24'
+            className={`relative flex-1 custom-scrollbar ${
+              isWorkspacePanelOpen
+                ? 'overflow-y-auto p-0 pb-40 md:pb-24'
+                : activeTab === 'chat'
+                  ? `overflow-hidden p-0 ${currentTrack ? 'pb-[9.5rem]' : 'pb-[5.25rem]'} md:pb-0`
+                  : 'overflow-y-auto px-3 pt-4 pb-44 sm:px-6 md:pb-24'
             }`}
           >
             {isEQOpen ? (
@@ -1806,7 +1810,7 @@ export default function App() {
                 }}
               />
             ) : (
-              <div key={activeTab} className="view-transition">
+              <div key={activeTab} className={`view-transition ${activeTab === 'chat' ? 'h-full min-h-0' : ''}`}>
                 {activeTab === 'home' && (
               <HomeView
                 tracks={tracks}

@@ -70,10 +70,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   const suggestionPrompts = [
-    '✨ Generate a 30s synthwave beat with heavy bass 🎧',
-    'Recommend synthwave tracks for night driving 🌙',
-    'Suggest a lofi playlist for studying 📚',
-    'Explain the difference between Synthwave and Cyberpunk ⚡',
+    { label: '30s synthwave', prompt: 'Generate a 30s synthwave beat with heavy bass' },
+    { label: 'Night drive', prompt: 'Recommend synthwave tracks for night driving' },
+    { label: 'Study mix', prompt: 'Suggest a lofi playlist for studying' },
+    { label: 'Genre guide', prompt: 'Explain the difference between Synthwave and Cyberpunk' },
   ];
 
   const handleSendMessage = async (customText?: string) => {
@@ -293,19 +293,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const ActivePhase = THINKING_PHASES[thinkingPhaseIdx];
 
   return (
-    <section className="workspace-screen mx-auto flex h-[calc(100vh-140px)] min-h-[560px] w-full max-w-6xl flex-col bg-[#121212] text-white select-none">
-      <header className="workspace-header flex flex-shrink-0 items-start justify-between gap-4 border-b border-white/10 pb-5">
-        <div className="flex min-w-0 items-center gap-4">
-          <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
-            <Bot className="h-6 w-6" />
+    <section className="workspace-screen mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_38%),#121212] text-white select-none">
+      <header className="workspace-header flex flex-shrink-0 items-center justify-between gap-2 border-b border-white/10 px-3 py-3 sm:items-start sm:gap-4 sm:px-0 sm:pb-5 sm:pt-0">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+          <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-12 sm:w-12 sm:rounded-2xl">
+            <Bot className="h-5 w-5 sm:h-6 sm:w-6" />
             <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#121212] bg-emerald-400" />
           </div>
           <div className="min-w-0">
-            <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
+            <div className="mb-1 hidden items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE] sm:flex">
               <Sparkles className="h-3.5 w-3.5" /> Intelligent listening
             </div>
-            <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">AI DJ Chat</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+            <h1 className="truncate text-lg font-black tracking-tight sm:text-3xl">AI DJ Chat</h1>
+            <div className="mt-0.5 hidden flex-wrap items-center gap-2 text-xs text-zinc-400 sm:flex">
               <span>Recommendations, music knowledge and AI composition.</span>
               <span className="hidden items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-300 sm:flex">
                 <Globe className="h-2.5 w-2.5" /> Web search ready
@@ -314,10 +314,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-shrink-0 items-center gap-2">
+        <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
           <button
             onClick={() => setShowAiGenPanel((open) => !open)}
-            className={`control-press flex h-10 items-center gap-2 rounded-2xl border px-3 text-xs font-black transition-colors sm:px-4 ${
+            className={`control-press flex h-11 w-11 items-center justify-center gap-2 rounded-2xl border text-xs font-black transition-colors sm:h-10 sm:w-auto sm:px-4 ${
               showAiGenPanel
                 ? 'border-[#D946EF]/60 bg-[#D946EF]/20 text-white'
                 : 'border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10'
@@ -329,7 +329,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <button
             onClick={handleClearHistory}
             disabled={messages.length === 0}
-            className="control-press flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-35"
+            className="control-press flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-zinc-400 hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-35 sm:h-10 sm:w-10 sm:rounded-full"
             title="Clear chat history"
             aria-label="Clear chat history"
           >
@@ -347,17 +347,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
             transition={{ duration: 0.25, ease: 'easeOut' }}
             className="flex-shrink-0 overflow-hidden"
           >
-            <div className="mt-5 rounded-3xl border border-[#A855F7]/30 bg-gradient-to-r from-[#211827] to-[#181818] p-4 shadow-xl sm:p-5">
+            <div className="custom-scrollbar max-h-[46dvh] overflow-y-auto border-b border-[#A855F7]/30 bg-gradient-to-r from-[#211827] to-[#181818] p-3 shadow-xl sm:mt-5 sm:max-h-none sm:rounded-3xl sm:border sm:p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
                 <div className="min-w-0 flex-1">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                     <div>
                       <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#E879F9]">
                         <Music className="h-4 w-4" /> Lyria composer
                       </p>
                       <p className="mt-1 text-[11px] text-zinc-500">Describe the sound, mood and instruments you want.</p>
                     </div>
-                    <div className="flex rounded-xl border border-white/10 bg-black/20 p-1">
+                    <div className="grid w-full grid-cols-2 rounded-xl border border-white/10 bg-black/20 p-1 sm:flex sm:w-auto">
                       <button
                         onClick={() => setAiGenModel('lyria-3-clip-preview')}
                         className={`rounded-lg px-3 py-1.5 text-[10px] font-black transition-colors ${
@@ -394,7 +394,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <button
                   disabled={isGeneratingTrack || !aiGenPrompt.trim()}
                   onClick={() => handleDirectGenerateMusic()}
-                  className="control-press flex h-12 flex-shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-6 text-xs font-black text-white shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="control-press flex h-12 w-full flex-shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-6 text-xs font-black text-white shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45 lg:w-auto"
                 >
                   {isGeneratingTrack ? (
                     <>
@@ -413,7 +413,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         )}
       </AnimatePresence>
 
-      <div className="workspace-card mt-5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#171717] shadow-2xl">
+      <div className="workspace-card flex min-h-0 flex-1 flex-col overflow-hidden border-white/10 bg-[#171717] shadow-2xl sm:mt-5 sm:rounded-3xl sm:border">
         <div className="flex flex-shrink-0 items-center justify-between border-b border-white/[0.08] px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
@@ -424,16 +424,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </span>
         </div>
 
-        <div className="custom-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+        <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-4 overscroll-contain sm:space-y-6 sm:px-6 sm:py-6 lg:px-8">
           {messages.length === 0 && !isLoading && (
-            <div className="flex min-h-full items-center justify-center py-8">
+            <div className="flex min-h-full items-center justify-center py-5 sm:py-8">
               <div className="max-w-lg text-center">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-[#A855F7]/30 bg-gradient-to-br from-[#A855F7]/25 to-[#D946EF]/10 text-[#E879F9] shadow-[0_18px_50px_rgba(168,85,247,0.14)]">
-                  <Bot className="h-8 w-8" />
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#A855F7]/30 bg-gradient-to-br from-[#A855F7]/25 to-[#D946EF]/10 text-[#E879F9] shadow-[0_18px_50px_rgba(168,85,247,0.14)] sm:h-16 sm:w-16 sm:rounded-3xl">
+                  <Bot className="h-7 w-7 sm:h-8 sm:w-8" />
                 </div>
-                <p className="mt-5 text-[10px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">VERTEX Music intelligence</p>
-                <h2 className="mt-2 text-2xl font-black tracking-tight">What should we listen to?</h2>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-zinc-500">
+                <p className="mt-4 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] sm:mt-5 sm:text-[10px] sm:tracking-[0.22em]">VERTEX Music intelligence</p>
+                <h2 className="mt-2 text-xl font-black tracking-tight sm:text-2xl">What should we listen to?</h2>
+                <p className="mx-auto mt-2 max-w-md px-3 text-xs leading-relaxed text-zinc-500 sm:px-0 sm:text-sm">
                   Ask about artists and genres, get listening ideas, or create a new track with AI.
                 </p>
               </div>
@@ -447,10 +447,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 initial={{ opacity: 0, y: 12, scale: 0.99 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.26, ease: 'easeOut' }}
-                className={`flex items-start gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                className={`flex items-start gap-2 sm:gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
               >
                 <div
-                  className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl border shadow-md ${
+                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border shadow-md sm:h-9 sm:w-9 sm:rounded-2xl ${
                     msg.sender === 'user'
                       ? 'border-white/20 bg-white text-black'
                       : 'border-[#D946EF]/30 bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white'
@@ -460,7 +460,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </div>
 
                 <div
-                  className={`max-w-[86%] rounded-3xl border p-4 text-sm leading-relaxed shadow-lg sm:max-w-[78%] sm:p-5 ${
+                  className={`max-w-[calc(100%_-_40px)] rounded-2xl border p-3 text-[13px] leading-relaxed shadow-lg sm:max-w-[78%] sm:rounded-3xl sm:p-5 sm:text-sm ${
                     msg.sender === 'user'
                       ? 'rounded-tr-md border-[#D946EF]/30 bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white'
                       : 'rounded-tl-md border-white/[0.08] bg-[#202020] text-zinc-100'
@@ -563,13 +563,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                className="flex items-start gap-3"
+                className="flex items-start gap-2 sm:gap-3"
               >
                 <div className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-md">
                   <Bot className="h-4 w-4" />
                   <span className="absolute -inset-1 animate-ping rounded-2xl border border-[#D946EF]/35" />
                 </div>
-                <div className="relative flex min-w-[220px] items-center gap-3 overflow-hidden rounded-3xl rounded-tl-md border border-white/[0.08] bg-[#202020] px-5 py-3.5">
+                <div className="relative flex min-w-0 max-w-[calc(100%_-_40px)] flex-1 items-center gap-2 overflow-hidden rounded-2xl rounded-tl-md border border-white/[0.08] bg-[#202020] px-4 py-3 sm:max-w-sm sm:flex-none sm:gap-3 sm:rounded-3xl sm:px-5 sm:py-3.5">
                   <span className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite] bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
                   <AnimatePresence mode="wait">
                     <motion.div
@@ -597,46 +597,46 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
 
         {messages.length <= 2 && (
-          <div className="custom-scrollbar flex flex-shrink-0 gap-2 overflow-x-auto border-t border-white/[0.06] px-4 pt-3 sm:px-6">
-            {suggestionPrompts.map((prompt, index) => (
+          <div className="custom-scrollbar flex flex-shrink-0 gap-2 overflow-x-auto border-t border-white/[0.06] px-3 pt-2.5 sm:px-6 sm:pt-3">
+            {suggestionPrompts.map((suggestion, index) => (
               <button
                 key={index}
-                onClick={() => handleSendMessage(prompt)}
+                onClick={() => handleSendMessage(suggestion.prompt)}
                 disabled={isLoading}
-                className="control-press flex flex-shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold text-zinc-400 hover:border-[#A855F7]/30 hover:bg-[#A855F7]/10 hover:text-white disabled:opacity-40"
+                className="control-press flex h-9 flex-shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 text-[11px] font-bold text-zinc-400 hover:border-[#A855F7]/30 hover:bg-[#A855F7]/10 hover:text-white disabled:opacity-40 sm:h-auto sm:py-1.5"
               >
-                <Sparkles className="h-3 w-3 text-[#D946EF]" /> {prompt}
+                <Sparkles className="h-3 w-3 text-[#D946EF]" /> {suggestion.label}
               </button>
             ))}
           </div>
         )}
 
-        <div className="flex-shrink-0 bg-[#141414] p-3 sm:p-4">
+        <div className="flex-shrink-0 border-t border-white/[0.06] bg-[#141414] p-2.5 sm:p-4">
           <form
             onSubmit={(event) => {
               event.preventDefault();
               handleSendMessage();
             }}
-            className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] p-2 transition-all focus-within:border-[#C084FC]/60 focus-within:bg-white/[0.06] focus-within:ring-4 focus-within:ring-[#A855F7]/10"
+            className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] p-1.5 transition-all focus-within:border-[#C084FC]/60 focus-within:bg-white/[0.06] focus-within:ring-4 focus-within:ring-[#A855F7]/10 sm:p-2"
           >
             <input
               type="text"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask about music, artists, genres or your next playlist..."
+              placeholder="Ask VERTEX AI..."
               disabled={isLoading}
-              className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 disabled:opacity-50"
+              className="min-w-0 flex-1 bg-transparent px-2.5 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 disabled:opacity-50 sm:px-3"
             />
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="control-press flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-md hover:brightness-110 disabled:cursor-not-allowed disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600"
+            className="control-press flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-md hover:brightness-110 disabled:cursor-not-allowed disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 sm:h-10 sm:w-10 sm:rounded-xl"
               aria-label="Send message"
             >
               <Send className="ml-0.5 h-4 w-4 fill-current" />
             </button>
           </form>
-          <p className="mt-2 px-2 text-center text-[9px] font-medium text-zinc-600">
+          <p className="mt-2 hidden px-2 text-center text-[9px] font-medium text-zinc-600 sm:block">
             AI responses can be inaccurate. Verify important music and artist information.
           </p>
         </div>

@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,600&display=swap');
+@import "tailwindcss";
 
 @theme {
   --font-sans: 'Plus Jakarta Sans', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -15,6 +15,18 @@ html {
 body {
   font-weight: 500;
   letter-spacing: -0.01em;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+button,
+[role='button'] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 
@@ -281,5 +293,67 @@ button, a {
 
   .spotify-global-search {
     max-width: 170px !important;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Mobile shell and touch-first controls
+--------------------------------------------------------------------- */
+.mobile-bottom-nav {
+  bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.mobile-mini-player {
+  bottom: calc(max(0.5rem, env(safe-area-inset-bottom)) + 4.25rem);
+}
+
+@media (max-width: 767px) {
+  body {
+    overscroll-behavior: none;
+    background: #000;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  .custom-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workspace-screen {
+    animation-duration: 0.28s;
+  }
+
+  .control-press:hover,
+  .card-interactive:hover {
+    transform: none;
+  }
+
+  /* Hover does not exist on touch screens. Keep the primary card action
+     visible and tappable instead of hiding it behind a desktop-only state. */
+  .mobile-card-action {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+  }
+
+  .mobile-row-action {
+    opacity: 1 !important;
+  }
+}
+
+@media (max-width: 359px) {
+  .mobile-bottom-nav span {
+    font-size: 8px;
+  }
+
+  .mobile-mini-player button:first-of-type {
+    display: none;
   }
 }

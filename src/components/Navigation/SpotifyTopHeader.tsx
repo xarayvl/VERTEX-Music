@@ -60,19 +60,19 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
   return (
     <header
       data-context-type="header"
-      className="spotify-top-header sticky top-0 z-30 w-full px-4 sm:px-6 py-3 bg-[#121212]/95 backdrop-blur-xl flex items-center gap-2 border-b border-white/[0.05] select-none transition-colors"
+      className="spotify-top-header sticky top-0 z-30 flex w-full items-center gap-2 border-b border-white/[0.06] bg-[#121212]/92 px-3 py-2.5 backdrop-blur-xl transition-colors select-none sm:px-6 sm:py-3"
     >
       {/* Left Navigation Buttons & Search Input */}
-      <div className="flex min-w-0 flex-1 items-center space-x-2.5">
+      <div className="flex min-w-0 items-center space-x-2.5">
         {/* Compact brand mark — mobile only, replaces desktop back/forward + search */}
         <div className="flex sm:hidden items-center space-x-2 min-w-0">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-[0_0_12px_rgba(217,70,239,0.4)] flex-shrink-0">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[13px] bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-[0_0_16px_rgba(217,70,239,0.32)]">
             <Music className="w-4 h-4 fill-white text-white stroke-[2.5]" />
           </div>
           <button
             onClick={() => onSelectTab('search')}
             title="Search"
-            className="p-2 -ml-1 rounded-full text-zinc-300 hover:text-white active:scale-95 transition-all"
+            className="-ml-0.5 flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/[0.06] bg-white/[0.035] text-zinc-300 transition-all hover:text-white active:scale-95"
           >
             <Search className="w-4 h-4" />
           </button>
@@ -120,7 +120,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
       </div>
 
       {/* Center/Middle Quick Category Filter Chips - Scrollable flex row cleanly isolated */}
-      <div className="spotify-header-categories hidden lg:flex items-center space-x-2 overflow-x-auto min-w-0 flex-1 mx-2 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="spotify-header-categories hidden lg:flex min-w-0 items-center space-x-2 overflow-x-auto ml-1 mr-2 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {categories.map((cat) => (
           <button
             key={cat}
@@ -146,7 +146,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
             onClick={onOpenAddTrackModal}
             title="Upload"
             aria-label="Upload audio"
-            className="control-press flex h-9 flex-shrink-0 items-center gap-1.5 bg-transparent px-1.5 text-xs font-extrabold text-white/80 hover:text-white hover:drop-shadow-[0_0_8px_rgba(217,70,239,0.85)]"
+            className="control-press hidden h-9 flex-shrink-0 items-center gap-1.5 bg-transparent px-1.5 text-xs font-extrabold text-white/80 hover:text-white hover:drop-shadow-[0_0_8px_rgba(217,70,239,0.85)] sm:flex"
           >
             <Upload className="h-4 w-4 text-[#D946EF]" />
             <span className="spotify-upload-label hidden lg:inline">Upload</span>
@@ -158,7 +158,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="flex items-center space-x-2 bg-black/70 hover:bg-black/90 p-1 pl-1 pr-2.5 rounded-full border border-white/10 transition-all shadow hover:border-white/20 active:scale-95"
+              className="flex h-10 items-center space-x-2 rounded-[15px] border border-white/10 bg-black/70 p-1 pl-1 pr-2 transition-all shadow hover:border-white/20 hover:bg-black/90 active:scale-95 sm:h-auto sm:rounded-full sm:pr-2.5"
               title="Account & Profile Menu"
             >
               <div className="w-7 h-7 rounded-full overflow-hidden border border-[#D946EF]/60 relative flex-shrink-0">
@@ -174,7 +174,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
               <span className="spotify-profile-name hidden md:inline text-xs font-bold text-white max-w-[100px] truncate">
                 {userProfile.displayName}
               </span>
-              <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`hidden h-3.5 w-3.5 text-zinc-400 transition-transform sm:block ${isMenuOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {/* Spotify Dropdown Menu */}

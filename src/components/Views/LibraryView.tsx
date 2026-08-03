@@ -187,7 +187,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           e.stopPropagation();
                           onPlayPlaylist(pl);
                         }}
-                        className="absolute right-2 bottom-2 w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-200 hover:scale-110"
+                        className="mobile-card-action absolute right-2 bottom-2 w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-200 hover:scale-110"
                         title="Quick Play"
                       >
                         <Play className="w-5 h-5 fill-white ml-0.5" />

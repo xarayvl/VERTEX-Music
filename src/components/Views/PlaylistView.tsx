@@ -348,7 +348,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                           e.stopPropagation();
                           onRemoveTrackFromPlaylist(playlist.id, track.id);
                         }}
-                        className="p-1 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                        className="mobile-row-action flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 opacity-0 transition-colors hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
                         title="Remove from playlist"
                       >
                         <Trash2 className="w-4 h-4" />
