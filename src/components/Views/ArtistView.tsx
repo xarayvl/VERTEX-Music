@@ -517,13 +517,13 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
 
                       <div className="min-w-0">
                         <p
-                          className={`text-xs font-extrabold truncate ${
+                          className={`text-sm font-extrabold truncate tracking-tight ${
                             isCurrent ? 'text-[#D946EF]' : 'text-white'
                           }`}
                         >
                           {track.title}
                         </p>
-                        <p className="text-[11px] text-zinc-400 truncate">{track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}</p>
+                        <p className="text-xs text-zinc-400 truncate">{track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}</p>
                       </div>
                     </div>
 
@@ -585,7 +585,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                   className="w-8 h-8 rounded-full object-cover border border-white/20"
                 />
                 <div className="text-xs">
-                  <p className="text-zinc-400 text-[11px]">Posted by {artistName}</p>
+                  <p className="text-xs text-zinc-400">Posted by {artistName}</p>
                   <p className="font-extrabold text-white">{artistPickComment || 'Artist Pick'}</p>
                 </div>
               </div>
@@ -694,8 +694,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                   </div>
 
                   <div>
-                    <h3 className="text-xs font-extrabold text-white truncate">{group.title}</h3>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                    <h3 className="truncate text-sm font-extrabold tracking-tight text-white">{group.title}</h3>
+                    <p className="mt-1 text-xs text-zinc-400">
                       {group.releaseType}
                       {group.isMultiTrack ? ` • ${group.tracks.length} songs` : ''}
                     </p>

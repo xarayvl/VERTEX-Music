@@ -524,7 +524,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-white truncate">{track.title}</h4>
-                  <p className="text-[11px] text-zinc-400 mt-1 truncate">{track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}</p>
+                  <p className="mt-1 truncate text-xs text-zinc-400">{track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}</p>
                 </div>
               </div>
             ))}

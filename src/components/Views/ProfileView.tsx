@@ -555,7 +555,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 return (
                   <div className="p-6 text-center bg-white/5 rounded-xl border border-white/5 space-y-2">
                     <Music className="w-8 h-8 mx-auto text-zinc-500" />
-                    <p className="text-xs font-bold text-white">No uploaded songs yet</p>
+                    <p className="text-sm font-bold text-white">No uploaded songs yet</p>
                     <p className="text-[11px] text-zinc-400 max-w-sm mx-auto">
                       Upload your MP3 / WAV audio files directly. They will be stored in your folder and featured on your Spotify artist profile.
                     </p>
@@ -642,7 +642,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                                 </button>
                                 <span className="w-5 shrink-0 text-center font-mono text-[10px] text-zinc-600">{releaseTrack.trackNumber || trackIndex + 1}</span>
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate text-xs font-bold text-zinc-200">{releaseTrack.title}</p>
+                                  <p className="truncate text-sm font-bold text-zinc-200">{releaseTrack.title}</p>
                                   <p className="truncate text-[9px] text-zinc-600">{releaseTrack.genre || 'No genre'}</p>
                                 </div>
                                 <span className="hidden font-mono text-[10px] text-zinc-600 sm:block">{Math.floor(releaseTrack.duration / 60)}:{Math.floor(releaseTrack.duration % 60).toString().padStart(2, '0')}</span>
@@ -703,8 +703,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       />
 
                       <div className="min-w-0">
-                        <p className="text-xs font-extrabold text-white truncate">{track.title}</p>
-                        <p className="text-[11px] text-zinc-400 truncate">{track.artist}</p>
+                        <p className="truncate text-sm font-extrabold tracking-tight text-white">{track.title}</p>
+                        <p className="truncate text-xs text-zinc-400">{track.artist}</p>
                       </div>
                     </div>
 
@@ -771,10 +771,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         />
                       </div>
                       <div>
-                        <h3 className="text-xs font-extrabold text-white truncate w-full">
+                        <h3 className="w-full truncate text-sm font-extrabold tracking-tight text-white">
                           {artist.name}
                         </h3>
-                        <p className="text-[11px] text-zinc-400">Artist</p>
+                        <p className="text-xs text-zinc-400">Artist</p>
                       </div>
                     </div>
                   ))}

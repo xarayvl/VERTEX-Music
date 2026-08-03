@@ -589,7 +589,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                         {art.name}
                       </h4>
 
-                      <p className="text-[11px] text-zinc-400 truncate w-full mt-0.5">
+                      <p className="mt-0.5 w-full truncate text-xs text-zinc-400">
                         {art.username ? `@${art.username}` : art.genre || 'Artist'}
                       </p>
 

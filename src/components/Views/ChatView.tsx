@@ -293,7 +293,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const ActivePhase = THINKING_PHASES[thinkingPhaseIdx];
 
   return (
-    <section className="workspace-screen mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_38%),#121212] text-white select-none md:h-[calc(100vh-140px)] md:min-h-[560px] md:overflow-visible md:bg-[#121212]">
+    <section className="workspace-screen mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_38%),#121212] text-white select-none md:bg-[#121212]">
       <header className="workspace-header flex flex-shrink-0 items-center justify-between gap-2 border-b border-white/10 px-3 py-3 sm:items-start sm:gap-4 sm:px-0 sm:pb-5 sm:pt-0">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-12 sm:w-12 sm:rounded-2xl">
@@ -537,8 +537,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           >
                             <img src={track.coverUrl} alt={track.title} referrerPolicy="no-referrer" className="h-10 w-10 flex-shrink-0 rounded-xl object-cover" />
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-xs font-black text-white group-hover:text-[#E879F9]">{track.title}</span>
-                              <span className="block truncate text-[10px] text-zinc-500">{track.artist}</span>
+                              <span className="block truncate text-sm font-black text-white group-hover:text-[#E879F9]">{track.title}</span>
+                              <span className="block truncate text-xs text-zinc-500">{track.artist}</span>
                             </span>
                             <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white text-black">
                               <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />
