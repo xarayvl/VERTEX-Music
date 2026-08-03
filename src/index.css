@@ -255,3 +255,31 @@ button, a {
     linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
   background-size: 20px 20px;
 }
+
+/* The center panel is resizable independently of the browser viewport, so
+   header controls must respond to their own available width. */
+.spotify-top-header {
+  container-type: inline-size;
+}
+
+@container (max-width: 900px) {
+  .spotify-upload-label {
+    display: none !important;
+  }
+}
+
+@container (max-width: 760px) {
+  .spotify-header-categories {
+    display: none !important;
+  }
+}
+
+@container (max-width: 620px) {
+  .spotify-profile-name {
+    display: none !important;
+  }
+
+  .spotify-global-search {
+    max-width: 170px !important;
+  }
+}

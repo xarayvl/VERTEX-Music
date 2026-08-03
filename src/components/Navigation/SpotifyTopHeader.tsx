@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Search, Crown, User, ExternalLink, LogOut, Check, ChevronDown, Sparkles, Music } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Crown, User, ExternalLink, LogOut, Check, ChevronDown, Sparkles, Music, Upload } from 'lucide-react';
 import { TabType, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
@@ -60,10 +60,10 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
   return (
     <header
       data-context-type="header"
-      className="sticky top-0 z-30 w-full px-4 sm:px-6 py-3 bg-[#121212]/95 backdrop-blur-xl flex items-center justify-between border-b border-white/[0.05] select-none transition-colors"
+      className="spotify-top-header sticky top-0 z-30 w-full px-4 sm:px-6 py-3 bg-[#121212]/95 backdrop-blur-xl flex items-center gap-2 border-b border-white/[0.05] select-none transition-colors"
     >
       {/* Left Navigation Buttons & Search Input */}
-      <div className="flex items-center space-x-2.5 min-w-0 flex-shrink-1">
+      <div className="flex min-w-0 flex-1 items-center space-x-2.5">
         {/* Compact brand mark — mobile only, replaces desktop back/forward + search */}
         <div className="flex sm:hidden items-center space-x-2 min-w-0">
           <div className="w-7 h-7 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-[0_0_12px_rgba(217,70,239,0.4)] flex-shrink-0">
@@ -102,7 +102,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
             Uses flex-1 + min/max width (instead of a fixed width per breakpoint) so it shrinks
             fluidly with the window instead of jumping between sizes and overflowing into the
             buttons on the right at in-between widths. */}
-        <div className="hidden sm:block relative flex-1 min-w-[90px] max-w-[220px]">
+        <div className="spotify-global-search hidden sm:block relative flex-1 min-w-[72px] max-w-[220px]">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
           <input
             type="text"
@@ -120,7 +120,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
       </div>
 
       {/* Center/Middle Quick Category Filter Chips - Scrollable flex row cleanly isolated */}
-      <div className="hidden lg:flex items-center space-x-2 overflow-x-auto min-w-0 flex-1 mx-3 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="spotify-header-categories hidden lg:flex items-center space-x-2 overflow-x-auto min-w-0 flex-1 mx-2 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {categories.map((cat) => (
           <button
             key={cat}
@@ -137,7 +137,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
       </div>
 
       {/* Right User Actions & Audio Controls - Fixed & Non-shrinking */}
-      <div className="flex items-center space-x-2 sm:space-x-2.5 flex-shrink-0 ml-auto z-10 bg-[#121212] pl-2">
+      <div className="flex items-center space-x-2 sm:space-x-2.5 flex-shrink-0 ml-auto z-10">
         {/* Add Song Button — icon-only until there's room for the label (lg+),
             so it never crowds into the search box / profile pill at in-between
             window widths the way a fixed "+ Add Song" label used to. */}
@@ -145,10 +145,11 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
           <button
             onClick={onOpenAddTrackModal}
             title="Upload"
-            className="flex items-center space-x-1.5 px-2 py-1.5 text-white/80 hover:text-white text-xs font-extrabold hover:drop-shadow-[0_0_8px_rgba(217,70,239,0.85)] active:scale-95 transition-all flex-shrink-0"
+            aria-label="Upload audio"
+            className="control-press flex h-9 flex-shrink-0 items-center gap-1.5 bg-transparent px-1.5 text-xs font-extrabold text-white/80 hover:text-white hover:drop-shadow-[0_0_8px_rgba(217,70,239,0.85)]"
           >
-            <span aria-hidden="true" className="text-[#D946EF] text-base leading-none">+</span>
-            <span className="hidden lg:inline">Upload</span>
+            <Upload className="h-4 w-4 text-[#D946EF]" />
+            <span className="spotify-upload-label hidden lg:inline">Upload</span>
           </button>
         )}
 
@@ -170,7 +171,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="hidden md:inline text-xs font-bold text-white max-w-[100px] truncate">
+              <span className="spotify-profile-name hidden md:inline text-xs font-bold text-white max-w-[100px] truncate">
                 {userProfile.displayName}
               </span>
               <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
