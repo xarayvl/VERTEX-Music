@@ -293,352 +293,352 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const ActivePhase = THINKING_PHASES[thinkingPhaseIdx];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] max-w-4xl mx-auto select-none">
-      {/* Top Header Card */}
-      <div className="relative flex items-center justify-between p-4 bg-[#181818]/90 backdrop-blur-xl rounded-2xl border border-white/[0.08] shadow-2xl mb-4 flex-shrink-0 overflow-hidden">
-        <div
-          className="pointer-events-none absolute -inset-24 opacity-20 blur-3xl"
-          style={{ background: 'radial-gradient(circle at 20% 20%, #A855F7, transparent 60%), radial-gradient(circle at 80% 80%, #D946EF, transparent 60%)' }}
-        />
-        <div className="relative flex items-center space-x-3">
-          <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-[#A855F7] to-[#D946EF] p-[2px] shadow-lg shadow-[#A855F7]/30">
-            <div className="w-full h-full rounded-full bg-[#181818] flex items-center justify-center relative">
-              <Bot className="w-5 h-5 text-[#E9D5FF]" />
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[#181818] animate-pulse" />
-            </div>
+    <section className="workspace-screen mx-auto flex h-[calc(100vh-140px)] min-h-[560px] w-full max-w-6xl flex-col bg-[#121212] text-white select-none">
+      <header className="workspace-header flex flex-shrink-0 items-start justify-between gap-4 border-b border-white/10 pb-5">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
+            <Bot className="h-6 w-6" />
+            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#121212] bg-emerald-400" />
           </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-lg font-extrabold text-white tracking-tight">VERTEX Music AI DJ</h2>
-              <span className="px-2 py-0.5 rounded-full bg-[#A855F7]/20 border border-[#A855F7]/40 text-[#C084FC] text-[10px] font-bold uppercase tracking-wider">
-                Gemini 3.5 Flash Lite + LYRIA AI
-              </span>
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-400/30 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
-                <Globe className="w-2.5 h-2.5" />
-                Live Web Search
+          <div className="min-w-0">
+            <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
+              <Sparkles className="h-3.5 w-3.5" /> Intelligent listening
+            </div>
+            <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">AI DJ Chat</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+              <span>Recommendations, music knowledge and AI composition.</span>
+              <span className="hidden items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-300 sm:flex">
+                <Globe className="h-2.5 w-2.5" /> Web search ready
               </span>
             </div>
-            <p className="text-xs text-zinc-400 mt-0.5">Ask for recommendations, playlist ideas & generate AI music</p>
           </div>
         </div>
 
-        <div className="relative flex items-center space-x-2">
+        <div className="flex flex-shrink-0 items-center gap-2">
           <button
-            onClick={() => setShowAiGenPanel(!showAiGenPanel)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center space-x-1.5 transition-all shadow ${
+            onClick={() => setShowAiGenPanel((open) => !open)}
+            className={`control-press flex h-10 items-center gap-2 rounded-2xl border px-3 text-xs font-black transition-colors sm:px-4 ${
               showAiGenPanel
-                ? 'bg-[#D946EF] border-[#D946EF] text-white shadow-[#D946EF]/20'
-                : 'bg-[#A855F7]/20 border-[#A855F7]/40 text-[#C084FC] hover:bg-[#A855F7]/30'
+                ? 'border-[#D946EF]/60 bg-[#D946EF]/20 text-white'
+                : 'border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Generate Music</span>
+            <Sparkles className="h-4 w-4 text-[#E879F9]" />
+            <span className="hidden sm:inline">Generate music</span>
           </button>
-
           <button
             onClick={handleClearHistory}
-            className="p-2 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
-            title="Clear Chat History"
+            disabled={messages.length === 0}
+            className="control-press flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-35"
+            title="Clear chat history"
+            aria-label="Clear chat history"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Lyria AI Music Generator Panel */}
-      {showAiGenPanel && (
-        <div className="mb-4 p-4 bg-[#201c29] border border-[#A855F7]/40 rounded-2xl shadow-xl space-y-3 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-xs font-bold text-[#D946EF]">
-              <Sparkles className="w-4 h-4" />
-              <span>Lyria AI Music Composer</span>
-            </div>
-            <div className="flex space-x-1">
-              <button
-                onClick={() => setAiGenModel('lyria-3-clip-preview')}
-                className={`px-2 py-0.5 text-[10px] font-bold rounded-lg transition-all ${
-                  aiGenModel === 'lyria-3-clip-preview'
-                    ? 'bg-[#D946EF] text-white'
-                    : 'bg-white/5 text-zinc-400 hover:text-white'
-                }`}
-              >
-                30s Clip
-              </button>
-              <button
-                onClick={() => setAiGenModel('lyria-3-pro-preview')}
-                className={`px-2 py-0.5 text-[10px] font-bold rounded-lg transition-all ${
-                  aiGenModel === 'lyria-3-pro-preview'
-                    ? 'bg-[#D946EF] text-white'
-                    : 'bg-white/5 text-zinc-400 hover:text-white'
-                }`}
-              >
-                Full Track
-              </button>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={aiGenPrompt}
-              onChange={(e) => setAiGenPrompt(e.target.value)}
-              placeholder="e.g. Upbeat synthwave beat with heavy bassline and ambient pads"
-              className="flex-1 px-3 py-2 bg-[#181818] border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#D946EF]"
-            />
-            <button
-              disabled={isGeneratingTrack}
-              onClick={() => handleDirectGenerateMusic()}
-              className="px-4 py-2 bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow flex items-center space-x-1.5 transition-all"
-            >
-              {isGeneratingTrack ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Composing...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Compose</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Messages Thread Container */}
-      <div className="flex-1 overflow-y-auto space-y-5 pr-2 custom-scrollbar min-h-0 mb-4">
-        <AnimatePresence initial={false}>
-          {messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 14, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.28, ease: 'easeOut' }}
-              className={`flex items-start gap-3 ${
-                msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'
-              }`}
-            >
-              {/* Avatar */}
-              <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 shadow-md ${
-                  msg.sender === 'user'
-                    ? 'bg-white text-black font-bold'
-                    : 'bg-gradient-to-tr from-[#A855F7] to-[#D946EF] text-white font-bold'
-                }`}
-              >
-                {msg.sender === 'user' ? (
-                  <User className="w-4 h-4 text-black" />
-                ) : (
-                  <Bot className="w-4 h-4 text-white" />
-                )}
-              </div>
-
-              {/* Bubble */}
-              <div
-                className={`max-w-[82%] rounded-3xl p-5 text-sm leading-relaxed shadow-lg ${
-                  msg.sender === 'user'
-                    ? 'bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white font-medium rounded-tr-md'
-                    : 'bg-[#181818]/95 backdrop-blur border border-white/[0.08] text-zinc-100 rounded-tl-md'
-                }`}
-              >
-                {/* Web search grounding chip */}
-                {msg.sender === 'ai' && msg.webSearchUsed && (
-                  <div className="mb-3">
-                    <button
-                      onClick={() => toggleSources(msg.id)}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-400/30 text-emerald-300 text-[11px] font-bold hover:bg-emerald-500/20 transition-colors"
-                    >
-                      <Globe className="w-3 h-3" />
-                      <span>Web'de arandı{msg.sources?.length ? ` · ${msg.sources.length} kaynak` : ''}</span>
-                      <ChevronDown
-                        className={`w-3 h-3 transition-transform ${expandedSources[msg.id] ? 'rotate-180' : ''}`}
-                      />
-                    </button>
-
-                    <AnimatePresence>
-                      {expandedSources[msg.id] && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="mt-2 p-3 rounded-xl bg-black/30 border border-white/10 space-y-2">
-                            {msg.searchQueries && msg.searchQueries.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5">
-                                {msg.searchQueries.map((q, i) => (
-                                  <span
-                                    key={i}
-                                    className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] text-zinc-300 flex items-center gap-1"
-                                  >
-                                    <Search className="w-2.5 h-2.5" />
-                                    {q}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            {msg.sources && msg.sources.length > 0 && (
-                              <div className="space-y-1">
-                                {msg.sources.map((s, i) => (
-                                  <a
-                                    key={i}
-                                    href={s.uri}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex items-center gap-1.5 text-[11px] text-zinc-400 hover:text-[#D946EF] transition-colors truncate"
-                                  >
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-                                    <span className="truncate">{s.title}</span>
-                                  </a>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-
-                <div className="whitespace-pre-wrap">{renderFormattedText(msg.text)}</div>
-
-                {/* Matched Tracks Recommendations inside AI message */}
-                {msg.matchedTracks && msg.matchedTracks.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-white/10 space-y-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#C084FC] flex items-center gap-1">
-                      <Music className="w-3 h-3" />
-                      Recommended Tracks Found In Library:
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {msg.matchedTracks.map((tr) => (
-                        <div
-                          key={tr.id}
-                          onClick={() => onPlayTrack(tr)}
-                          className="bg-[#242424] hover:bg-[#2e2e2e] p-2 rounded-lg flex items-center justify-between cursor-pointer border border-white/5 transition-all group"
-                        >
-                          <div className="flex items-center space-x-2 min-w-0">
-                            <img
-                              src={tr.coverUrl}
-                              alt={tr.title}
-                              referrerPolicy="no-referrer"
-                              className="w-8 h-8 rounded object-cover flex-shrink-0"
-                            />
-                            <div className="min-w-0">
-                              <h5 className="text-xs font-bold text-white truncate group-hover:text-[#D946EF]">
-                                {tr.title}
-                              </h5>
-                              <p className="text-[10px] text-zinc-400 truncate">{tr.artist}</p>
-                            </div>
-                          </div>
-
-                          <button className="w-7 h-7 rounded-full bg-[#A855F7] text-white flex items-center justify-center shadow group-hover:scale-105 transition-transform flex-shrink-0 ml-1">
-                            <Play className="w-3.5 h-3.5 fill-white ml-0.5" />
-                          </button>
-                        </div>
-                      ))}
+      <AnimatePresence initial={false}>
+        {showAiGenPanel && (
+          <motion.section
+            initial={{ opacity: 0, height: 0, y: -8 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -8 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="flex-shrink-0 overflow-hidden"
+          >
+            <div className="mt-5 rounded-3xl border border-[#A855F7]/30 bg-gradient-to-r from-[#211827] to-[#181818] p-4 shadow-xl sm:p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#E879F9]">
+                        <Music className="h-4 w-4" /> Lyria composer
+                      </p>
+                      <p className="mt-1 text-[11px] text-zinc-500">Describe the sound, mood and instruments you want.</p>
+                    </div>
+                    <div className="flex rounded-xl border border-white/10 bg-black/20 p-1">
+                      <button
+                        onClick={() => setAiGenModel('lyria-3-clip-preview')}
+                        className={`rounded-lg px-3 py-1.5 text-[10px] font-black transition-colors ${
+                          aiGenModel === 'lyria-3-clip-preview'
+                            ? 'bg-white text-black'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        30s Clip
+                      </button>
+                      <button
+                        onClick={() => setAiGenModel('lyria-3-pro-preview')}
+                        className={`rounded-lg px-3 py-1.5 text-[10px] font-black transition-colors ${
+                          aiGenModel === 'lyria-3-pro-preview'
+                            ? 'bg-white text-black'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        Full Track
+                      </button>
                     </div>
                   </div>
-                )}
+                  <input
+                    type="text"
+                    value={aiGenPrompt}
+                    onChange={(event) => setAiGenPrompt(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') handleDirectGenerateMusic();
+                    }}
+                    placeholder="Upbeat synthwave with heavy bass and ambient pads"
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-black/30 focus:ring-4 focus:ring-[#A855F7]/10"
+                  />
+                </div>
+                <button
+                  disabled={isGeneratingTrack || !aiGenPrompt.trim()}
+                  onClick={() => handleDirectGenerateMusic()}
+                  className="control-press flex h-12 flex-shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-6 text-xs font-black text-white shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {isGeneratingTrack ? (
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Composing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" /> Compose track
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </motion.section>
+        )}
+      </AnimatePresence>
 
-                <span
-                  className={`block text-[10px] mt-3 opacity-60 text-right ${
-                    msg.sender === 'user' ? 'text-white' : 'text-zinc-400'
+      <div className="workspace-card mt-5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#171717] shadow-2xl">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/[0.08] px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Conversation</span>
+          </div>
+          <span className="rounded-full bg-white/5 px-2.5 py-1 text-[10px] font-bold text-zinc-500">
+            {messages.length} {messages.length === 1 ? 'message' : 'messages'}
+          </span>
+        </div>
+
+        <div className="custom-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+          {messages.length === 0 && !isLoading && (
+            <div className="flex min-h-full items-center justify-center py-8">
+              <div className="max-w-lg text-center">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-[#A855F7]/30 bg-gradient-to-br from-[#A855F7]/25 to-[#D946EF]/10 text-[#E879F9] shadow-[0_18px_50px_rgba(168,85,247,0.14)]">
+                  <Bot className="h-8 w-8" />
+                </div>
+                <p className="mt-5 text-[10px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">VERTEX Music intelligence</p>
+                <h2 className="mt-2 text-2xl font-black tracking-tight">What should we listen to?</h2>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-zinc-500">
+                  Ask about artists and genres, get listening ideas, or create a new track with AI.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <AnimatePresence initial={false}>
+            {messages.map((msg) => (
+              <motion.div
+                key={msg.id}
+                initial={{ opacity: 0, y: 12, scale: 0.99 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.26, ease: 'easeOut' }}
+                className={`flex items-start gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+              >
+                <div
+                  className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl border shadow-md ${
+                    msg.sender === 'user'
+                      ? 'border-white/20 bg-white text-black'
+                      : 'border-[#D946EF]/30 bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white'
                   }`}
                 >
-                  {formatTimestamp(msg.timestamp)}
-                </span>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+                  {msg.sender === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                </div>
 
-        {/* "Thinking / Searching" Status Indicator */}
-        <AnimatePresence>
-          {isLoading && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              className="flex items-start gap-3"
-            >
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center font-bold shadow-md flex-shrink-0 relative">
-                <Bot className="w-4 h-4" />
-                <span className="absolute -inset-1 rounded-full border-2 border-[#D946EF]/40 animate-ping" />
-              </div>
-              <div className="relative bg-[#181818]/95 backdrop-blur border border-white/[0.08] px-5 py-3.5 rounded-3xl rounded-tl-md flex items-center gap-3 overflow-hidden min-w-[220px]">
-                {/* Scanning shimmer sweep - reinforces the "searching" feel */}
-                <span className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
+                <div
+                  className={`max-w-[86%] rounded-3xl border p-4 text-sm leading-relaxed shadow-lg sm:max-w-[78%] sm:p-5 ${
+                    msg.sender === 'user'
+                      ? 'rounded-tr-md border-[#D946EF]/30 bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white'
+                      : 'rounded-tl-md border-white/[0.08] bg-[#202020] text-zinc-100'
+                  }`}
+                >
+                  {msg.sender === 'ai' && msg.webSearchUsed && (
+                    <div className="mb-3">
+                      <button
+                        onClick={() => toggleSources(msg.id)}
+                        className="control-press flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-300 hover:bg-emerald-500/15"
+                      >
+                        <Globe className="h-3 w-3" />
+                        Web search{msg.sources?.length ? ` · ${msg.sources.length} sources` : ''}
+                        <ChevronDown className={`h-3 w-3 transition-transform ${expandedSources[msg.id] ? 'rotate-180' : ''}`} />
+                      </button>
 
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={thinkingPhaseIdx}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.22 }}
-                    className="flex items-center gap-2 relative z-10"
-                  >
-                    <ActivePhase.Icon className="w-4 h-4 text-[#D946EF] animate-pulse" />
-                    <span className="text-sm text-zinc-300 font-medium">{ActivePhase.text}</span>
-                  </motion.div>
-                </AnimatePresence>
+                      <AnimatePresence>
+                        {expandedSources[msg.id] && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-3 space-y-3 rounded-2xl border border-white/[0.08] bg-black/25 p-3">
+                              {msg.searchQueries && msg.searchQueries.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {msg.searchQueries.map((query, index) => (
+                                    <span key={index} className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-zinc-300">
+                                      <Search className="h-2.5 w-2.5" /> {query}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {msg.sources && msg.sources.length > 0 && (
+                                <div className="space-y-1.5">
+                                  {msg.sources.map((source, index) => (
+                                    <a
+                                      key={index}
+                                      href={source.uri}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="flex min-w-0 items-center gap-2 rounded-xl px-2 py-1.5 text-[11px] text-zinc-400 transition-colors hover:bg-white/5 hover:text-[#E879F9]"
+                                    >
+                                      <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-400" />
+                                      <span className="truncate">{source.title}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
 
-                <span className="flex items-center gap-1 relative z-10 ml-auto">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#D946EF] animate-bounce" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#D946EF] animate-bounce [animation-delay:0.15s]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#D946EF] animate-bounce [animation-delay:0.3s]" />
-                </span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  <div className="whitespace-pre-wrap">{renderFormattedText(msg.text)}</div>
 
-        <div ref={messagesEndRef} />
-      </div>
+                  {msg.matchedTracks && msg.matchedTracks.length > 0 && (
+                    <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+                      <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-[#D8B4FE]">
+                        <Music className="h-3.5 w-3.5" /> Tracks from your library
+                      </p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {msg.matchedTracks.map((track) => (
+                          <button
+                            key={track.id}
+                            onClick={() => onPlayTrack(track)}
+                            className="control-press group flex min-w-0 items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/20 p-2.5 text-left hover:border-[#A855F7]/35 hover:bg-black/30"
+                          >
+                            <img src={track.coverUrl} alt={track.title} referrerPolicy="no-referrer" className="h-10 w-10 flex-shrink-0 rounded-xl object-cover" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-black text-white group-hover:text-[#E879F9]">{track.title}</span>
+                              <span className="block truncate text-[10px] text-zinc-500">{track.artist}</span>
+                            </span>
+                            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white text-black">
+                              <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-      {/* Suggestion Quick Chips */}
-      {messages.length <= 2 && (
-        <div className="mb-3 flex flex-wrap gap-2 flex-shrink-0">
-          {suggestionPrompts.map((prompt, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleSendMessage(prompt)}
-              className="px-3 py-1.5 rounded-full bg-[#181818] hover:bg-[#242424] border border-white/10 text-xs font-medium text-zinc-300 hover:text-white transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[#D946EF]" />
-              <span>{prompt}</span>
-            </button>
-          ))}
+                  <span className={`mt-3 block text-right text-[9px] font-bold ${msg.sender === 'user' ? 'text-white/60' : 'text-zinc-600'}`}>
+                    {formatTimestamp(msg.timestamp)}
+                  </span>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {isLoading && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                className="flex items-start gap-3"
+              >
+                <div className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-md">
+                  <Bot className="h-4 w-4" />
+                  <span className="absolute -inset-1 animate-ping rounded-2xl border border-[#D946EF]/35" />
+                </div>
+                <div className="relative flex min-w-[220px] items-center gap-3 overflow-hidden rounded-3xl rounded-tl-md border border-white/[0.08] bg-[#202020] px-5 py-3.5">
+                  <span className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite] bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={thinkingPhaseIdx}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -5 }}
+                      className="relative z-10 flex items-center gap-2"
+                    >
+                      <ActivePhase.Icon className="h-4 w-4 animate-pulse text-[#E879F9]" />
+                      <span className="text-xs font-bold text-zinc-300">{ActivePhase.text}</span>
+                    </motion.div>
+                  </AnimatePresence>
+                  <span className="relative z-10 ml-auto flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#D946EF]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#D946EF] [animation-delay:0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#D946EF] [animation-delay:0.3s]" />
+                  </span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div ref={messagesEndRef} />
         </div>
-      )}
 
-      {/* Input Field & Submit Button */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSendMessage();
-        }}
-        className="relative flex items-center gap-2 bg-[#181818]/90 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl flex-shrink-0 focus-within:border-[#D946EF]/50 transition-colors"
-      >
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask VERTEX Music AI anything about music, artists, genres..."
-          disabled={isLoading}
-          className="flex-1 bg-transparent px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none disabled:opacity-50"
-        />
+        {messages.length <= 2 && (
+          <div className="custom-scrollbar flex flex-shrink-0 gap-2 overflow-x-auto border-t border-white/[0.06] px-4 pt-3 sm:px-6">
+            {suggestionPrompts.map((prompt, index) => (
+              <button
+                key={index}
+                onClick={() => handleSendMessage(prompt)}
+                disabled={isLoading}
+                className="control-press flex flex-shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold text-zinc-400 hover:border-[#A855F7]/30 hover:bg-[#A855F7]/10 hover:text-white disabled:opacity-40"
+              >
+                <Sparkles className="h-3 w-3 text-[#D946EF]" /> {prompt}
+              </button>
+            ))}
+          </div>
+        )}
 
-        <button
-          type="submit"
-          disabled={!input.trim() || isLoading}
-          className="w-10 h-10 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 disabled:bg-zinc-800 disabled:text-zinc-600 text-white flex items-center justify-center transition-all shadow-md active:scale-95 flex-shrink-0"
-        >
-          <Send className="w-4 h-4 fill-current ml-0.5" />
-        </button>
-      </form>
-    </div>
+        <div className="flex-shrink-0 bg-[#141414] p-3 sm:p-4">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleSendMessage();
+            }}
+            className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] p-2 transition-all focus-within:border-[#C084FC]/60 focus-within:bg-white/[0.06] focus-within:ring-4 focus-within:ring-[#A855F7]/10"
+          >
+            <input
+              type="text"
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Ask about music, artists, genres or your next playlist..."
+              disabled={isLoading}
+              className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={!input.trim() || isLoading}
+              className="control-press flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-md hover:brightness-110 disabled:cursor-not-allowed disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600"
+              aria-label="Send message"
+            >
+              <Send className="ml-0.5 h-4 w-4 fill-current" />
+            </button>
+          </form>
+          <p className="mt-2 px-2 text-center text-[9px] font-medium text-zinc-600">
+            AI responses can be inaccurate. Verify important music and artist information.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 };
