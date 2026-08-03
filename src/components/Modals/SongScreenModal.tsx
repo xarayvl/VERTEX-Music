@@ -174,7 +174,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
             </div>
           </article>
 
-          <article className="workspace-card flex min-h-0 flex-shrink-0 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-[#211827] to-[#181818] p-3 shadow-2xl md:flex-shrink md:rounded-3xl md:p-5">
+          <article className="workspace-card flex min-h-0 flex-shrink-0 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-[#211827] to-[#181818] p-3 shadow-2xl md:self-start md:rounded-3xl md:p-5">
             <div className="flex items-center justify-between gap-3 md:items-start md:gap-4">
               <div className="min-w-0">
                 <p className="hidden text-[10px] font-black uppercase tracking-[0.22em] text-[#D8B4FE] md:block">Listening session</p>
@@ -262,7 +262,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               </div>
             </div>
 
-            <div className="mt-3 hidden min-h-0 flex-1 flex-col rounded-3xl border border-white/[0.08] bg-[#101010]/60 p-4 md:flex">
+            <div className="mt-3 hidden flex-none flex-col rounded-3xl border border-white/[0.08] bg-[#101010]/60 p-4 md:flex">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
@@ -279,12 +279,12 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                   </button>
                 )}
               </div>
-              <div className="mt-3 flex min-h-0 flex-1 items-end justify-center overflow-hidden rounded-2xl border border-white/[0.06] bg-black/30 px-4 pb-3">
+              <div className="mt-3 flex h-[clamp(190px,24dvh,240px)] flex-none items-end justify-center overflow-hidden rounded-2xl border border-white/[0.06] bg-black/30 px-4">
                 <AudioVisualizer
                   isPlaying={isPlaying}
                   accentColor={palette.accent}
                   secondaryColor={palette.secondary}
-                  height={154}
+                  height={190}
                   maxHeightRatio={0.82}
                 />
               </div>
