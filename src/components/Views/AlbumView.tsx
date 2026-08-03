@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Play, Pause, Heart, Clock, MoreHorizontal, ListPlus, FolderPlus, Copy, ChevronRight, Plus, Music2, User } from 'lucide-react';
 import { Track, Artist, UserProfile, Playlist } from '../../types';
 
@@ -8,6 +9,7 @@ interface AlbumViewProps {
   currentTrackId?: string;
   isPlaying: boolean;
   onPlayTrack: (track: Track) => void;
+  onTogglePlay?: () => void;
   onToggleLike: (trackId: string) => void;
   onSelectArtist: (artist: Artist | string) => void;
   onSelectAlbum: (track: Track) => void;
@@ -15,7 +17,9 @@ interface AlbumViewProps {
   userProfile?: UserProfile | null;
   playlists?: Playlist[];
   onAddToQueue?: (track: Track) => void;
-  onAddToPlaylist?: (playlistId: string, trackId: string) => void;
+  onAddTracksToQueue?: (tracks: Track[]) => void;
+  onAddToPlaylist?: (playlistId: string, trackId: string) => Promise<boolean> | boolean;
+  onAddTracksToPlaylist?: (playlistId: string, trackIds: string[]) => Promise<boolean> | boolean;
   onOpenNewPlaylist?: () => void;
   showToast?: (msg: string) => void;
 }
@@ -26,12 +30,15 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   currentTrackId,
   isPlaying,
   onPlayTrack,
+  onTogglePlay,
   onToggleLike,
   onSelectArtist,
   onSelectAlbum,
   playlists = [],
   onAddToQueue,
+  onAddTracksToQueue,
   onAddToPlaylist,
+  onAddTracksToPlaylist,
   onOpenNewPlaylist,
   showToast,
 }) => {
@@ -78,7 +85,8 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
     ).values()
   );
 
-  const isCurrentAlbumPlaying = albumTracks.some((t) => t.id === currentTrackId) && isPlaying;
+  const isCurrentAlbumActive = albumTracks.some((t) => t.id === currentTrackId);
+  const isCurrentAlbumPlaying = isCurrentAlbumActive && isPlaying;
 
   // Track the most up-to-date version of the track in allTracks to synchronize Heart state
   const freshAlbumTrack = allTracks.find((t) => t.id === albumTrack.id) || albumTrack;
@@ -86,22 +94,91 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   // Dropdown context menu state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showPlaylistSubmenu, setShowPlaylistSubmenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuPanelRef = useRef<HTMLDivElement>(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+    if (!isMenuOpen) return;
+    const handleClickOutside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!menuButtonRef.current?.contains(target) && !menuPanelRef.current?.contains(target)) {
         setIsMenuOpen(false);
         setShowPlaylistSubmenu(false);
       }
     };
-    if (isMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMenuOpen(false);
+        setShowPlaylistSubmenu(false);
+      }
+    };
+    const handleViewportChange = () => {
+      setIsMenuOpen(false);
+      setShowPlaylistSubmenu(false);
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('pointerdown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
     };
   }, [isMenuOpen]);
+
+  useEffect(() => {
+    setIsMenuOpen(false);
+    setShowPlaylistSubmenu(false);
+  }, [albumTrack.id]);
+
+  useLayoutEffect(() => {
+    if (!isMenuOpen || !menuButtonRef.current || !menuPanelRef.current) return;
+    const buttonRect = menuButtonRef.current.getBoundingClientRect();
+    const panelRect = menuPanelRef.current.getBoundingClientRect();
+    const padding = 12;
+    const left = Math.min(Math.max(padding, buttonRect.left), window.innerWidth - panelRect.width - padding);
+    const preferredTop = buttonRect.bottom + 8;
+    const top = preferredTop + panelRect.height <= window.innerHeight - padding
+      ? preferredTop
+      : Math.max(padding, buttonRect.top - panelRect.height - 8);
+    setMenuPosition({ top, left });
+  }, [isMenuOpen, showPlaylistSubmenu]);
+
+  const toggleMenu = () => {
+    if (!isMenuOpen && menuButtonRef.current) {
+      const rect = menuButtonRef.current.getBoundingClientRect();
+      setMenuPosition({ top: rect.bottom + 8, left: Math.max(12, rect.left) });
+    }
+    setIsMenuOpen((open) => !open);
+    setShowPlaylistSubmenu(false);
+  };
+
+  const closeMenu = () => {
+    setIsMenuOpen(false);
+    setShowPlaylistSubmenu(false);
+  };
+
+  const copyReleaseLink = async () => {
+    const link = `${window.location.origin}/track/${albumTrack.id}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      showToast?.('Copied release link to clipboard!');
+    } catch {
+      const input = document.createElement('textarea');
+      input.value = link;
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      const copied = document.execCommand('copy');
+      input.remove();
+      showToast?.(copied ? 'Copied release link to clipboard!' : 'Could not copy the release link.');
+    }
+    closeMenu();
+  };
 
   const effectiveYear = albumTrack.releaseYear || (albumTrack.createdAt ? new Date(albumTrack.createdAt).getFullYear() : new Date().getFullYear());
   const formattedReleaseDate = albumTrack.createdAt ? new Date(albumTrack.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : `Released ${effectiveYear}`;
@@ -162,7 +239,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
       {/* Action Row */}
       <div className="flex items-center space-x-6 px-2">
         <button
-          onClick={() => onPlayTrack(albumTracks[0])}
+          onClick={() => isCurrentAlbumActive && onTogglePlay ? onTogglePlay() : onPlayTrack(albumTracks[0])}
           className="w-14 h-14 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all"
         >
           {isCurrentAlbumPlaying ? (
@@ -184,36 +261,45 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
         >
           <Heart className={`w-8 h-8 ${freshAlbumTrack.isLiked ? 'fill-[#D946EF]' : ''}`} />
         </button>
-        <div className="relative" ref={menuRef}>
+        <div className="relative">
           <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="text-zinc-400 hover:text-white transition-colors flex items-center justify-center p-1"
+            ref={menuButtonRef}
+            onClick={toggleMenu}
+            aria-haspopup="menu"
+            aria-expanded={isMenuOpen}
+            aria-label="More release actions"
+            className={`control-press flex h-11 w-11 items-center justify-center rounded-2xl border transition-colors ${isMenuOpen ? 'border-[#D946EF]/40 bg-[#D946EF]/15 text-[#F0ABFC]' : 'border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}
           >
-            <MoreHorizontal className="w-8 h-8" />
+            <MoreHorizontal className="h-6 w-6" />
           </button>
-          
-          {isMenuOpen && (
-            <div className="absolute left-0 mt-2 w-56 bg-[#161618]/95 backdrop-blur-2xl border border-white/12 shadow-[0_20px_50px_rgba(0,0,0,0.85)] rounded-2xl py-2 px-1 text-zinc-200 text-xs font-medium z-50 animate-in fade-in zoom-in-95 duration-100 select-none">
+
+          {isMenuOpen && createPortal(
+            <div
+              ref={menuPanelRef}
+              role="menu"
+              onClick={(event) => event.stopPropagation()}
+              className="fixed z-[1000] w-64 max-h-[calc(100dvh-24px)] overflow-y-auto rounded-2xl border border-white/12 bg-[#161618] p-1.5 text-xs font-medium text-zinc-200 shadow-[0_24px_70px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-100 select-none"
+              style={{ top: menuPosition.top, left: menuPosition.left }}
+            >
               <div className="space-y-0.5">
                 {/* Add to Queue */}
                 <button
                   onClick={() => {
-                    const trackToQueue = albumTracks[0] || albumTrack;
-                    onAddToQueue?.(trackToQueue);
-                    showToast?.(`Added "${trackToQueue.title}" to queue`);
-                    setIsMenuOpen(false);
+                    if (onAddTracksToQueue) onAddTracksToQueue(albumTracks);
+                    else albumTracks.forEach((track) => onAddToQueue?.(track));
+                    showToast?.(albumTracks.length > 1 ? `Added ${albumTracks.length} release tracks to queue` : `Added "${albumTracks[0]?.title || albumTrack.title}" to queue`);
+                    closeMenu();
                   }}
                   className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
                 >
                   <ListPlus className="w-4 h-4 text-zinc-400" />
-                  <span>Add to Queue</span>
+                  <span>{albumTracks.length > 1 ? 'Add release to Queue' : 'Add to Queue'}</span>
                 </button>
 
                 {/* Add to Playlist */}
                 <div className="relative">
                   <button
-                    onMouseEnter={() => setShowPlaylistSubmenu(true)}
-                    onClick={() => setShowPlaylistSubmenu(!showPlaylistSubmenu)}
+                    onClick={() => setShowPlaylistSubmenu((open) => !open)}
                     className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
                   >
                     <div className="flex items-center space-x-2.5">
@@ -224,15 +310,11 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   </button>
 
                   {showPlaylistSubmenu && (
-                    <div
-                      onMouseLeave={() => setShowPlaylistSubmenu(false)}
-                      className="absolute left-full top-0 ml-1 w-48 bg-[#18181b]/95 backdrop-blur-2xl border border-white/12 shadow-2xl rounded-xl py-1 px-1 z-50 text-xs space-y-0.5 animate-in fade-in duration-100"
-                    >
+                    <div className="mt-1 max-h-48 space-y-0.5 overflow-y-auto rounded-xl border border-white/[0.08] bg-black/25 p-1 animate-in fade-in slide-in-from-top-1 duration-150">
                       <button
                         onClick={() => {
                           onOpenNewPlaylist?.();
-                          setIsMenuOpen(false);
-                          setShowPlaylistSubmenu(false);
+                          closeMenu();
                         }}
                         className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-[#D946EF]/20 text-[#D946EF] font-bold text-left"
                       >
@@ -244,11 +326,12 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                         playlists.map((pl) => (
                           <button
                             key={pl.id}
-                            onClick={() => {
-                              onAddToPlaylist?.(pl.id, (albumTracks[0] || albumTrack).id);
-                              showToast?.(`Added to "${pl.title}"`);
-                              setIsMenuOpen(false);
-                              setShowPlaylistSubmenu(false);
+                            onClick={async () => {
+                              const succeeded = onAddTracksToPlaylist
+                                ? await onAddTracksToPlaylist(pl.id, albumTracks.map((track) => track.id))
+                                : await onAddToPlaylist?.(pl.id, (albumTracks[0] || albumTrack).id);
+                              if (succeeded !== false) showToast?.(albumTracks.length > 1 ? `Added release to "${pl.title}"` : `Added to "${pl.title}"`);
+                              closeMenu();
                             }}
                             className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-300 hover:text-white text-left truncate"
                           >
@@ -267,7 +350,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                 <button
                   onClick={() => {
                     onSelectArtist(albumTrack.userId || '');
-                    setIsMenuOpen(false);
+                    closeMenu();
                   }}
                   className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
                 >
@@ -277,18 +360,15 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
 
                 {/* Copy Link / Share */}
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/track/${albumTrack.id}`);
-                    showToast?.('Copied release link to clipboard!');
-                    setIsMenuOpen(false);
-                  }}
+                  onClick={() => void copyReleaseLink()}
                   className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
                 >
                   <Copy className="w-4 h-4 text-zinc-400" />
                   <span>Copy Link / Share</span>
                 </button>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
         </div>
       </div>
@@ -339,7 +419,8 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onPlayTrack(track);
+                      if (isSelected && onTogglePlay) onTogglePlay();
+                      else onPlayTrack(track);
                     }}
                     className="w-6 text-center hidden group-hover:block text-white"
                   >

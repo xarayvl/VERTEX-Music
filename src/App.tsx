@@ -1179,11 +1179,30 @@ export default function App() {
   }, []);
 
   const handlePlayPlaylist = (playlist: Playlist) => {
-    const playlistTracks = tracks.filter((t) => playlist.trackIds.includes(t.id));
+    const playlistTracks = playlist.trackIds
+      .map((trackId) => tracks.find((track) => track.id === trackId))
+      .filter((track): track is Track => Boolean(track));
     if (playlistTracks.length > 0) {
       setQueue(playlistTracks);
       handlePlayTrack(playlistTracks[0]);
     }
+  };
+
+  const handleShufflePlaylist = (playlistTracks: Track[]) => {
+    if (playlistTracks.length === 0) return;
+    if (isShuffle && currentTrack && playlistTracks.some((track) => track.id === currentTrack.id)) {
+      setQueue(playlistTracks);
+      setIsShuffle(false);
+      return;
+    }
+    const shuffledTracks = [...playlistTracks];
+    for (let index = shuffledTracks.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [shuffledTracks[index], shuffledTracks[swapIndex]] = [shuffledTracks[swapIndex], shuffledTracks[index]];
+    }
+    setQueue(shuffledTracks);
+    setIsShuffle(true);
+    handlePlayTrack(shuffledTracks[0]);
   };
 
   const handleSelectPlaylist = (playlist: Playlist) => {
@@ -1236,10 +1255,16 @@ export default function App() {
     }
   };
 
-  const updatePlaylistTracks = async (playlistId: string, nextTrackIds: string[]) => {
+  const updatePlaylistTracks = async (playlistId: string, nextTrackIds: string[]): Promise<Playlist | null> => {
     const target = playlists.find((playlist) => playlist.id === playlistId);
-    if (!target) return showToast('404 — Playlist not found.');
-    if (!userProfile || target.userId !== userProfile.id) return showToast('Only the playlist owner can change its tracks.');
+    if (!target) {
+      showToast('404 — Playlist not found.');
+      return null;
+    }
+    if (!userProfile || target.userId !== userProfile.id) {
+      showToast('Only the playlist owner can change its tracks.');
+      return null;
+    }
 
     try {
       const response = await fetch(`/api/playlists/${playlistId}`, {
@@ -1248,26 +1273,44 @@ export default function App() {
         body: JSON.stringify({ trackIds: nextTrackIds }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.playlist) return showToast(data?.error || 'Playlist update failed.');
+      if (!response.ok || !data?.playlist) {
+        showToast(data?.error || 'Playlist update failed.');
+        return null;
+      }
       setPlaylists((previous) => previous.map((playlist) => (playlist.id === playlistId ? data.playlist : playlist)));
+      return data.playlist;
     } catch (error) {
       console.error('Error changing playlist tracks:', error);
       showToast('Playlist update failed.');
+      return null;
     }
   };
 
-  const handleAddTrackToPlaylist = (playlistId: string, trackId: string) => {
+  const handleAddTracksToPlaylist = async (playlistId: string, trackIds: string[]): Promise<boolean> => {
     const target = playlists.find((playlist) => playlist.id === playlistId);
-    if (!target) return showToast('404 — Playlist not found.');
-    if (!tracks.some((track) => track.id === trackId)) return showToast('404 — Track not found.');
-    if (target.trackIds.includes(trackId)) return;
-    void updatePlaylistTracks(playlistId, [...target.trackIds, trackId]);
+    if (!target) {
+      showToast('404 — Playlist not found.');
+      return false;
+    }
+    const uniqueTrackIds = [...new Set(trackIds)];
+    if (uniqueTrackIds.some((trackId) => !tracks.some((track) => track.id === trackId))) {
+      showToast('404 — One or more tracks were not found.');
+      return false;
+    }
+    const nextTrackIds = [...new Set([...target.trackIds, ...uniqueTrackIds])];
+    if (nextTrackIds.length === target.trackIds.length) return true;
+    return Boolean(await updatePlaylistTracks(playlistId, nextTrackIds));
   };
 
-  const handleRemoveTrackFromPlaylist = (playlistId: string, trackId: string) => {
+  const handleAddTrackToPlaylist = (playlistId: string, trackId: string) => handleAddTracksToPlaylist(playlistId, [trackId]);
+
+  const handleRemoveTrackFromPlaylist = async (playlistId: string, trackId: string): Promise<boolean> => {
     const target = playlists.find((playlist) => playlist.id === playlistId);
-    if (!target) return showToast('404 — Playlist not found.');
-    void updatePlaylistTracks(playlistId, target.trackIds.filter((id) => id !== trackId));
+    if (!target) {
+      showToast('404 — Playlist not found.');
+      return false;
+    }
+    return Boolean(await updatePlaylistTracks(playlistId, target.trackIds.filter((id) => id !== trackId)));
   };
 
   const handleCreatePlaylist = async (draft: NewPlaylistDraft) => {
@@ -1821,6 +1864,7 @@ export default function App() {
                 currentTrackId={currentTrack?.id}
                 isPlaying={isPlaying}
                 onPlayTrack={handlePlayTrack}
+                onTogglePlay={handleTogglePlay}
                 onSelectPlaylist={handleSelectPlaylist}
                 onSelectArtist={handleSelectArtist}
                 onSelectAlbum={handleSelectAlbum}
@@ -1890,13 +1934,19 @@ export default function App() {
                 allTracks={tracks}
                 currentTrackId={currentTrack?.id}
                 isPlaying={isPlaying}
+                isShuffle={isShuffle}
                 onPlayTrack={handlePlayTrack}
                 onPlayPlaylist={handlePlayPlaylist}
+                onTogglePlay={handleTogglePlay}
+                onShufflePlaylist={handleShufflePlaylist}
                 onToggleLike={handleToggleLike}
                 onOpenEditModal={() => setIsEditPlaylistOpen(true)}
                 onDeletePlaylist={handleDeletePlaylist}
                 onAddTrackToPlaylist={handleAddTrackToPlaylist}
                 onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
+                onSelectAlbum={handleSelectAlbum}
+                onSelectArtist={handleSelectArtist}
+                showToast={showToast}
               />
             )}
 
@@ -1961,6 +2011,7 @@ export default function App() {
                 currentTrackId={currentTrack?.id}
                 isPlaying={isPlaying}
                 onPlayTrack={handlePlayTrack}
+                onTogglePlay={handleTogglePlay}
                 onToggleLike={handleToggleLike}
                 onSelectArtist={handleSelectArtist}
                 onSelectAlbum={handleSelectAlbum}
@@ -1968,7 +2019,9 @@ export default function App() {
                 userProfile={userProfile}
                 playlists={ownedPlaylists}
                 onAddToQueue={(tr) => setQueue((prev) => [...prev, tr])}
+                onAddTracksToQueue={(releaseTracks) => setQueue((previous) => [...previous, ...releaseTracks])}
                 onAddToPlaylist={handleAddTrackToPlaylist}
+                onAddTracksToPlaylist={handleAddTracksToPlaylist}
                 onOpenNewPlaylist={() => openWorkspacePanel('playlist')}
                 showToast={showToast}
               />

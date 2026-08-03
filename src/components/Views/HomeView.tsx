@@ -73,6 +73,7 @@ interface HomeViewProps {
   currentTrackId?: string;
   isPlaying: boolean;
   onPlayTrack: (track: Track) => void;
+  onTogglePlay: () => void;
   onSelectPlaylist: (playlist: Playlist) => void;
   onSelectArtist?: (artistId: string) => void;
   onSelectAlbum?: (track: Track) => void;
@@ -91,6 +92,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   currentTrackId,
   isPlaying,
   onPlayTrack,
+  onTogglePlay,
   onSelectPlaylist,
   onSelectArtist,
   onSelectAlbum,
@@ -126,6 +128,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const handleQuickItemLeave = () => {
     hoverRequestId.current += 1;
     setGreetingAccent(DEFAULT_GREETING_ACCENT);
+  };
+
+  const playOrToggle = (track: Track) => {
+    if (track.id === currentTrackId) onTogglePlay();
+    else onPlayTrack(track);
   };
 
   const getGreeting = () => {
@@ -174,7 +181,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     type: 'track' as const,
     trackId: track.id,
     hoverColor: track.accentColor,
-    action: () => onPlayTrack(track),
+    action: () => playOrToggle(track),
   }));
 
   const playlistQuickItems = filteredPlaylists.map((playlist) => ({
@@ -287,7 +294,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
-                        onPlayTrack(track);
+                        playOrToggle(track);
                       }}
                       className={`mobile-card-action absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white shadow-2xl transition-all duration-200 ${
                         isThisTrackPlaying ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100'
@@ -498,7 +505,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <div
                     onClick={(e) => {
                       e.stopPropagation();
-                      onPlayTrack(track);
+                      playOrToggle(track);
                     }}
                     className={`mobile-card-action absolute right-2 bottom-2 w-11 h-11 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl transition-all duration-200 transform ${
                       isThisTrackPlaying
@@ -616,7 +623,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onPlayTrack(track);
+                          playOrToggle(track);
                         }}
                         className="w-6 text-center hidden group-hover:block text-white"
                       >
