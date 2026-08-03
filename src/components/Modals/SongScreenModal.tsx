@@ -113,7 +113,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
 
         <div className="mt-2.5 grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] gap-3 md:grid-rows-none md:grid-cols-[0.92fr_1.08fr] md:gap-4">
           <article
-            className="workspace-card relative flex min-h-0 flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/10 p-3 shadow-2xl md:rounded-3xl md:p-5"
+            className="workspace-card relative flex min-h-0 flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/10 p-3 shadow-2xl md:self-start md:justify-start md:rounded-3xl md:p-4"
             style={{
               background: `linear-gradient(145deg, ${palette.ambient}, #181818 62%, #111111)`,
             }}
