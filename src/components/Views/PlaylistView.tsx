@@ -216,7 +216,6 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-zinc-500"><Music className="h-6 w-6" /></div>
             <h3 className="mt-4 text-base font-black">This playlist is empty</h3>
             <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-zinc-500">Add songs from your real catalog and they will appear here in playlist order.</p>
-            {canManage && <button type="button" onClick={() => setShowAddSection(true)} className="control-press mt-5 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3 text-xs font-black"><Plus className="h-4 w-4" /> Add songs</button>}
           </div>
         ) : (
           <div className="divide-y divide-white/[0.045]">
