@@ -1,187 +1,157 @@
 <div align="center">
 
-VERTEX Music
+# 🎵 VERTEX Music
 
-A modern Spotify-inspired music streaming experience
+**A modern, Spotify-inspired music streaming experience**
 
 Discover music, explore artists, build playlists, and enjoy a clean, responsive interface designed for desktop and mobile.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
+[![Status](https://img.shields.io/badge/status-active%20development-brightgreen)](#project-status)
+[![Made with React](https://img.shields.io/badge/Made%20with-React-61DAFB?logo=react&logoColor=white)](#tech-stack)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-blueviolet.svg)](#contributing)
 
+[Features](#-features) · [Getting Started](#-getting-started) · [Tech Stack](#-tech-stack) · [Contributing](#-contributing)
 
 </div>
 
-About VERTEX Music
+<br/>
 
-VERTEX Music is a Spotify-inspired music application focused on a fast, stylish, and immersive listening experience.
+## 📸 Preview
 
-The project includes artist profiles, albums, playlists, search, playback controls, personalized libraries, and a responsive interface that works across desktop and mobile devices.
-
-Note: VERTEX Music is an independent project and is not affiliated with Spotify AB.
-
-Preview
-
-Add your application screenshots or demo GIF here:
+<div align="center">
 
 ![VERTEX Music Preview](./assets/vertex-preview.png)
 
-<!-- Replace this section with a real screenshot when available. -->
+<sub>Replace this with a real screenshot or demo GIF once available.</sub>
 
-Features
+</div>
 
-Modern music streaming interface
+> **Note:** VERTEX Music is an independent project and is **not affiliated with Spotify AB**.
 
-Responsive desktop and mobile design
+<br/>
 
-Music search
+## ✨ Features
 
-Artist profile pages
+<table>
+<tr>
+<td width="50%" valign="top">
 
-Album and track pages
+**Core Experience**
+- 🎨 Modern, dark-themed music streaming UI
+- 📱 Fully responsive — desktop & mobile
+- 🔍 Music search
+- 🎤 Artist profile pages
+- 💿 Album & track pages
+- 👤 User profiles
 
-User profiles
+</td>
+<td width="50%" valign="top">
 
-Personal music library
+**Playback & Library**
+- 📚 Personal music library
+- 📝 Playlist creation & management
+- ❤️ Favorites and liked songs
+- ⏱️ Recently played tracks
+- 🎧 Playback controls & queue view
+- 🧭 Sidebar navigation with smooth transitions
 
-Playlist creation and management
+</td>
+</tr>
+</table>
 
-Favorites and liked songs
+<details>
+<summary><strong>🛣️ Planned Features</strong></summary>
+<br/>
 
-Recently played tracks
+- 🔐 User authentication
+- 🔄 Real-time synchronized playback
+- 🎼 Lyrics support
+- 📊 Audio visualizer
+- 🤝 Collaborative playlists
+- 👥 Social activity & friend system
+- ✅ Artist verification system
+- 🎯 Personalized recommendations
+- 📈 Listening statistics
+- 📴 Offline playback
+- 🖥️ Desktop application
+- 🌐 Progressive Web App support
 
-Music player with playback controls
+</details>
 
-Queue and currently playing view
+<br/>
 
-Sidebar navigation
+## 🛠️ Tech Stack
 
-Dark-themed user interface
+> Update this section to match the technologies actually used in your project.
 
-Smooth transitions and interactive components
+| Area | Technology |
+|------|------------|
+| **Frontend** | React · JavaScript / TypeScript |
+| **Styling** | CSS · Tailwind CSS |
+| **Backend** | Node.js · Express |
+| **Database** | PostgreSQL · MongoDB |
+| **Authentication** | JWT · OAuth |
+| **Deployment** | Vercel · Render |
 
-Planned Features
+<br/>
 
-User authentication
+## 🚀 Getting Started
 
-Real-time synchronized playback
+### Prerequisites
 
-Lyrics support
+Make sure you have the following installed:
 
-Audio visualizer
+- [Node.js](https://nodejs.org/)
+- npm, pnpm, or Yarn
+- [Git](https://git-scm.com/)
 
-Collaborative playlists
+### Installation
 
-Social activity and friend system
-
-Artist verification system
-
-Personalized recommendations
-
-Listening statistics
-
-Offline playback
-
-Desktop application
-
-Progressive Web App support
-
-Tech Stack
-
-Update this section to match the technologies used in your project.
-
-Area
-
-Technology
-
-Frontend
-
-React / JavaScript / TypeScript
-
-Styling
-
-CSS / Tailwind CSS
-
-Backend
-
-Node.js / Express
-
-Database
-
-PostgreSQL / MongoDB
-
-Authentication
-
-JWT / OAuth
-
-Deployment
-
-Vercel / Render
-
-Getting Started
-
-Prerequisites
-
-Before running the project, install:
-
-Node.js
-
-npm, pnpm, or Yarn
-
-Git
-
-Installation
-
-Clone the repository:
-
+```bash
+# 1. Clone the repository
 git clone https://github.com/YOUR_USERNAME/vertex-music.git
 
-Open the project directory:
-
+# 2. Open the project directory
 cd vertex-music
 
-Install dependencies:
-
+# 3. Install dependencies
 npm install
 
-Start the development server:
-
+# 4. Start the development server
 npm run dev
+```
 
-Open the local URL shown in your terminal.
+Then open the local URL shown in your terminal. 🎉
 
-Environment Variables
+### Environment Variables
 
-Create a .env file in the project root:
+Create a `.env` file in the project root:
 
+```env
 VITE_API_URL=http://localhost:3000
+```
 
 Add any other API keys, database URLs, or authentication secrets required by your project.
 
-Never commit real passwords, private API keys, or secret tokens to GitHub.
+> ⚠️ **Never commit real passwords, private API keys, or secret tokens to GitHub.**
 
-Available Scripts
+<br/>
 
-Command
+## 📜 Available Scripts
 
-Description
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Starts the development server |
+| `npm run build` | Creates a production build |
+| `npm run preview` | Previews the production build |
+| `npm run lint` | Checks the project for code issues |
 
-npm run dev
+<br/>
 
-Starts the development server
+## 📁 Project Structure
 
-npm run build
-
-Creates a production build
-
-npm run preview
-
-Previews the production build
-
-npm run lint
-
-Checks the project for code issues
-
-Project Structure
-
+```
 vertex-music/
 ├── public/
 ├── src/
@@ -197,45 +167,53 @@ vertex-music/
 ├── .env.example
 ├── package.json
 └── README.md
+```
 
-Project Status
+<br/>
 
-VERTEX Music is currently under active development. Features, designs, and project structure may change as development continues.
+## 🧭 Project Status
 
-Contributing
+VERTEX Music is currently **under active development**. Features, designs, and project structure may change as development continues.
 
-Contributions, bug reports, and feature suggestions are welcome.
+<br/>
 
-Fork the repository.
+## 🤝 Contributing
 
-Create a new branch:
+Contributions, bug reports, and feature suggestions are welcome!
 
-git checkout -b feature/your-feature-name
+1. **Fork** the repository
+2. **Create** a new branch
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+3. **Commit** your changes
+   ```bash
+   git commit -m "Add your feature"
+   ```
+4. **Push** the branch
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+5. **Open** a pull request
 
-Commit your changes:
+<br/>
 
-git commit -m "Add your feature"
+## ⚖️ Disclaimer
 
-Push the branch:
+VERTEX Music is an independent educational and portfolio project. The project does not claim ownership of third-party music, album artwork, artist images, trademarks, or branding. Any external media used during development should be properly licensed or replaced before public distribution.
 
-git push origin feature/your-feature-name
+<br/>
 
-Open a pull request.
+## 📄 License
 
-Disclaimer
+This project is licensed under the [MIT License](LICENSE).
 
-VERTEX Music is an independent educational and portfolio project.
-
-The project does not claim ownership of third-party music, album artwork, artist images, trademarks, or branding. Any external media used during development should be properly licensed or replaced before public distribution.
-
-License
-
-This project is licensed under the MIT License.
+<br/>
 
 <div align="center">
 
 Made with ❤️ for music lovers.
 
-VERTEX Music
+**VERTEX Music**
 
 </div>
