@@ -18,6 +18,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { UserProfile, Track } from '../../types';
+import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
 interface ProfileModalProps {
   isOpen: boolean;

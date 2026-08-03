@@ -774,7 +774,6 @@ async function startServer() {
       db.users[index] = {
         ...db.users[index],
         stats: {
-          hoursListened: 0,
           tracksPlayed: 0,
           topGenre: "N/A",
           playlistsCreated: 0,
@@ -888,7 +887,6 @@ async function startServer() {
       db.users[index] = {
         ...db.users[index],
         stats: {
-          hoursListened: 0,
           tracksPlayed: 0,
           topGenre: "N/A",
           playlistsCreated: 0,
@@ -1114,7 +1112,6 @@ async function startServer() {
             ...db.users[userIndex],
             stats: {
               hoursListened: 0,
-              tracksPlayed: 0,
               topGenre: "N/A",
               playlistsCreated: 0,
               ...db.users[userIndex].stats,

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   User,
   Edit3,
@@ -44,6 +44,43 @@ interface ProfileViewProps {
   artists?: Artist[];
 }
 
+interface ReliableArtistImageProps {
+  src?: string;
+  fallbackSrc?: string;
+  alt: string;
+}
+
+const ReliableArtistImage: React.FC<ReliableArtistImageProps> = ({ src, fallbackSrc, alt }) => {
+  const firstSource = src || fallbackSrc || DEFAULT_AVATAR_URL;
+  const [currentSource, setCurrentSource] = useState(firstSource);
+
+  useEffect(() => {
+    setCurrentSource(src || fallbackSrc || DEFAULT_AVATAR_URL);
+  }, [src, fallbackSrc]);
+
+  const handleError = () => {
+    if (fallbackSrc && currentSource !== fallbackSrc) {
+      setCurrentSource(fallbackSrc);
+      return;
+    }
+    if (currentSource !== DEFAULT_AVATAR_URL) {
+      setCurrentSource(DEFAULT_AVATAR_URL);
+    }
+  };
+
+  return (
+    <img
+      src={currentSource}
+      alt={alt}
+      referrerPolicy="no-referrer"
+      loading="lazy"
+      decoding="async"
+      onError={handleError}
+      className="media-fade h-full w-full object-cover"
+    />
+  );
+};
+
 export const ProfileView: React.FC<ProfileViewProps> = ({
   userProfile,
   onUpdateProfile,
@@ -81,9 +118,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     const matchedTrack = (recentlyPlayed || []).find(
       (t) => t && t.artist && t.artist.toLowerCase() === nameLower && t.coverUrl
     );
-    const avatarUrl =
-      (isSelf ? userProfile?.avatarUrl : undefined) || matchedArtist?.avatarUrl || matchedTrack?.coverUrl || '';
-    return { name, avatarUrl, id: (isSelf ? userProfile?.id : matchedArtist?.id) || name };
+    const preferredAvatar =
+      (isSelf ? userProfile?.avatarUrl : undefined) || matchedArtist?.avatarUrl || '';
+    const fallbackAvatar = matchedTrack?.coverUrl || DEFAULT_AVATAR_URL;
+    return {
+      name,
+      avatarUrl: preferredAvatar || fallbackAvatar,
+      fallbackAvatar,
+      id: (isSelf ? userProfile?.id : matchedArtist?.id) || name,
+    };
   });
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'audioEngine' | 'settings'>('overview');
   const [isEditing, setIsEditing] = useState(false);
@@ -727,21 +770,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
                   {personalTopArtists.map((artist, idx) => (
                     <div
-                      key={idx}
+                      key={artist.id}
                       onClick={() => onSelectArtist && onSelectArtist(artist.name)}
-                      className="p-4 rounded-xl bg-[#181818] hover:bg-[#282828] transition-all group cursor-pointer flex flex-col items-center text-center space-y-3 border border-white/5"
+                      style={{ '--stagger-index': idx } as React.CSSProperties}
+                      className="stagger-item card-interactive group flex cursor-pointer flex-col items-center space-y-3 rounded-xl border border-white/5 bg-[#181818] p-4 text-center transition-all hover:bg-[#282828]"
                     >
-                      <div className="relative w-24 h-24 rounded-full overflow-hidden shadow-lg group-hover:scale-105 transition-transform bg-gradient-to-br from-[#A855F7] to-[#D946EF] flex items-center justify-center text-white text-xl font-black">
-                        {artist.avatarUrl ? (
-                          <img
-                            src={artist.avatarUrl}
-                            alt={artist.name}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          artist.name.slice(0, 2).toUpperCase()
-                        )}
+                      <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-xl font-black text-white shadow-lg transition-transform duration-300 group-hover:scale-105">
+                        <ReliableArtistImage
+                          src={artist.avatarUrl}
+                          fallbackSrc={artist.fallbackAvatar}
+                          alt={artist.name}
+                        />
                       </div>
                       <div>
                         <h3 className="text-xs font-extrabold text-white truncate w-full">

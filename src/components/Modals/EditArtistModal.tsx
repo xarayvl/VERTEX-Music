@@ -179,13 +179,13 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="workspace-screen absolute inset-0 z-[100] overflow-y-auto bg-[#121212] p-4 sm:p-6 lg:p-8">
       <div
-        className="bg-[#181818] border border-white/10 w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+        className="workspace-card mx-auto flex min-h-full w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#181818] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 bg-[#222222] border-b border-white/10 flex items-center justify-between">
+        <div className="workspace-header sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-[#202020] px-5 py-4 sm:px-7">
           <div className="flex items-center space-x-2.5">
             <Sparkles className="w-5 h-5 text-[#D946EF]" />
             <h2 className="text-lg font-black text-white tracking-tight">Edit Artist Profile</h2>
@@ -205,7 +205,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
         </div>
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="flex-1 space-y-6 p-5 sm:p-7">
           {/* Default Account Username Badge (Non-editable as requested) */}
           <div className="p-3.5 rounded-xl bg-[#222222] border border-white/10 flex items-center justify-between">
             <div className="flex items-center space-x-3">

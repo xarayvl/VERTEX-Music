@@ -116,6 +116,13 @@ export default function App() {
   const [isEditPlaylistOpen, setIsEditPlaylistOpen] = useState<boolean>(false);
   const [isDeviceSelectorOpen, setIsDeviceSelectorOpen] = useState<boolean>(false);
   const [isSongScreenOpen, setIsSongScreenOpen] = useState<boolean>(false);
+
+  const openWorkspacePanel = (panel: 'eq' | 'playlist' | 'upload') => {
+    setIsEQOpen(panel === 'eq');
+    setIsNewPlaylistOpen(panel === 'playlist');
+    setIsAddTrackOpen(panel === 'upload');
+  };
+
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [selectedArtist, setSelectedArtist] = useState<Artist | UserProfile | null>(null);
   const [isArtistLoading, setIsArtistLoading] = useState(false);
@@ -1868,6 +1875,7 @@ export default function App() {
   };
 
   const progressFraction = currentTrack?.duration ? currentTimeSeconds / currentTrack.duration : 0;
+  const isWorkspacePanelOpen = isEQOpen || isNewPlaylistOpen || isAddTrackOpen;
 
   return (
     <div
@@ -1897,7 +1905,7 @@ export default function App() {
             artists={artists.filter((a) => followedArtistIds.includes(a.id))}
             tracks={tracks}
             onSelectPlaylist={handleSelectPlaylist}
-            onOpenNewPlaylistModal={() => setIsNewPlaylistOpen(true)}
+            onOpenNewPlaylistModal={() => openWorkspacePanel('playlist')}
             onPlayTrack={handlePlayTrack}
             currentTrackId={currentTrack?.id}
             onOpenProfileModal={handleOpenProfileModal}
@@ -1982,7 +1990,7 @@ export default function App() {
             onSelectTab={handleSelectTab}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
-            onOpenEQ={() => setIsEQOpen(true)}
+            onOpenEQ={() => openWorkspacePanel('eq')}
             onOpenDeviceSelector={() => setIsDeviceSelectorOpen(true)}
             activeDeviceName={activeDeviceName}
             selectedCategory={selectedCategory}
@@ -1993,39 +2001,49 @@ export default function App() {
             canGoForward={historyIndex < navHistory.length - 1}
             userProfile={userProfile}
             onOpenProfileModal={handleOpenProfileModal}
-            onOpenAddTrackModal={() => setIsAddTrackOpen(true)}
+            onOpenAddTrackModal={() => openWorkspacePanel('upload')}
             onLogout={handleLogout}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
           />
 
           {/* Scrollable View Content */}
-          <div className="flex-1 overflow-y-auto px-3 sm:px-6 pt-4 pb-44 md:pb-24 custom-scrollbar">
-            {isSongScreenOpen ? (
+          <div
+            className={`relative flex-1 overflow-y-auto custom-scrollbar ${
+              isWorkspacePanelOpen ? 'p-0 pb-40 md:pb-24' : 'px-3 pt-4 pb-44 sm:px-6 md:pb-24'
+            }`}
+          >
+            {isEQOpen ? (
+              <AudioEQModal
+                isOpen={isEQOpen}
+                onClose={() => setIsEQOpen(false)}
+                eq={eq}
+                onUpdateEQ={setEq}
+              />
+            ) : isNewPlaylistOpen ? (
+              <NewPlaylistModal
+                isOpen={isNewPlaylistOpen}
+                onClose={() => setIsNewPlaylistOpen(false)}
+                onCreatePlaylist={handleCreatePlaylist}
+              />
+            ) : isAddTrackOpen ? (
+              <AddTrackModal
+                isOpen={isAddTrackOpen}
+                onClose={() => setIsAddTrackOpen(false)}
+                userId={userProfile?.id}
+                userProfileName={userProfile?.artistName || userProfile?.displayName}
+                tracks={tracks}
+                onTrackAdded={(newTrack) => {
+                  setTracks((prev) => [newTrack, ...prev]);
+                  handlePlayTrack(newTrack);
+                }}
+              />
+            ) : isSongScreenOpen ? (
               <SongScreenModal
                 isOpen={isSongScreenOpen}
                 onClose={() => setIsSongScreenOpen(false)}
                 currentTrack={currentTrack}
                 isPlaying={isPlaying}
-                progress={progressFraction}
-                currentTimeSeconds={currentTimeSeconds}
-                volume={volume}
-                isShuffle={isShuffle}
-                repeatMode={repeatMode}
-                onTogglePlay={handleTogglePlay}
-                onNext={handleNextTrack}
-                onPrev={handlePrevTrack}
-                onSeek={handleSeek}
-                onVolumeChange={setVolume}
-                onToggleLike={handleToggleLike}
-                onToggleShuffle={() => setIsShuffle(!isShuffle)}
-                onToggleRepeat={() =>
-                  setRepeatMode(
-                    repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off'
-                  )
-                }
-                onSelectArtist={handleSelectArtist}
-                onOpenEQ={() => setIsEQOpen(true)}
-                userProfile={userProfile}
+                onOpenEQ={() => openWorkspacePanel('eq')}
               />
             ) : (
               <div key={activeTab} className="view-transition">
@@ -2043,8 +2061,9 @@ export default function App() {
                 onToggleLike={handleToggleLike}
                 selectedCategory={selectedCategory}
                 onSelectTab={handleSelectTab}
-                onOpenAddTrackModal={() => setIsAddTrackOpen(true)}
-                onOpenNewPlaylistModal={() => setIsNewPlaylistOpen(true)}
+                onOpenAddTrackModal={() => openWorkspacePanel('upload')}
+                onOpenNewPlaylistModal={() => openWorkspacePanel('playlist')}
+                recentlyPlayed={recentlyPlayed}
               />
             )}
 
@@ -2085,8 +2104,8 @@ export default function App() {
                 onSelectPlaylist={handleSelectPlaylist}
                 onSelectAlbum={handleSelectAlbum}
                 onSelectArtist={handleSelectArtist}
-                onOpenNewPlaylistModal={() => setIsNewPlaylistOpen(true)}
-                onOpenAddTrackModal={() => setIsAddTrackOpen(true)}
+                onOpenNewPlaylistModal={() => openWorkspacePanel('playlist')}
+                onOpenAddTrackModal={() => openWorkspacePanel('upload')}
                 onWipeAllTracks={handleWipeAllTracks}
                 onToggleLike={handleToggleLike}
               />
@@ -2134,7 +2153,7 @@ export default function App() {
                 onSelectArtist={handleSelectArtist}
                 onDeleteTrack={handleDeleteTrack}
                 onEditTrack={(tr) => setEditingTrack(tr)}
-                onOpenAddTrackModal={() => setIsAddTrackOpen(true)}
+                onOpenAddTrackModal={() => openWorkspacePanel('upload')}
                 artists={artists}
               />
             )}
@@ -2175,7 +2194,7 @@ export default function App() {
                 playlists={playlists}
                 onAddToQueue={(tr) => setQueue((prev) => [...prev, tr])}
                 onAddToPlaylist={handleAddTrackToPlaylist}
-                onOpenNewPlaylist={() => setIsNewPlaylistOpen(true)}
+                onOpenNewPlaylist={() => openWorkspacePanel('playlist')}
                 showToast={showToast}
               />
             )}
@@ -2231,7 +2250,7 @@ export default function App() {
               onToggleLike={handleToggleLike}
               onSelectArtist={handleSelectArtist}
               onAddToPlaylist={handleAddTrackToPlaylist}
-              onOpenNewPlaylistModal={() => setIsNewPlaylistOpen(true)}
+              onOpenNewPlaylistModal={() => openWorkspacePanel('playlist')}
               showToast={showToast}
             />
           </div>
@@ -2285,7 +2304,7 @@ export default function App() {
             repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off'
           )
         }
-        onOpenEQ={() => setIsEQOpen(true)}
+        onOpenEQ={() => openWorkspacePanel('eq')}
         onOpenDeviceSelector={() => setIsDeviceSelectorOpen(true)}
         onOpenSongScreen={() => setIsSongScreenOpen((prev) => !prev)}
         activeDeviceName={activeDeviceName}
@@ -2294,19 +2313,6 @@ export default function App() {
       />
 
       {/* Modals */}
-
-      <AudioEQModal
-        isOpen={isEQOpen}
-        onClose={() => setIsEQOpen(false)}
-        eq={eq}
-        onUpdateEQ={setEq}
-      />
-
-      <NewPlaylistModal
-        isOpen={isNewPlaylistOpen}
-        onClose={() => setIsNewPlaylistOpen(false)}
-        onCreatePlaylist={handleCreatePlaylist}
-      />
 
       <EditPlaylistModal
         isOpen={isEditPlaylistOpen}
@@ -2331,18 +2337,6 @@ export default function App() {
         onPlayTrack={handlePlayTrack}
         onLogout={handleLogout}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
-      />
-
-      <AddTrackModal
-        isOpen={isAddTrackOpen}
-        onClose={() => setIsAddTrackOpen(false)}
-        userId={userProfile?.id}
-        userProfileName={userProfile?.artistName || userProfile?.displayName}
-        tracks={tracks}
-        onTrackAdded={(newTrack) => {
-          setTracks((prev) => [newTrack, ...prev]);
-          handlePlayTrack(newTrack);
-        }}
       />
 
       <AuthModal
@@ -2386,9 +2380,9 @@ export default function App() {
         onTogglePlay={handleTogglePlay}
         onNextTrack={handleNextTrack}
         onPrevTrack={handlePrevTrack}
-        onOpenEQ={() => setIsEQOpen(true)}
-        onOpenAddTrack={() => setIsAddTrackOpen(true)}
-        onOpenNewPlaylist={() => setIsNewPlaylistOpen(true)}
+        onOpenEQ={() => openWorkspacePanel('eq')}
+        onOpenAddTrack={() => openWorkspacePanel('upload')}
+        onOpenNewPlaylist={() => openWorkspacePanel('playlist')}
         onNavigate={handleSelectTab}
         onOpenProfile={handleOpenProfileModal}
         onOpenChat={() => handleSelectTab('chat')}

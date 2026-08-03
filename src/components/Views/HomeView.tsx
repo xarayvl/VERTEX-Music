@@ -18,6 +18,7 @@ interface HomeViewProps {
   onSelectTab?: (tab: TabType) => void;
   onOpenAddTrackModal?: () => void;
   onOpenNewPlaylistModal?: () => void;
+  recentlyPlayed?: Track[];
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -35,6 +36,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onSelectTab,
   onOpenAddTrackModal,
   onOpenNewPlaylistModal,
+  recentlyPlayed = [],
 }) => {
   const getGreeting = () => {
     const hrs = new Date().getHours();
@@ -62,29 +64,45 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   const likedTracks = tracks.filter((t) => t.isLiked);
 
-  // Group tracks belonging to the same album/EP release into a single
-  // card so an 11-track album doesn't flood the home feed as 11 entries.
-  const recentReleaseGroups = groupTracksByRelease(filteredTracks).slice(0, 5);
+  // Use the real user-scoped listening history. Fall back to fresh releases
+  // only for brand-new users who have not played anything yet.
+  const validRecentTracks = recentlyPlayed
+    .filter((track) => track && tracks.some((candidate) => candidate.id === track.id))
+    .slice(0, 12);
+  const recentSource = validRecentTracks.length > 0 ? validRecentTracks : filteredTracks;
+  const recentReleaseGroups = groupTracksByRelease(recentSource).slice(0, 5);
 
-  // Quick 6 items for the 2x3 grid
+  // The greeting area now includes actual recently played songs instead of
+  // being limited to Liked Songs and playlist shortcuts.
+  const recentQuickItems = validRecentTracks.slice(0, 5).map((track) => ({
+    id: `recent-${track.id}`,
+    title: track.title,
+    coverUrl: track.coverUrl,
+    type: 'track' as const,
+    trackId: track.id,
+    action: () => onPlayTrack(track),
+  }));
+
+  const playlistQuickItems = filteredPlaylists.map((playlist) => ({
+    id: playlist.id,
+    title: playlist.title,
+    coverUrl: playlist.coverUrl,
+    type: 'playlist' as const,
+    playlistId: playlist.id,
+    action: () => onSelectPlaylist(playlist),
+  }));
+
   const quickItems = [
     {
       id: 'liked-songs',
-      title: 'Liked Songs',
+      title: `Liked Songs${likedTracks.length ? ` · ${likedTracks.length}` : ''}`,
       coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=300&q=80',
-      action: () => {
-        if (onSelectTab) {
-          onSelectTab('library');
-        }
-      },
+      type: 'library' as const,
+      action: () => onSelectTab?.('library'),
     },
-    ...filteredPlaylists.slice(0, 5).map((pl) => ({
-      id: pl.id,
-      title: pl.title,
-      coverUrl: pl.coverUrl,
-      action: () => onSelectPlaylist(pl),
-    })),
-  ];
+    ...recentQuickItems,
+    ...playlistQuickItems,
+  ].slice(0, 6);
 
   return (
     <div className="space-y-8 pb-12 select-none">
@@ -112,18 +130,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
           {quickItems.map((item, idx) => (
             <div
               key={item.id}
-              data-playlist-id={item.id.startsWith('pl-') ? item.id : undefined}
-              data-context-type="playlist"
+              data-playlist-id={'playlistId' in item ? item.playlistId : undefined}
+              data-track-id={'trackId' in item ? item.trackId : undefined}
+              data-context-type={item.type === 'track' ? 'track' : item.type === 'playlist' ? 'playlist' : undefined}
               onClick={item.action}
               style={{ '--stagger-index': idx } as React.CSSProperties}
-              className="stagger-item card-interactive group relative flex items-center bg-white/5 hover:bg-white/10 transition-all duration-200 rounded-md overflow-hidden cursor-pointer shadow-md pr-4"
+              className="stagger-item card-interactive group relative flex items-center overflow-hidden rounded-xl border border-white/[0.06] bg-white/5 pr-4 shadow-md transition-all duration-300 hover:bg-white/10"
             >
               <div className="w-16 h-16 flex-shrink-0 relative overflow-hidden">
                 <img
                   src={item.coverUrl}
                   alt={item.title}
                   referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  className="media-fade w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
               </div>
 

@@ -235,6 +235,37 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
             </div>
           </div>
 
+          {/* Saved Artists — grouped with Liked Songs & Recently Played so
+              this whole "your stuff at a glance" cluster stays together,
+              instead of Artists sitting all the way down past Playlists. */}
+          {(libraryFilter === 'all' || libraryFilter === 'artists') &&
+            filteredArtists.map((artist) => {
+              const artistTrack = tracks.find((t) => t.artist === artist.name) || tracks[0];
+              return (
+                <div
+                  key={artist.id}
+                  data-artist-id={artist.id}
+                  data-artist-name={artist.name}
+                  data-context-type="artist"
+                  onClick={() => onPlayTrack(artistTrack)}
+                  className="flex items-center space-x-3 p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors"
+                >
+                  <img
+                    src={artist.avatarUrl}
+                    alt={artist.name}
+                    referrerPolicy="no-referrer"
+                    className="w-12 h-12 rounded-full object-cover flex-shrink-0 shadow-md border border-white/10"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
+                      {artist.name}
+                    </h4>
+                    <p className="text-xs text-zinc-400 truncate">Artist</p>
+                  </div>
+                </div>
+              );
+            })}
+
           {/* Recently Played List */}
           {recentlyPlayed && recentlyPlayed.length > 0 && (
             <div className="pt-2 pb-1 border-t border-white/5 mt-1">
@@ -302,35 +333,6 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
                 </div>
               </div>
             ))}
-
-          {/* Saved Artists */}
-          {(libraryFilter === 'all' || libraryFilter === 'artists') &&
-            filteredArtists.map((artist) => {
-              const artistTrack = tracks.find((t) => t.artist === artist.name) || tracks[0];
-              return (
-                <div
-                  key={artist.id}
-                  data-artist-id={artist.id}
-                  data-artist-name={artist.name}
-                  data-context-type="artist"
-                  onClick={() => onPlayTrack(artistTrack)}
-                  className="flex items-center space-x-3 p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors"
-                >
-                  <img
-                    src={artist.avatarUrl}
-                    alt={artist.name}
-                    referrerPolicy="no-referrer"
-                    className="w-12 h-12 rounded-full object-cover flex-shrink-0 shadow-md border border-white/10"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
-                      {artist.name}
-                    </h4>
-                    <p className="text-xs text-zinc-400 truncate">Artist</p>
-                  </div>
-                </div>
-              );
-            })}
         </div>
       </div>
     </aside>

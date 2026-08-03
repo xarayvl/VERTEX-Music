@@ -532,11 +532,11 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 select-none">
-      <div className="relative w-full max-w-lg bg-[#181818] border border-white/10 rounded-2xl shadow-2xl overflow-hidden text-white max-h-[90vh] flex flex-col">
+    <section className="workspace-screen min-h-full w-full bg-[#121212] p-4 text-white select-none sm:p-6 lg:p-8">
+      <div className="workspace-card relative mx-auto flex w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#181818] shadow-2xl">
         
         {/* Header */}
-        <div className="p-5 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-[#A855F7]/30 to-[#D946EF]/20">
+        <div className="workspace-header sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-[#24172f] via-[#201722] to-[#261429] p-5 sm:p-6">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] flex items-center justify-center shadow-lg">
               <Music className="w-5 h-5 text-white" />
@@ -556,7 +556,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
         </div>
 
         {/* Content Body Form */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
+        <form onSubmit={handleSubmit} className="flex-1 space-y-5 p-5 sm:p-7">
           {error && (
             <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center space-x-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -1044,6 +1044,6 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </section>
   );
 };
