@@ -88,6 +88,4 @@ Private project — all rights reserved.
 
 <div align="center">
 
-Made with ❤️ for music lovers.
-
 </div>
