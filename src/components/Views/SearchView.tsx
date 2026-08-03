@@ -322,7 +322,13 @@ export const SearchView: React.FC<SearchViewProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               {/* TOP RESULT CARD (5 columns) */}
               {topResult && filterType === 'all' && (
-                <div className="md:col-span-5 flex flex-col justify-between bg-[#18181a] border border-white/10 hover:border-[#D946EF]/40 p-5 rounded-2xl transition-all relative group cursor-pointer shadow-xl">
+                <div
+                  data-track-id={topResult.type === 'track' ? topResult.item.id : undefined}
+                  data-artist-id={topResult.type === 'artist' ? topResult.item.id : undefined}
+                  data-playlist-id={topResult.type === 'playlist' ? topResult.item.id : undefined}
+                  data-context-type={topResult.type}
+                  className="md:col-span-5 flex flex-col justify-between bg-[#18181a] border border-white/10 hover:border-[#D946EF]/40 p-5 rounded-2xl transition-all relative group cursor-pointer shadow-xl"
+                >
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider">
@@ -348,6 +354,8 @@ export const SearchView: React.FC<SearchViewProps> = ({
                         </h2>
                         <p className="text-xs font-medium text-zinc-400 mt-1">
                           Song • <span 
+                            data-artist-id={topResult.item.userId}
+                            data-context-type="artist"
                             onClick={(e) => {
                               e.stopPropagation();
                               if (onSelectArtist) onSelectArtist(topResult.item.userId || '');
@@ -361,7 +369,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                     )}
 
                     {topResult.type === 'artist' && (
-                      <div onClick={() => handleArtistClick(topResult.item)}>
+                      <div data-artist-id={topResult.item.id} data-context-type="artist" onClick={() => handleArtistClick(topResult.item)}>
                         <img
                           src={topResult.item.avatarUrl}
                           alt={topResult.item.name}
@@ -497,6 +505,8 @@ export const SearchView: React.FC<SearchViewProps> = ({
                               {track.title}
                             </h4>
                             <p
+                              data-artist-id={track.userId}
+                              data-context-type="artist"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (onSelectArtist) onSelectArtist(track.userId || '');

@@ -347,54 +347,54 @@ export default function App() {
     const targetElement = e.target as HTMLElement | null;
     if (!targetElement) return;
 
-    // 1. Check for Track Context
-    const trackElem = targetElement.closest('[data-track-id]') as HTMLElement | null;
-    if (trackElem) {
-      const trackId = trackElem.getAttribute('data-track-id');
-      const foundTrack = tracks.find((t) => t.id === trackId);
-      if (foundTrack) {
-        setContextMenuTarget({
-          x: e.clientX,
-          y: e.clientY,
-          category: 'track',
-          elementName: `Song: ${foundTrack.title}`,
-          track: foundTrack,
-        });
-        return;
-      }
-    }
+    // Resolve the nearest tagged entity in one pass. The old track-first
+    // checks incorrectly opened a song menu when right-clicking an artist
+    // name nested inside a track card, because the outer track ancestor was
+    // found before the closer artist element.
+    const entityElem = targetElement.closest(
+      '[data-track-id], [data-playlist-id], [data-artist-id]'
+    ) as HTMLElement | null;
+    if (entityElem) {
+      const trackId = entityElem.getAttribute('data-track-id');
+      const playlistId = entityElem.getAttribute('data-playlist-id');
+      const artistId = entityElem.getAttribute('data-artist-id');
 
-    // 2. Check for Playlist Context
-    const playlistElem = targetElement.closest('[data-playlist-id]') as HTMLElement | null;
-    if (playlistElem) {
-      const playlistId = playlistElem.getAttribute('data-playlist-id');
-      const foundPlaylist = playlists.find((p) => p.id === playlistId);
-      if (foundPlaylist) {
-        setContextMenuTarget({
-          x: e.clientX,
-          y: e.clientY,
-          category: 'playlist',
-          elementName: `Playlist: ${foundPlaylist.title}`,
-          playlist: foundPlaylist,
-        });
-        return;
-      }
-    }
-
-    // 3. Check for Artist Context
-    const artistElem = targetElement.closest('[data-artist-id]') as HTMLElement | null;
-    if (artistElem) {
-      const artistId = artistElem.getAttribute('data-artist-id');
-      const foundArtist = artists.find((artist) => artist.id === artistId);
-      if (foundArtist) {
-        setContextMenuTarget({
-          x: e.clientX,
-          y: e.clientY,
-          category: 'artist',
-          elementName: `Artist: ${foundArtist.name}`,
-          artist: foundArtist,
-        });
-        return;
+      if (trackId) {
+        const foundTrack = tracks.find((track) => track.id === trackId);
+        if (foundTrack) {
+          setContextMenuTarget({
+            x: e.clientX,
+            y: e.clientY,
+            category: 'track',
+            elementName: `Song: ${foundTrack.title}`,
+            track: foundTrack,
+          });
+          return;
+        }
+      } else if (playlistId) {
+        const foundPlaylist = playlists.find((playlist) => playlist.id === playlistId);
+        if (foundPlaylist) {
+          setContextMenuTarget({
+            x: e.clientX,
+            y: e.clientY,
+            category: 'playlist',
+            elementName: `Playlist: ${foundPlaylist.title}`,
+            playlist: foundPlaylist,
+          });
+          return;
+        }
+      } else if (artistId) {
+        const foundArtist = artists.find((artist) => artist.id === artistId);
+        if (foundArtist) {
+          setContextMenuTarget({
+            x: e.clientX,
+            y: e.clientY,
+            category: 'artist',
+            elementName: `Artist: ${foundArtist.name}`,
+            artist: foundArtist,
+          });
+          return;
+        }
       }
     }
 
@@ -1657,6 +1657,7 @@ export default function App() {
             recentlyPlayed={recentlyPlayed}
             onSelectAlbum={handleSelectAlbum}
             onSelectArtist={handleSelectArtist}
+            isCompact={sidebarWidth <= 220}
           />
         </div>
 

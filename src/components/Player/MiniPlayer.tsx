@@ -26,6 +26,8 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   return (
     <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-30 w-[92%] max-w-md transition-all duration-300">
       <div
+        data-track-id={currentTrack.id}
+        data-context-type="track"
         onClick={onOpenSongScreen}
         className="group relative overflow-hidden backdrop-blur-2xl bg-zinc-900/85 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.7)] rounded-2xl p-2.5 flex items-center justify-between hover:bg-zinc-900/95 transition-all active:scale-[0.99] cursor-pointer"
       >

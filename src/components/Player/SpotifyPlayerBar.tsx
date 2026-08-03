@@ -128,6 +128,8 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
             {currentTrack?.title || 'No Track Playing'}
           </h4>
           <p
+            data-artist-id={currentTrack?.userId || undefined}
+            data-context-type="artist"
             onClick={(e) => {
               e.stopPropagation();
               if (onSelectArtist && currentTrack) {

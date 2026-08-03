@@ -530,6 +530,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         {msg.matchedTracks.map((track) => (
                           <button
                             key={track.id}
+                            data-track-id={track.id}
+                            data-context-type="track"
                             onClick={() => onPlayTrack(track)}
                             className="control-press group flex min-w-0 items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/20 p-2.5 text-left hover:border-[#A855F7]/35 hover:bg-black/30"
                           >

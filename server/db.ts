@@ -5,6 +5,7 @@ import { Redis } from '@upstash/redis';
 
 const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
 const UPSTASH_DB_KEY = 'app:spotify:db_v1';
+const UPSTASH_DB_BACKUP_KEY = 'app:spotify:db_v1:previous';
 
 export interface UserRecord {
   id: string;
@@ -142,10 +143,14 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
     const email = typeof rawUser.email === 'string' ? rawUser.email.trim().toLowerCase() : '';
     const password = typeof rawUser.password === 'string' ? rawUser.password : '';
     const usernameKey = username.toLowerCase();
+    // Registration applies today's strict username/email rules. Persisted
+    // accounts must be read more conservatively: older real accounts may
+    // predate those rules, and dropping one here also drops every track that
+    // references it. Only reject structurally unusable or duplicate records.
     if (
       !id || usedUserIds.has(id) ||
-      !/^[a-zA-Z0-9_.-]{3,32}$/.test(username) || usedUsernames.has(usernameKey) ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || usedEmails.has(email) ||
+      !username || usedUsernames.has(usernameKey) ||
+      !email || usedEmails.has(email) ||
       !password
     ) continue;
 
@@ -424,6 +429,19 @@ export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<vo
       .filter((u) => u.isArtist || data.tracks.some((track) => track.userId === u.id))
       .map((u) => u.id);
 
+    // Keep the immediately previous canonical dataset before replacing it.
+    // This makes an accidental sanitizer/migration regression recoverable
+    // instead of permanently stranding still-valid R2 audio objects without
+    // their track metadata.
+    const previousCanonical = await redis.get<DBData>(UPSTASH_DB_KEY);
+    if (
+      previousCanonical &&
+      typeof previousCanonical === 'object' &&
+      JSON.stringify(previousCanonical) !== JSON.stringify(data)
+    ) {
+      await redis.set(UPSTASH_DB_BACKUP_KEY, previousCanonical);
+    }
+
     // Store sets & ID lists in Upstash Redis
     await Promise.all([
       redis.set(UPSTASH_DB_KEY, data),
@@ -674,4 +692,3 @@ export function deleteSessionFromRedis(token: string): void {
     console.error('Failed to delete session from Upstash Redis:', err);
   });
 }
-

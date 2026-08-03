@@ -106,6 +106,8 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
         <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-[#121212]/80 to-transparent z-0" />
 
         <img
+          data-track-id={albumTrack.id}
+          data-context-type="track"
           src={albumTrack.coverUrl}
           alt={albumTrack.album}
           referrerPolicy="no-referrer"
@@ -116,11 +118,13 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
           <p className="text-sm font-semibold uppercase tracking-widest text-white/80">
             {albumTrack.releaseType ? albumTrack.releaseType.toUpperCase() : (albumTrack.album === 'Single' ? 'SINGLE' : 'ALBUM')}
           </p>
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter drop-shadow-lg leading-none py-1">
+          <h1 data-track-id={albumTrack.id} data-context-type="track" className="text-4xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter drop-shadow-lg leading-none py-1">
             {albumTrack.releaseTitle || (albumTrack.album === 'Single' ? albumTrack.title : albumTrack.album)}
           </h1>
           <div className="flex items-center space-x-2 text-sm text-zinc-300 font-medium pt-2">
             <span
+              data-artist-id={albumTrack.userId}
+              data-context-type="artist"
               onClick={() => onSelectArtist(albumTrack.userId || '')}
               className="font-bold text-white hover:underline cursor-pointer tracking-tight"
             >
@@ -341,6 +345,8 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   </h4>
                   <p className="text-xs text-zinc-400 truncate group-hover:text-white transition-colors">
                     <span 
+                      data-artist-id={track.userId}
+                      data-context-type="artist"
                       onClick={(e) => { e.stopPropagation(); onSelectArtist(track.userId || ''); }}
                       className="hover:underline cursor-pointer"
                     >
@@ -393,7 +399,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
       {moreByArtist.length > 0 && (
         <div className="pt-6 border-t border-white/5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-white hover:underline cursor-pointer" onClick={() => onSelectArtist(albumTrack.userId || '')}>
+            <h2 data-artist-id={albumTrack.userId} data-context-type="artist" className="text-xl font-bold text-white hover:underline cursor-pointer" onClick={() => onSelectArtist(albumTrack.userId || '')}>
               More by {albumTrack.artist}
             </h2>
           </div>
@@ -401,6 +407,8 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
             {moreByArtist.slice(0, 5).map((track) => (
               <div
                 key={track.id}
+                data-track-id={track.id}
+                data-context-type="track"
                 onClick={() => onPlayTrack(track)}
                 className="group bg-[#181818] hover:bg-[#282828] p-4 rounded-xl transition-all cursor-pointer flex flex-col justify-between shadow-md"
               >

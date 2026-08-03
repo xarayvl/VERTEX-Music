@@ -397,6 +397,8 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
               {availableTracks.map((track) => (
                 <div
                   key={track.id}
+                  data-track-id={track.id}
+                  data-context-type="track"
                   className="p-3 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-between border border-white/5 transition-colors"
                 >
                   <div className="flex items-center space-x-3 min-w-0 pr-2">

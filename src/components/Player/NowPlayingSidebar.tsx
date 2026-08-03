@@ -110,6 +110,8 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
           <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider truncate" title={releaseContextText}>{releaseContextText}</p>
             <h3
+              data-track-id={currentTrack.id}
+              data-context-type="track"
               className="text-xs font-bold text-white truncate hover:underline cursor-pointer"
               title={releaseName}
               onClick={() => onSelectAlbum(currentTrack)}
@@ -130,6 +132,8 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
         <div className="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar pb-24">
           {/* Large Cover Art */}
           <div
+            data-track-id={currentTrack.id}
+            data-context-type="track"
             className="relative aspect-square w-full rounded-xl overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.6)] group cursor-pointer"
             onClick={() => onSelectAlbum(currentTrack)}
           >
@@ -151,12 +155,14 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
               <h2
+                data-track-id={currentTrack.id}
+                data-context-type="track"
                 className="text-lg font-extrabold text-white truncate leading-tight tracking-tight hover:text-[#D946EF] cursor-pointer"
                 onClick={() => onSelectAlbum(currentTrack)}
               >
                 {currentTrack.title}
               </h2>
-              <p className="text-sm text-zinc-400 truncate mt-1 hover:text-[#D946EF] hover:underline cursor-pointer" onClick={() => onSelectArtist(displayObj || currentTrack.userId || '')}>
+              <p data-artist-id={currentTrack.userId} data-context-type="artist" className="text-sm text-zinc-400 truncate mt-1 hover:text-[#D946EF] hover:underline cursor-pointer" onClick={() => onSelectArtist(displayObj || currentTrack.userId || '')}>
                 {finalDisplayName}
               </p>
             </div>
@@ -230,7 +236,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
           </div>
 
           {/* 'About the Artist' Card */}
-          <div className="bg-[#18181a] border border-white/10 rounded-xl overflow-hidden shadow-lg transition-all hover:border-white/15 flex flex-col">
+          <div data-artist-id={currentTrack.userId} data-context-type="artist" className="bg-[#18181a] border border-white/10 rounded-xl overflow-hidden shadow-lg transition-all hover:border-white/15 flex flex-col">
             {/* Cover Header */}
             <div className="relative h-28 overflow-hidden">
               <img

@@ -350,6 +350,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       {track.title}
                     </h4>
                     <p
+                      data-artist-id={track.userId}
+                      data-context-type="artist"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (onSelectArtist) onSelectArtist(track.userId || '');

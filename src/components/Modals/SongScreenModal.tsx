@@ -95,7 +95,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
                 <Sparkles className="h-3.5 w-3.5" /> Now playing
               </div>
-              <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">{currentTrack.title}</h1>
+              <h1 data-track-id={currentTrack.id} data-context-type="track" className="truncate text-2xl font-black tracking-tight sm:text-3xl">{currentTrack.title}</h1>
               <p className="mt-1 truncate text-xs text-zinc-400 sm:text-sm">
                 Playing from {releaseType.toLowerCase()} · {releaseName}
               </p>
@@ -123,7 +123,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               style={{ background: `radial-gradient(circle at 50% 0%, ${palette.accent}, transparent 68%)` }}
             />
 
-            <div className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-[1.75rem] border border-white/15 bg-[#0f0f0f] shadow-[0_28px_70px_rgba(0,0,0,0.55)]">
+            <div data-track-id={currentTrack.id} data-context-type="track" className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-[1.75rem] border border-white/15 bg-[#0f0f0f] shadow-[0_28px_70px_rgba(0,0,0,0.55)]">
               <img
                 key={currentTrack.coverUrl}
                 src={currentTrack.coverUrl}
@@ -146,6 +146,8 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
 
             <div className="relative mt-5 grid grid-cols-2 gap-3">
               <button
+                data-artist-id={currentTrack.userId}
+                data-context-type="artist"
                 onClick={() => onSelectArtist?.(currentTrack.userId)}
                 disabled={!onSelectArtist}
                 className="control-press flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left hover:bg-white/[0.07] disabled:cursor-default"
@@ -157,6 +159,8 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                 </span>
               </button>
               <button
+                data-track-id={currentTrack.id}
+                data-context-type="track"
                 onClick={() => onSelectAlbum?.(currentTrack)}
                 disabled={!onSelectAlbum}
                 className="control-press flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left hover:bg-white/[0.07] disabled:cursor-default"
@@ -174,8 +178,10 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">Listening session</p>
-                <h2 className="mt-2 truncate text-3xl font-black tracking-tight text-white sm:text-4xl">{currentTrack.title}</h2>
+                <h2 data-track-id={currentTrack.id} data-context-type="track" className="mt-2 truncate text-3xl font-black tracking-tight text-white sm:text-4xl">{currentTrack.title}</h2>
                 <button
+                  data-artist-id={currentTrack.userId}
+                  data-context-type="artist"
                   onClick={() => onSelectArtist?.(currentTrack.userId)}
                   className="mt-2 truncate text-sm font-bold text-zinc-400 transition-colors hover:text-[#E879F9]"
                 >

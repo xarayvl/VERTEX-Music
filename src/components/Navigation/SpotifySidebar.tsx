@@ -31,6 +31,7 @@ interface SpotifySidebarProps {
   recentlyPlayed?: Track[];
   onSelectAlbum?: (track: Track) => void;
   onSelectArtist?: (artist: Artist | string) => void;
+  isCompact?: boolean;
 }
 
 export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
@@ -48,6 +49,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
   recentlyPlayed = [],
   onSelectAlbum,
   onSelectArtist,
+  isCompact = false,
 }) => {
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,13 +71,13 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
       className="w-full flex-shrink-0 flex flex-col gap-2 select-none h-full text-zinc-300"
     >
       {/* Navigation Block (Home & Search) */}
-      <div className="bg-[#121212] rounded-xl p-4 flex flex-col gap-4 border border-white/[0.04]">
+      <div className={`bg-[#121212] rounded-xl flex flex-col border border-white/[0.04] transition-[padding,gap] ${isCompact ? 'p-2 gap-2' : 'p-4 gap-4'}`}>
         {/* VERTEX Music Branding */}
-        <div className="flex items-center space-x-3 px-2 py-1">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-[0_0_15px_rgba(217,70,239,0.4)]">
+        <div className={`flex items-center py-1 ${isCompact ? 'justify-center px-0' : 'space-x-3 px-2'}`} title="VERTEX Music">
+          <div className="w-8 h-8 flex-shrink-0 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-[0_0_15px_rgba(217,70,239,0.4)]">
             <Music className="w-5 h-5 fill-white text-white stroke-[2.5]" />
           </div>
-          <div className="flex flex-col">
+          <div className={isCompact ? 'hidden' : 'flex flex-col min-w-0'}>
             <span className="text-white font-extrabold text-lg tracking-tight">
               VERTEX Music
             </span>
@@ -86,50 +88,54 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
         <nav className="flex flex-col gap-1">
           <button
             onClick={() => onSelectTab('home')}
-            className={`flex items-center space-x-4 px-3 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 group ${
+            title="Home"
+            className={`flex items-center rounded-lg font-bold text-sm transition-all duration-200 group ${isCompact ? 'justify-center px-2 py-2.5' : 'space-x-4 px-3 py-2.5'} ${
               activeTab === 'home'
                 ? 'text-white bg-white/10'
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <Home className={`w-6 h-6 transition-transform group-hover:scale-110 ${activeTab === 'home' ? 'text-white' : 'text-zinc-400'}`} />
-            <span>Home</span>
+            <span className={isCompact ? 'hidden' : ''}>Home</span>
           </button>
 
           <button
             onClick={() => onSelectTab('search')}
-            className={`flex items-center space-x-4 px-3 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 group ${
+            title="Search"
+            className={`flex items-center rounded-lg font-bold text-sm transition-all duration-200 group ${isCompact ? 'justify-center px-2 py-2.5' : 'space-x-4 px-3 py-2.5'} ${
               activeTab === 'search'
                 ? 'text-white bg-white/10'
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <Search className={`w-6 h-6 transition-transform group-hover:scale-110 ${activeTab === 'search' ? 'text-white' : 'text-zinc-400'}`} />
-            <span>Search</span>
+            <span className={isCompact ? 'hidden' : ''}>Search</span>
           </button>
 
           <button
             onClick={() => onSelectTab('browse')}
-            className={`flex items-center space-x-4 px-3 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 group ${
+            title="Explore Genres"
+            className={`flex items-center rounded-lg font-bold text-sm transition-all duration-200 group ${isCompact ? 'justify-center px-2 py-2.5' : 'space-x-4 px-3 py-2.5'} ${
               activeTab === 'browse'
                 ? 'text-white bg-white/10'
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <Sparkles className={`w-6 h-6 transition-transform group-hover:scale-110 ${activeTab === 'browse' ? 'text-[#D946EF]' : 'text-zinc-400'}`} />
-            <span>Explore Genres</span>
+            <span className={isCompact ? 'hidden' : ''}>Explore Genres</span>
           </button>
 
           <button
             onClick={() => onSelectTab('chat')}
-            className={`flex items-center space-x-4 px-3 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 group ${
+            title="AI DJ Chat"
+            className={`flex items-center rounded-lg font-bold text-sm transition-all duration-200 group ${isCompact ? 'justify-center px-2 py-2.5' : 'space-x-4 px-3 py-2.5'} ${
               activeTab === 'chat'
                 ? 'text-white bg-[#A855F7]/20 border border-[#A855F7]/40'
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <Bot className={`w-6 h-6 transition-transform group-hover:scale-110 ${activeTab === 'chat' ? 'text-[#D946EF]' : 'text-[#D946EF]'}`} />
-            <span className="flex items-center gap-1.5">
+            <span className={isCompact ? 'hidden' : 'flex items-center gap-1.5'}>
               <span>AI DJ Chat</span>
               <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white">New</span>
             </span>
@@ -137,31 +143,33 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
 
           <button
             onClick={() => onSelectTab('profile')}
-            className={`flex items-center space-x-4 px-3 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 group ${
+            title="Profile & Account"
+            className={`flex items-center rounded-lg font-bold text-sm transition-all duration-200 group ${isCompact ? 'justify-center px-2 py-2.5' : 'space-x-4 px-3 py-2.5'} ${
               activeTab === 'profile'
                 ? 'text-white bg-white/10'
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
             <User className="w-6 h-6 transition-transform group-hover:scale-110 text-zinc-400 group-hover:text-white" />
-            <span>Profile & Account</span>
+            <span className={isCompact ? 'hidden' : ''}>Profile & Account</span>
           </button>
         </nav>
       </div>
 
       {/* Library Block */}
-      <div className="bg-[#121212] rounded-xl p-3 flex-1 flex flex-col min-h-0 overflow-hidden border border-white/[0.04]">
+      <div className={`bg-[#121212] rounded-xl flex-1 flex flex-col min-h-0 overflow-hidden border border-white/[0.04] transition-[padding] ${isCompact ? 'p-2' : 'p-3'}`}>
         {/* Library Header */}
-        <div className="flex items-center justify-between px-2 py-2">
+        <div className={`flex items-center px-2 py-2 ${isCompact ? 'justify-center' : 'justify-between'}`}>
           <button
             onClick={() => onSelectTab('library')}
-            className="flex items-center space-x-3 text-zinc-400 hover:text-white font-bold text-sm transition-colors group"
+            title="Your Library"
+            className={`flex items-center text-zinc-400 hover:text-white font-bold text-sm transition-colors group ${isCompact ? 'justify-center' : 'space-x-3'}`}
           >
             <Library className="w-6 h-6 group-hover:text-white transition-colors" />
-            <span className="tracking-tight">Your Library</span>
+            <span className={isCompact ? 'hidden' : 'tracking-tight'}>Your Library</span>
           </button>
 
-          <div className="flex items-center space-x-1">
+          <div className={isCompact ? 'hidden' : 'flex items-center space-x-1'}>
             <button
               onClick={onOpenNewPlaylistModal}
               className="p-2 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-all active:scale-95"
@@ -180,7 +188,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
         </div>
 
         {/* Filter Pills */}
-        <div className="flex items-center space-x-2 px-2 py-2 overflow-x-auto scrollbar-none">
+        <div className={`${isCompact ? 'hidden' : 'flex'} items-center space-x-2 px-2 py-2 overflow-x-auto scrollbar-none`}>
           <button
             onClick={() => setLibraryFilter(libraryFilter === 'playlists' ? 'all' : 'playlists')}
             className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
@@ -204,7 +212,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
         </div>
 
         {/* Search inside Library */}
-        <div className="px-2 py-1.5 flex items-center justify-between">
+        <div className={`${isCompact ? 'hidden' : 'flex'} px-2 py-1.5 items-center justify-between`}>
           <div className="relative flex-1">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
             <input
@@ -222,12 +230,13 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
           {/* Liked Songs Tile */}
           <div
             onClick={() => onSelectTab('library')}
-            className="flex items-center space-x-3 p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors"
+            title="Liked Songs"
+            className={`flex items-center p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors ${isCompact ? 'justify-center' : 'space-x-3'}`}
           >
             <div className="w-12 h-12 rounded-md bg-gradient-to-br from-indigo-600 via-purple-600 to-rose-500 flex items-center justify-center flex-shrink-0 shadow-md">
               <Heart className="w-6 h-6 text-white fill-white" />
             </div>
-            <div className="min-w-0 flex-1">
+            <div className={isCompact ? 'hidden' : 'min-w-0 flex-1'}>
               <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
                 Liked Songs
               </h4>
@@ -248,7 +257,8 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
                   data-artist-id={artist.id}
                   data-context-type="artist"
                   onClick={() => onSelectArtist?.(artist)}
-                  className="flex items-center space-x-3 p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors"
+                  title={artist.name}
+                  className={`flex items-center p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors ${isCompact ? 'justify-center' : 'space-x-3'}`}
                 >
                   <img
                     src={artist.avatarUrl}
@@ -256,7 +266,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
                     referrerPolicy="no-referrer"
                     className="w-12 h-12 rounded-full object-cover flex-shrink-0 shadow-md border border-white/10"
                   />
-                  <div className="min-w-0 flex-1">
+                  <div className={isCompact ? 'hidden' : 'min-w-0 flex-1'}>
                     <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
                       {artist.name}
                     </h4>
@@ -268,8 +278,8 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
 
           {/* Recently Played List */}
           {recentlyPlayed && recentlyPlayed.length > 0 && (
-            <div className="pt-3 pb-1 mt-1">
-              <p className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider px-2 mb-1">
+            <div className={`${isCompact ? 'pt-1' : 'pt-3'} pb-1 mt-1`}>
+              <p className={isCompact ? 'hidden' : 'text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider px-2 mb-1'}>
                 Recently Played
               </p>
               <div className="space-y-0.5">
@@ -285,7 +295,8 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
                         onPlayTrack(track);
                       }
                     }}
-                    className="flex items-center space-x-3 p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-all"
+                    title={`${track.title} — ${track.artist}`}
+                    className={`flex items-center p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-all ${isCompact ? 'justify-center' : 'space-x-3'}`}
                   >
                     <img
                       src={track.coverUrl}
@@ -293,7 +304,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
                       referrerPolicy="no-referrer"
                       className="w-10 h-10 rounded-md object-cover flex-shrink-0 shadow-md"
                     />
-                    <div className="min-w-0 flex-1">
+                    <div className={isCompact ? 'hidden' : 'min-w-0 flex-1'}>
                       <h5 className="text-xs font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
                         {track.title}
                       </h5>
@@ -315,7 +326,8 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
                 data-playlist-id={playlist.id}
                 data-context-type="playlist"
                 onClick={() => onSelectPlaylist(playlist)}
-                className="flex items-center space-x-3 p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors"
+                title={playlist.title}
+                className={`flex items-center p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors ${isCompact ? 'justify-center' : 'space-x-3'}`}
               >
                 <img
                   src={playlist.coverUrl}
@@ -323,7 +335,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
                   referrerPolicy="no-referrer"
                   className="w-12 h-12 rounded-md object-cover flex-shrink-0 shadow-md"
                 />
-                <div className="min-w-0 flex-1">
+                <div className={isCompact ? 'hidden' : 'min-w-0 flex-1'}>
                   <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
                     {playlist.title}
                   </h4>

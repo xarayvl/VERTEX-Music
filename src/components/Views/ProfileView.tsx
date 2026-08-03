@@ -305,6 +305,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         <div className="flex items-center space-x-3 pt-8 flex-wrap gap-y-3">
           {onSelectArtist && (
             <button
+              data-artist-id={userProfile.id}
+              data-context-type="artist"
               onClick={() => onSelectArtist(userProfile)}
               className="px-5 py-2.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white text-xs font-extrabold shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
             >
@@ -570,6 +572,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   {myUploadedTracks.map((track) => (
                     <div
                       key={track.id}
+                      data-track-id={track.id}
+                      data-context-type="track"
                       className="flex items-center justify-between px-4 py-3 hover:bg-white/10 group transition-colors"
                     >
                       <div className="flex items-center space-x-3.5 min-w-0">
@@ -650,6 +654,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 {personalTopTracks.map((track, index) => (
                   <div
                     key={track.id}
+                    data-track-id={track.id}
+                    data-context-type="track"
                     onClick={() => onPlayTrack(track)}
                     className="flex items-center justify-between px-4 py-3 hover:bg-white/10 group transition-colors cursor-pointer"
                   >
@@ -723,6 +729,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   {personalTopArtists.map(({ profile: artist, fallbackAvatar }, idx) => (
                     <div
                       key={artist.id}
+                      data-artist-id={artist.id}
+                      data-context-type="artist"
                       onClick={() => onSelectArtist && onSelectArtist(artist)}
                       style={{ '--stagger-index': idx } as React.CSSProperties}
                       className="stagger-item card-interactive group flex cursor-pointer flex-col items-center space-y-3 rounded-xl border border-white/5 bg-[#181818] p-4 text-center transition-all hover:bg-[#282828]"

@@ -216,7 +216,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
       )}
 
       {/* SPOTIFY HERO ARTIST BANNER */}
-      <div className="relative rounded-2xl overflow-hidden min-h-[320px] sm:min-h-[380px] flex flex-col justify-end p-6 sm:p-10 border border-white/10 shadow-2xl group bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827]">
+      <div data-artist-id={artist.id} data-context-type="artist" className="relative rounded-2xl overflow-hidden min-h-[320px] sm:min-h-[380px] flex flex-col justify-end p-6 sm:p-10 border border-white/10 shadow-2xl group bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827]">
         {/* Background Image & Dynamic Gradient Overlay */}
         <div
           className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
@@ -458,6 +458,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
           <div className="space-y-4">
             <h2 className="text-2xl font-black text-white tracking-tight">Artist Pick</h2>
             <div
+              data-track-id={featuredTrack.id}
+              data-context-type="track"
               onClick={() => onPlayTrack(featuredTrack)}
               className="p-5 rounded-2xl bg-[#181818] border border-white/10 hover:border-white/20 transition-all cursor-pointer group space-y-4 shadow-xl"
             >
@@ -540,6 +542,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
               return (
                 <div
                   key={group.key}
+                  data-track-id={group.representative.id}
+                  data-context-type="track"
                   onClick={() => {
                     if (onSelectAlbum) {
                       onSelectAlbum(group.representative);
@@ -592,7 +596,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
       {/* SPOTIFY ABOUT SECTION */}
       <div className="space-y-4 pt-4">
         <h2 className="text-2xl font-black text-white tracking-tight">About</h2>
-        <div className="relative rounded-2xl overflow-hidden p-8 sm:p-10 bg-[#181818] border border-white/10 shadow-2xl group cursor-pointer">
+        <div data-artist-id={artist.id} data-context-type="artist" className="relative rounded-2xl overflow-hidden p-8 sm:p-10 bg-[#181818] border border-white/10 shadow-2xl group cursor-pointer">
           <div className="relative z-10 max-w-2xl space-y-4">
             <div className="flex items-center space-x-4">
               <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/20">
