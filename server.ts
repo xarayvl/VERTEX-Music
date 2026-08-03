@@ -627,7 +627,13 @@ async function startServer() {
         )
         .map((u) => toPublicArtistCard(u, db.tracks));
 
-      // Extract unique artists from uploaded tracks
+      // Extract unique artists from uploaded tracks. We only ever resolve
+      // these to a REAL registered user (by track.userId, or by a matching
+      // displayName/artistName) — never fabricate a stand-in profile for a
+      // track-artist name that isn't actually a registered account. If no
+      // real user owns that name, it's simply left out of the results, and
+      // the client shows its existing "no registered artist profile was
+      // found" not-found state instead of a fake/mock artist card.
       const trackArtistNames = Array.from(new Set(db.tracks.map((t) => t.artist).filter(Boolean)));
       const matchedTrackArtists = trackArtistNames
         .filter((name) => name.toLowerCase().includes(query))
@@ -640,32 +646,10 @@ async function startServer() {
               u.displayName?.toLowerCase() === name.toLowerCase() ||
               u.artistName?.toLowerCase() === name.toLowerCase()
           );
-          
-          if (userMatch) {
-            return toPublicArtistCard(userMatch, db.tracks);
-          }
 
-          const matchingTracks = db.tracks.filter((track) => track.artist.toLowerCase() === name.toLowerCase());
-          const totalPlays = matchingTracks.reduce(
-            (sum, track) => sum + (Number.parseInt(track.plays || "0", 10) || 0),
-            0
-          );
-          return {
-            id: `artist-${name.toLowerCase().replace(/\s+/g, "-")}`,
-            name: name,
-            username: name.toLowerCase().replace(/\s+/g, "_"),
-            displayName: name,
-            avatarUrl: sampleTrack?.coverUrl || DEFAULT_AVATAR_URL,
-            bannerUrl: "",
-            bio: "",
-            genre: sampleTrack?.genre || "",
-            monthlyListeners: `${totalPlays.toLocaleString()} monthly listeners`,
-            verified: false,
-            stats: emptyStats(),
-            isUser: false,
-            isSynthetic: true,
-          };
-        });
+          return userMatch ? toPublicArtistCard(userMatch, db.tracks) : null;
+        })
+        .filter((artist): artist is NonNullable<typeof artist> => artist !== null);
 
       const combinedArtists = Array.from(
         new Map([...matchedUsers, ...matchedTrackArtists].map((artist) => [artist.id, artist])).values()

@@ -135,99 +135,187 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       )}
 
-      {/* Playlists Collection */}
-      {(libraryFilter === 'all' || libraryFilter === 'playlists') && (
+      {/* Your Library Collection: Playlists + Followed Artists live together
+          in one unified grid, just like the tracks above — they used to be
+          two separate sections that could each vanish independently when
+          empty, leaving an ugly blank gap at the bottom of the screen. */}
+      {(libraryFilter === 'all' || libraryFilter === 'playlists' || libraryFilter === 'artists') && (
         <div>
-          <h3 className="text-lg font-extrabold text-white tracking-tight mb-4">Playlists</h3>
+          <h3 className="text-lg font-extrabold text-white tracking-tight mb-4">
+            {libraryFilter === 'playlists'
+              ? 'Playlists'
+              : libraryFilter === 'artists'
+              ? 'Followed Artists'
+              : 'Your Collection'}
+          </h3>
 
-          {viewMode === 'grid' ? (
+          {(libraryFilter === 'playlists' ? playlists.length === 0 : false) ||
+          (libraryFilter === 'artists' ? artists.length === 0 : false) ||
+          (libraryFilter === 'all' ? playlists.length === 0 && artists.length === 0 : false) ? (
+            <div className="p-8 rounded-2xl bg-[#181818]/70 border border-white/5 text-center text-zinc-400 space-y-2">
+              <Library className="w-10 h-10 mx-auto text-zinc-600 mb-2" />
+              <p className="text-sm font-bold text-white">
+                {libraryFilter === 'artists' ? 'No followed artists yet' : 'Nothing here yet'}
+              </p>
+              <p className="text-xs text-zinc-500">
+                {libraryFilter === 'artists'
+                  ? 'Follow an artist from their profile to see them here.'
+                  : 'Create a playlist or follow an artist to fill up your library.'}
+              </p>
+            </div>
+          ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {playlists.map((pl) => (
-                <div
-                  key={pl.id}
-                  data-playlist-id={pl.id}
-                  data-context-type="playlist"
-                  onClick={() => onSelectPlaylist(pl)}
-                  className="card-interactive bg-[#181818] hover:bg-[#282828] p-4 rounded-xl flex flex-col justify-between group cursor-pointer transition-all shadow relative"
-                >
-                  <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 shadow">
-                    <img
-                      src={pl.coverUrl}
-                      alt={pl.title}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                    {/* Quick Play Button */}
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPlayPlaylist(pl);
-                      }}
-                      className="absolute right-2 bottom-2 w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-200 hover:scale-110"
-                      title="Quick Play"
-                    >
-                      <Play className="w-5 h-5 fill-white ml-0.5" />
+              {(libraryFilter === 'all' || libraryFilter === 'playlists') &&
+                playlists.map((pl) => (
+                  <div
+                    key={`pl-${pl.id}`}
+                    data-playlist-id={pl.id}
+                    data-context-type="playlist"
+                    onClick={() => onSelectPlaylist(pl)}
+                    className="card-interactive bg-[#181818] hover:bg-[#282828] p-4 rounded-xl flex flex-col justify-between group cursor-pointer transition-all shadow relative"
+                  >
+                    <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 shadow">
+                      <img
+                        src={pl.coverUrl}
+                        alt={pl.title}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      {/* Quick Play Button */}
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPlayPlaylist(pl);
+                        }}
+                        className="absolute right-2 bottom-2 w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-200 hover:scale-110"
+                        title="Quick Play"
+                      >
+                        <Play className="w-5 h-5 fill-white ml-0.5" />
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
+                        {pl.title}
+                      </h4>
+                      <p className="text-xs text-zinc-400 truncate mt-1">
+                        Playlist • {pl.trackCount} tracks
+                      </p>
                     </div>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
-                      {pl.title}
-                    </h4>
-                    <p className="text-xs text-zinc-400 truncate mt-1">
-                      Playlist • {pl.trackCount} tracks
-                    </p>
+                ))}
+
+              {(libraryFilter === 'all' || libraryFilter === 'artists') &&
+                artists.map((artist) => (
+                  <div
+                    key={`artist-${artist.id}`}
+                    data-artist-id={artist.id}
+                    data-context-type="artist"
+                    onClick={() => onSelectArtist && onSelectArtist(artist.name)}
+                    className="bg-[#181818] hover:bg-[#282828] p-4 rounded-xl flex flex-col justify-between group cursor-pointer transition-all shadow relative"
+                  >
+                    <div className="relative aspect-square w-full rounded-full overflow-hidden mb-3 shadow border border-white/5">
+                      <img
+                        src={artist.avatarUrl}
+                        alt={artist.name}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
+                        {artist.name}
+                      </h4>
+                      <p className="text-xs text-zinc-400 truncate mt-1">
+                        Artist • {artist.monthlyListeners || '0 monthly listeners'}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           ) : (
             <div className="bg-[#181818]/60 rounded-xl divide-y divide-white/[0.04] border border-white/[0.04]">
-              {playlists.map((pl) => (
-                <div
-                  key={pl.id}
-                  data-playlist-id={pl.id}
-                  data-context-type="playlist"
-                  onClick={() => onSelectPlaylist(pl)}
-                  className="p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center space-x-4 min-w-0">
-                    <img
-                      src={pl.coverUrl}
-                      alt={pl.title}
-                      referrerPolicy="no-referrer"
-                      className="w-12 h-12 rounded object-cover shadow"
-                    />
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF]">
-                        {pl.title}
-                      </h4>
-                      <p className="text-xs text-zinc-400 truncate">{pl.description}</p>
+              {(libraryFilter === 'all' || libraryFilter === 'playlists') &&
+                playlists.map((pl) => (
+                  <div
+                    key={`pl-${pl.id}`}
+                    data-playlist-id={pl.id}
+                    data-context-type="playlist"
+                    onClick={() => onSelectPlaylist(pl)}
+                    className="p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center space-x-4 min-w-0">
+                      <img
+                        src={pl.coverUrl}
+                        alt={pl.title}
+                        referrerPolicy="no-referrer"
+                        className="w-12 h-12 rounded object-cover shadow"
+                      />
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF]">
+                          {pl.title}
+                        </h4>
+                        <p className="text-xs text-zinc-400 truncate">{pl.description}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-xs font-mono text-zinc-400">{pl.trackCount} Tracks</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPlayPlaylist(pl);
+                        }}
+                        className="w-8 h-8 rounded-full bg-white/10 hover:bg-[#A855F7] text-white flex items-center justify-center transition-colors"
+                        title="Quick Play"
+                      >
+                        <Play className="w-4 h-4 fill-white ml-0.5" />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-3">
-                    <span className="text-xs font-mono text-zinc-400">{pl.trackCount} Tracks</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPlayPlaylist(pl);
-                      }}
-                      className="w-8 h-8 rounded-full bg-white/10 hover:bg-[#A855F7] text-white flex items-center justify-center transition-colors"
-                      title="Quick Play"
-                    >
-                      <Play className="w-4 h-4 fill-white ml-0.5" />
-                    </button>
+                ))}
+
+              {(libraryFilter === 'all' || libraryFilter === 'artists') &&
+                artists.map((artist) => (
+                  <div
+                    key={`artist-${artist.id}`}
+                    data-artist-id={artist.id}
+                    data-context-type="artist"
+                    onClick={() => onSelectArtist && onSelectArtist(artist.name)}
+                    className="p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center space-x-4 min-w-0">
+                      <img
+                        src={artist.avatarUrl}
+                        alt={artist.name}
+                        referrerPolicy="no-referrer"
+                        className="w-12 h-12 rounded-full object-cover shadow border border-white/5"
+                      />
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF]">
+                          {artist.name}
+                        </h4>
+                        <p className="text-xs text-zinc-400 truncate">
+                          {artist.monthlyListeners || '0 monthly listeners'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           )}
         </div>
       )}
 
       {/* Liked Songs List View */}
-      {(libraryFilter === 'all' || libraryFilter === 'liked') && likedTracks.length > 0 && (
+      {(libraryFilter === 'all' || libraryFilter === 'liked') && (
         <div>
           <h3 className="text-lg font-extrabold text-white tracking-tight mb-4">Saved Tracks</h3>
+          {likedTracks.length === 0 ? (
+            <div className="p-8 rounded-2xl bg-[#181818]/70 border border-white/5 text-center text-zinc-400 space-y-2">
+              <Heart className="w-10 h-10 mx-auto text-zinc-600 mb-2" />
+              <p className="text-sm font-bold text-white">No liked songs yet</p>
+              <p className="text-xs text-zinc-500">Tap the heart on any track to save it here.</p>
+            </div>
+          ) : (
           <div className="bg-[#181818]/60 rounded-xl divide-y divide-white/[0.04] border border-white/[0.04]">
             {likedTracks.map((track) => (
               <div
@@ -292,75 +380,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Followed Artists Collection */}
-      {(libraryFilter === 'all' || libraryFilter === 'artists') && artists.length > 0 && (
-        <div>
-          <h3 className="text-lg font-extrabold text-white tracking-tight mb-4">Followed Artists</h3>
-
-          {viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {artists.map((artist) => (
-                <div
-                  key={artist.id}
-                  data-artist-id={artist.id}
-                  data-context-type="artist"
-                  onClick={() => onSelectArtist && onSelectArtist(artist.name)}
-                  className="bg-[#181818] hover:bg-[#282828] p-4 rounded-xl flex flex-col justify-between group cursor-pointer transition-all shadow relative"
-                >
-                  <div className="relative aspect-square w-full rounded-full overflow-hidden mb-3 shadow border border-white/5">
-                    <img
-                      src={artist.avatarUrl}
-                      alt={artist.name}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF] transition-colors">
-                      {artist.name}
-                    </h4>
-                    <p className="text-xs text-zinc-400 truncate mt-1">
-                      Artist • {artist.monthlyListeners || '0 monthly listeners'}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-[#181818]/60 rounded-xl divide-y divide-white/[0.04] border border-white/[0.04]">
-              {artists.map((artist) => (
-                <div
-                  key={artist.id}
-                  data-artist-id={artist.id}
-                  data-context-type="artist"
-                  onClick={() => onSelectArtist && onSelectArtist(artist.name)}
-                  className="p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center space-x-4 min-w-0">
-                    <img
-                      src={artist.avatarUrl}
-                      alt={artist.name}
-                      referrerPolicy="no-referrer"
-                      className="w-12 h-12 rounded-full object-cover shadow border border-white/5"
-                    />
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-bold text-white truncate group-hover:text-[#D946EF]">
-                        {artist.name}
-                      </h4>
-                      <p className="text-xs text-zinc-400 truncate">
-                        {artist.monthlyListeners || '0 monthly listeners'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           )}
         </div>
       )}
+
     </div>
   );
 };

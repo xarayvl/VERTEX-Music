@@ -2135,6 +2135,7 @@ export default function App() {
                 onDeleteTrack={handleDeleteTrack}
                 onEditTrack={(tr) => setEditingTrack(tr)}
                 onOpenAddTrackModal={() => setIsAddTrackOpen(true)}
+                artists={artists}
               />
             )}
 

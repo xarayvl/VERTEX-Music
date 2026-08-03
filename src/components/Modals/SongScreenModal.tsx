@@ -5,6 +5,17 @@ import {
   ChevronDown,
   Sparkles,
   Disc,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  Volume2,
+  Volume1,
+  VolumeX,
+  Radio,
 } from 'lucide-react';
 import { Track } from '../../types';
 import { AudioVisualizer } from '../Player/AudioVisualizer';
@@ -33,12 +44,31 @@ interface SongScreenModalProps {
   userProfile?: any;
 }
 
+const formatTime = (secs: number) => {
+  if (!secs || isNaN(secs) || !isFinite(secs)) return '0:00';
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+};
+
 export const SongScreenModal: React.FC<SongScreenModalProps> = ({
   isOpen,
   onClose,
   currentTrack,
   isPlaying,
+  progress = 0,
+  currentTimeSeconds = 0,
+  volume = 0.7,
+  isShuffle = false,
+  repeatMode = 'off',
+  onTogglePlay,
+  onNext,
+  onPrev,
+  onSeek,
+  onVolumeChange,
   onToggleLike,
+  onToggleShuffle,
+  onToggleRepeat,
   onSelectArtist,
   onOpenEQ,
 }) => {
@@ -100,11 +130,14 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
           <ChevronDown className="w-6 h-6" />
         </button>
 
-        <div className="text-center">
-          <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400">
-            Now Playing from {currentTrack.album || 'Single'}
-          </p>
-          <p className="text-xs font-bold text-[#C084FC]">VERTEX Hi-Res Lossless Audio</p>
+        <div className="flex flex-col items-center gap-1.5">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/10 backdrop-blur-md">
+            <Radio className="w-3 h-3 text-[#D946EF]" />
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-200">
+              Playing from {currentTrack.releaseType || 'Single'} · {currentTrack.album || currentTrack.title}
+            </p>
+          </div>
+          <p className="text-[10px] font-bold text-[#C084FC] tracking-wide">VERTEX Hi-Res Lossless Audio</p>
         </div>
 
         {onOpenEQ ? (
@@ -239,6 +272,132 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Transport Bar: Progress + Playback Controls + Volume */}
+      <div className="w-full max-w-4xl mx-auto z-20 space-y-3 pt-2">
+        {/* Progress / Seek */}
+        <div className="flex items-center space-x-2.5 w-full text-[11px] font-mono text-zinc-400">
+          <span className="w-9 text-right select-none">{formatTime(currentTimeSeconds)}</span>
+          <div className="relative flex-1 flex items-center group cursor-pointer py-2">
+            <div className="w-full h-1 group-hover:h-1.5 bg-white/10 rounded-full overflow-hidden relative transition-all">
+              <div
+                className="h-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] rounded-full transition-all duration-75"
+                style={{ width: `${Math.min(100, Math.max(0, progress * 100))}%` }}
+              />
+            </div>
+            <div
+              className="absolute w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none -translate-x-1/2"
+              style={{ left: `${Math.min(100, Math.max(0, progress * 100))}%` }}
+            />
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.001}
+              value={progress}
+              onChange={(e) => onSeek && onSeek(parseFloat(e.target.value))}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              title="Track progress scrubber"
+            />
+          </div>
+          <span className="w-9 select-none">{formatTime(currentTrack.duration)}</span>
+        </div>
+
+        {/* Playback + Volume Row */}
+        <div className="flex items-center justify-between gap-4 pb-2">
+          <div className="w-24 hidden sm:block" />
+
+          <div className="flex items-center justify-center space-x-6 flex-1">
+            <button
+              onClick={onToggleShuffle}
+              className={`p-1.5 rounded-full transition-colors relative ${
+                isShuffle ? 'text-[#D946EF]' : 'text-zinc-400 hover:text-white'
+              }`}
+              title="Shuffle"
+            >
+              <Shuffle className="w-4.5 h-4.5" />
+              {isShuffle && (
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#D946EF]" />
+              )}
+            </button>
+
+            <button
+              onClick={onPrev}
+              className="text-zinc-300 hover:text-white transition-colors active:scale-90"
+              title="Previous Track"
+            >
+              <SkipBack className="w-6 h-6 fill-current" />
+            </button>
+
+            <button
+              onClick={onTogglePlay}
+              className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-[0_4px_20px_rgba(255,255,255,0.25)] hover:scale-105 active:scale-95 transition-all"
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? (
+                <Pause className="w-6 h-6 fill-black text-black" />
+              ) : (
+                <Play className="w-6 h-6 fill-black text-black ml-0.5" />
+              )}
+            </button>
+
+            <button
+              onClick={onNext}
+              className="text-zinc-300 hover:text-white transition-colors active:scale-90"
+              title="Next Track"
+            >
+              <SkipForward className="w-6 h-6 fill-current" />
+            </button>
+
+            <button
+              onClick={onToggleRepeat}
+              className={`p-1.5 rounded-full transition-colors relative ${
+                repeatMode !== 'off' ? 'text-[#D946EF]' : 'text-zinc-400 hover:text-white'
+              }`}
+              title="Repeat"
+            >
+              {repeatMode === 'one' ? <Repeat1 className="w-4.5 h-4.5" /> : <Repeat className="w-4.5 h-4.5" />}
+              {repeatMode !== 'off' && (
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#D946EF]" />
+              )}
+            </button>
+          </div>
+
+          {/* Volume */}
+          <div className="w-24 hidden sm:flex items-center space-x-1.5 text-zinc-400">
+            <button
+              onClick={() => onVolumeChange && onVolumeChange(volume > 0 ? 0 : 0.7)}
+              className="hover:text-white transition-colors"
+            >
+              {volume === 0 ? (
+                <VolumeX className="w-4 h-4 text-zinc-500" />
+              ) : volume < 0.5 ? (
+                <Volume1 className="w-4 h-4" />
+              ) : (
+                <Volume2 className="w-4 h-4" />
+              )}
+            </button>
+            <div className="relative flex-1 flex items-center group cursor-pointer py-2">
+              <div className="w-full h-1 group-hover:h-1.5 bg-white/10 rounded-full overflow-hidden relative transition-all">
+                <div
+                  className="h-full bg-[#A855F7] group-hover:bg-[#D946EF] rounded-full transition-all duration-75"
+                  style={{ width: `${Math.min(100, Math.max(0, volume * 100))}%` }}
+                />
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={volume}
+                onChange={(e) => onVolumeChange && onVolumeChange(parseFloat(e.target.value))}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                title="Volume control"
+              />
             </div>
           </div>
         </div>

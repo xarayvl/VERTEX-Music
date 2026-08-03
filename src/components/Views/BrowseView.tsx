@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Disc, Play, Heart, Wand2 } from 'lucide-react';
+import { Disc, Play, Heart } from 'lucide-react';
 import { Track, Playlist, Artist } from '../../types';
 import { BROWSE_CATEGORIES } from '../../data/browseCategories';
 
@@ -25,9 +25,6 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   onSelectArtist,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [moodPrompt, setMoodPrompt] = useState<string>('');
-  const [aiGeneratedStation, setAiGeneratedStation] = useState<string | null>(null);
-  const [matchingTrack, setMatchingTrack] = useState<Track | null>(null);
 
   const filteredTracks = selectedCategory
     ? tracks.filter((t) =>
@@ -35,75 +32,12 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       )
     : tracks;
 
-  const handleGenerateAiStation = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!moodPrompt.trim()) return;
-
-    // Find closest track match or default to first track
-    const promptLower = moodPrompt.toLowerCase();
-    const match =
-      tracks.find(
-        (t) =>
-          t.title.toLowerCase().includes(promptLower) ||
-          t.artist.toLowerCase().includes(promptLower) ||
-          t.genre.toLowerCase().includes(promptLower) ||
-          t.album.toLowerCase().includes(promptLower)
-      ) || tracks[Math.floor(Math.random() * tracks.length)];
-
-    setMatchingTrack(match);
-    setAiGeneratedStation(
-      `AI Station Generated: "${moodPrompt}" (${Math.floor(Math.random() * 8) + 12} tracks queued)`
-    );
-  };
-
   return (
     <div className="space-y-8 pb-12 select-none">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-extrabold text-white tracking-tight">Explore & Browse</h1>
-        <p className="text-xs text-zinc-400 mt-1">Discover new music by genre, mood, or AI station</p>
-      </div>
-
-      {/* AI Smart Station Generator */}
-      <div className="bg-[#181818] rounded-2xl p-5 border border-white/[0.06] shadow-xl">
-        <div className="flex items-center space-x-2 mb-2">
-          <Wand2 className="w-5 h-5 text-[#D946EF]" />
-          <h3 className="text-base font-extrabold text-white tracking-tight">
-            AI Radio Station Synthesizer
-          </h3>
-        </div>
-        <p className="text-xs text-zinc-400 mb-4">
-          Type any atmosphere or aesthetic to instantly generate an AI stream.
-        </p>
-
-        <form onSubmit={handleGenerateAiStation} className="flex gap-2">
-          <input
-            type="text"
-            value={moodPrompt}
-            onChange={(e) => setMoodPrompt(e.target.value)}
-            placeholder="e.g. Rainy cafe in Paris, Cyberpunk neon drive..."
-            className="flex-1 bg-[#242424] border border-white/10 rounded-full px-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#A855F7]"
-          />
-          <button
-            type="submit"
-            className="px-5 py-2.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white text-xs font-bold transition-all shadow-md active:scale-95"
-          >
-            Synthesize
-          </button>
-        </form>
-
-        {aiGeneratedStation && (
-          <div className="mt-4 p-3 rounded-xl bg-[#A855F7]/10 border border-[#A855F7]/30 flex items-center justify-between text-xs text-[#C084FC]">
-            <span className="font-semibold">{aiGeneratedStation}</span>
-            <button
-              onClick={() => matchingTrack && onPlayTrack(matchingTrack)}
-              className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white font-extrabold hover:scale-105 active:scale-95 transition-all shadow flex items-center gap-1.5"
-            >
-              <Play className="w-3.5 h-3.5 fill-white" />
-              <span>Play Station</span>
-            </button>
-          </div>
-        )}
+        <p className="text-xs text-zinc-400 mt-1">Discover new music by genre and artist</p>
       </div>
 
       {/* VERTEX Music Colorful Genre Cards Grid */}
@@ -135,22 +69,28 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         </div>
       </div>
 
-      {/* Filtered Track Results */}
+      {/* Genre-Filtered Track Results (only shown once a real genre is picked above) */}
+      {selectedCategory && (
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-extrabold text-white tracking-tight">
-            {selectedCategory ? `${selectedCategory} Recommendations` : 'Featured Editor Picks'}
+            {selectedCategory} Recommendations
           </h2>
-          {selectedCategory && (
-            <button
-              onClick={() => setSelectedCategory(null)}
-              className="text-xs font-bold text-[#D946EF] hover:underline"
-            >
-              Clear Filter
-            </button>
-          )}
+          <button
+            onClick={() => setSelectedCategory(null)}
+            className="text-xs font-bold text-[#D946EF] hover:underline"
+          >
+            Clear Filter
+          </button>
         </div>
 
+        {filteredTracks.length === 0 ? (
+          <div className="p-8 rounded-2xl bg-[#181818]/70 border border-white/5 text-center text-zinc-400">
+            <Disc className="w-10 h-10 mx-auto text-zinc-600 mb-2" />
+            <p className="text-sm font-bold text-white">No tracks in this genre yet</p>
+            <p className="text-xs text-zinc-500 mt-1">Try another category or check back later.</p>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {filteredTracks.map((track) => (
             <div
@@ -199,7 +139,9 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             </div>
           ))}
         </div>
+        )}
       </div>
+      )}
 
       {/* Artists Section */}
       <div>

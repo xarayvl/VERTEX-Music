@@ -179,14 +179,16 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
   const handleArtistClick = (art: SearchArtistItem) => {
     if (!onSelectArtist) return;
-    // If it's the current user profile
-    if (
-      userProfile &&
-      (userProfile.id === art.id ||
-        userProfile.username === art.username ||
-        userProfile.displayName === art.name ||
-        userProfile.artistName === art.name)
-    ) {
+    // Ownership must be decided by id only. Comparing username/displayName/
+    // artistName as a fallback is unsafe: two different artists can share a
+    // display name (or both simply have no username set, making
+    // `undefined === undefined` true), which would wrongly redirect a click
+    // on SOMEONE ELSE's artist card to your own profile — showing Edit
+    // controls on an artist that isn't yours, or hiding a real artist you
+    // were trying to view behind your own profile. `art.id` is already the
+    // real user id for your own entry (see localMatchedUsers above and the
+    // server's /api/search response), so a strict id check is sufficient.
+    if (userProfile && art.id === userProfile.id) {
       onSelectArtist(userProfile as any);
       return;
     }

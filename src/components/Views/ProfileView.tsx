@@ -37,10 +37,11 @@ interface ProfileViewProps {
   onPlayTrack: (track: Track) => void;
   onLogout?: () => void;
   onOpenAuthModal?: () => void;
-  onSelectArtist?: (artist: Artist | UserProfile) => void;
+  onSelectArtist?: (artist: Artist | UserProfile | string) => void;
   onDeleteTrack?: (trackId: string) => void;
   onEditTrack?: (track: Track) => void;
   onOpenAddTrackModal?: () => void;
+  artists?: Artist[];
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
@@ -56,6 +57,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onDeleteTrack,
   onEditTrack,
   onOpenAddTrackModal,
+  artists = [],
 }) => {
   // "This month" stats must reflect the CURRENT user's own listening history, not the
   // global/shared track catalog. Falls back to an empty state (not someone else's data)
@@ -64,6 +66,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const personalTopArtistNames: string[] = Array.from(
     new Set((recentlyPlayed || []).filter((t) => t && t.artist).map((t) => t.artist))
   );
+  // Resolve a real photo for each top artist: prefer the registered
+  // artist's own avatar (or the user's own avatar, when it's you), then
+  // fall back to the cover art of one of their tracks, so the grid never
+  // has to fall back to plain initials unless truly nothing is available.
+  const personalTopArtists = personalTopArtistNames.map((name) => {
+    const nameLower = name.toLowerCase();
+    const isSelf =
+      userProfile &&
+      [userProfile.artistName, userProfile.displayName, userProfile.username]
+        .filter(Boolean)
+        .some((n) => n!.toLowerCase() === nameLower);
+    const matchedArtist = artists.find((a) => a.name.toLowerCase() === nameLower);
+    const matchedTrack = (recentlyPlayed || []).find(
+      (t) => t && t.artist && t.artist.toLowerCase() === nameLower && t.coverUrl
+    );
+    const avatarUrl =
+      (isSelf ? userProfile?.avatarUrl : undefined) || matchedArtist?.avatarUrl || matchedTrack?.coverUrl || '';
+    return { name, avatarUrl, id: (isSelf ? userProfile?.id : matchedArtist?.id) || name };
+  });
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'audioEngine' | 'settings'>('overview');
   const [isEditing, setIsEditing] = useState(false);
   const [likedTrackIds, setLikedTrackIds] = useState<Record<string, boolean>>({
@@ -704,17 +725,27 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               }
               return (
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
-                  {personalTopArtistNames.map((artistName, idx) => (
+                  {personalTopArtists.map((artist, idx) => (
                     <div
                       key={idx}
+                      onClick={() => onSelectArtist && onSelectArtist(artist.name)}
                       className="p-4 rounded-xl bg-[#181818] hover:bg-[#282828] transition-all group cursor-pointer flex flex-col items-center text-center space-y-3 border border-white/5"
                     >
                       <div className="relative w-24 h-24 rounded-full overflow-hidden shadow-lg group-hover:scale-105 transition-transform bg-gradient-to-br from-[#A855F7] to-[#D946EF] flex items-center justify-center text-white text-xl font-black">
-                        {artistName.slice(0, 2).toUpperCase()}
+                        {artist.avatarUrl ? (
+                          <img
+                            src={artist.avatarUrl}
+                            alt={artist.name}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          artist.name.slice(0, 2).toUpperCase()
+                        )}
                       </div>
                       <div>
                         <h3 className="text-xs font-extrabold text-white truncate w-full">
-                          {artistName}
+                          {artist.name}
                         </h3>
                         <p className="text-[11px] text-zinc-400">Artist</p>
                       </div>
