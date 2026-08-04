@@ -18,7 +18,46 @@ const THINKING_PHASES = [
   { text: 'Preparing a response...', Icon: Sparkles },
 ];
 
+const WEB_SEARCH_PHASES = [
+  { text: 'Processing your request...', Icon: BrainCircuit },
+  { text: 'Searching the web...', Icon: Globe },
+  { text: 'Preparing a response...', Icon: Sparkles },
+];
+
 const AI_HIGH_DEMAND_MESSAGE = 'AI is in high demand right now. Please try again later.';
+
+const shouldRequestWebSearch = (message: string): boolean => {
+  const normalized = message.toLocaleLowerCase('tr-TR').replace(/[’`]/g, "'");
+  const explicitSearchPhrases = [
+    'search the web',
+    'search online',
+    'browse the web',
+    'look it up',
+    'google it',
+    'research this',
+    'internette ara',
+    'internette arama',
+    'internette araştır',
+    'internetten ara',
+    'internetten bak',
+    'internetten araştır',
+    "web'de ara",
+    'webde ara',
+    'web üzerinde ara',
+    "google'da ara",
+    'googleda ara',
+    'online ara',
+    'araştır',
+  ];
+
+  const currentInformationPatterns = [
+    /\b(latest|current|today|tonight|yesterday|now|recent|new releases?|news|charts?|rankings?|tours?|concerts?|schedule|prices?|weather|scores?|standings|exchange rates?|what (?:date|day|time) is it|202[4-9])\b/i,
+    /(?:bugün(?:ün|kü|de|den|e)?|bugunun|bugunku|dün(?:ün|kü|de|den)?|şu an|şimdiki|güncel|en son|son durum|son dakika|bu hafta|bu ay|bu yıl|hangi gündeyiz|hangi tarihteyiz|bugün günlerden|bugün ayın kaçı|saat kaç|hava durumu|döviz kuru|maç sonucu|skor|puan durumu|yeni çıkan|haber|liste|sıralama|turne|konser|program)/i,
+  ];
+
+  return explicitSearchPhrases.some((phrase) => normalized.includes(phrase))
+    || currentInformationPatterns.some((pattern) => pattern.test(normalized));
+};
 
 const createMessageId = (prefix: 'user' | 'ai' | 'err'): string => {
   const randomId = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -36,6 +75,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [rateLimitSeconds, setRateLimitSeconds] = useState(0);
   const [quotaNotice, setQuotaNotice] = useState('');
   const [thinkingPhaseIdx, setThinkingPhaseIdx] = useState(0);
+  const [isWebSearchPending, setIsWebSearchPending] = useState(false);
   const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -53,11 +93,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
       setThinkingPhaseIdx(0);
       return;
     }
+    const phaseCount = isWebSearchPending ? WEB_SEARCH_PHASES.length : THINKING_PHASES.length;
     const interval = setInterval(() => {
-      setThinkingPhaseIdx((i) => Math.min(i + 1, THINKING_PHASES.length - 1));
+      setThinkingPhaseIdx((i) => Math.min(i + 1, phaseCount - 1));
     }, 950);
     return () => clearInterval(interval);
-  }, [isLoading]);
+  }, [isLoading, isWebSearchPending]);
 
   useEffect(() => {
     if (rateLimitSeconds <= 0) return;
@@ -91,6 +132,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
     onUpdateMessages((prev) => [...prev, userMsg]);
     if (!customText) setInput('');
+    const webSearchRequested = shouldRequestWebSearch(textToSend);
+    setIsWebSearchPending(webSearchRequested);
     setIsLoading(true);
 
     try {
@@ -114,6 +157,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           message: textToSend.trim(),
           history: historyPayload,
           userId,
+          forceWebSearch: webSearchRequested,
         }),
       });
 
@@ -161,6 +205,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       onUpdateMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
+      setIsWebSearchPending(false);
     }
   };
 
@@ -212,7 +257,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
-  const ActivePhase = THINKING_PHASES[thinkingPhaseIdx];
+  const activePhases = isWebSearchPending ? WEB_SEARCH_PHASES : THINKING_PHASES;
+  const ActivePhase = activePhases[Math.min(thinkingPhaseIdx, activePhases.length - 1)];
 
   return (
     <section className="workspace-screen mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_38%),#121212] text-white select-none md:bg-[#121212]">

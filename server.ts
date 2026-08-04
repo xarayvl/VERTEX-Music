@@ -2014,7 +2014,36 @@ function parseCleanErrorMessage(err: any): ProviderErrorInfo {
 }
 
 function shouldUseGeminiWebSearch(message: string): boolean {
-  return /\b(latest|current|today|tonight|yesterday|recent|new release|news|chart|ranking|tour|concert|schedule|price|202[4-9]|güncel|bugün|dün|son dakika|yeni çıkan|haber|liste|sıralama|turne|konser|program)\b/i.test(message);
+  const normalized = message.toLocaleLowerCase("tr-TR").replace(/[’`]/g, "'");
+  const explicitSearchPhrases = [
+    "search the web",
+    "search online",
+    "browse the web",
+    "look it up",
+    "google it",
+    "research this",
+    "internette ara",
+    "internette arama",
+    "internette araştır",
+    "internetten ara",
+    "internetten bak",
+    "internetten araştır",
+    "web'de ara",
+    "webde ara",
+    "web üzerinde ara",
+    "google'da ara",
+    "googleda ara",
+    "online ara",
+    "araştır",
+  ];
+
+  const currentInformationPatterns = [
+    /\b(latest|current|today|tonight|yesterday|now|recent|new releases?|news|charts?|rankings?|tours?|concerts?|schedule|prices?|weather|scores?|standings|exchange rates?|what (?:date|day|time) is it|202[4-9])\b/i,
+    /(?:bugün(?:ün|kü|de|den|e)?|bugunun|bugunku|dün(?:ün|kü|de|den)?|şu an|şimdiki|güncel|en son|son durum|son dakika|bu hafta|bu ay|bu yıl|hangi gündeyiz|hangi tarihteyiz|bugün günlerden|bugün ayın kaçı|saat kaç|hava durumu|döviz kuru|maç sonucu|skor|puan durumu|yeni çıkan|haber|liste|sıralama|turne|konser|program)/i,
+  ];
+
+  return explicitSearchPhrases.some((phrase) => normalized.includes(phrase))
+    || currentInformationPatterns.some((pattern) => pattern.test(normalized));
 }
 
 function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> {
@@ -2056,7 +2085,7 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
     };
 
     try {
-      const { message, history, userId } = req.body;
+      const { message, history, userId, forceWebSearch } = req.body;
 
       if (!message || typeof message !== "string") {
         return res.status(400).json({ error: "Message string is required" });
@@ -2109,7 +2138,7 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
       }
 
       const formattedHistory = formatGeminiHistory(history);
-      const webSearchRequested = shouldUseGeminiWebSearch(cleanMessage);
+      const webSearchRequested = forceWebSearch === true || shouldUseGeminiWebSearch(cleanMessage);
       const geminiChatModel = requestDiagnostics.model;
       requestDiagnostics.historyMessages = formattedHistory.length;
       requestDiagnostics.historyCharacters = formattedHistory.reduce(
@@ -2117,6 +2146,18 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
         0,
       );
       requestDiagnostics.webSearchRequested = webSearchRequested;
+      const currentIstanbulDateTime = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Istanbul",
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+        timeZoneName: "long",
+      }).format(new Date());
       const chatConfig: any = {
         systemInstruction:
           "You are VERTEX Music AI, an expert, energetic VERTEX Music AI DJ, Producer, and Music Assistant. " +
@@ -2124,10 +2165,16 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
           "and provide text-based music guidance. Never claim to create or attach playable audio files. " +
           "Keep responses friendly, engaging, and cleanly formatted with markdown bullet points or bold text. " +
           "When mentioning song titles or artists, bold them clearly. " +
-          "When a live Google Search tool is available, use it for current events, recent releases, chart rankings, " +
-          "tour dates, news, or anything else that could have changed recently.",
+          `The exact current date and time in the app timezone is ${currentIstanbulDateTime}. ` +
+          "Use that value for date, day, and time questions and never guess the current date. " +
+          "Google Search is available. Use it whenever the answer depends on live, recent, changing, or uncertain information, " +
+          "including current events, recent releases, chart rankings, tour dates, news, weather, scores, prices, and schedules. " +
+          "Do not use Google Search for stable facts that you already know confidently. " +
+          (webSearchRequested
+            ? "The current request was classified as requiring live information. You must use Google Search before answering and ground the answer in current search results."
+            : ""),
+        tools: [{ googleSearch: {} }],
       };
-      if (webSearchRequested) chatConfig.tools = [{ googleSearch: {} }];
 
       const chat = ai.chats.create({
         model: geminiChatModel,
