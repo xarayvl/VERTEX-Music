@@ -105,29 +105,38 @@ export const HomeView: React.FC<HomeViewProps> = ({
 }) => {
   const [activeHomeSection, setActiveHomeSection] = useState<'overview' | 'playlists' | 'recent'>('overview');
   const [greetingAccent, setGreetingAccent] = useState(DEFAULT_GREETING_ACCENT);
+  const [isGreetingAccentActive, setIsGreetingAccentActive] = useState(false);
   const coverColorCache = useRef(new Map<string, string>());
   const hoverRequestId = useRef(0);
+
+  // Keep the last sampled cover color mounted while its overlay fades out.
+  // Replacing the gradient with the default purple at the same moment that
+  // opacity started changing caused a bright one-frame flash on mouse leave.
+  const applyGreetingAccent = (color: string) => {
+    setGreetingAccent(color);
+    setIsGreetingAccentActive(color !== DEFAULT_GREETING_ACCENT);
+  };
 
   const handleQuickItemEnter = (coverUrl: string, knownAccent?: string) => {
     const requestId = ++hoverRequestId.current;
     if (knownAccent) {
-      setGreetingAccent(knownAccent);
+      applyGreetingAccent(knownAccent);
       return;
     }
     const cachedColor = coverColorCache.current.get(coverUrl);
     if (cachedColor) {
-      setGreetingAccent(cachedColor);
+      applyGreetingAccent(cachedColor);
       return;
     }
     void extractDominantCoverColor(coverUrl).then((color) => {
       coverColorCache.current.set(coverUrl, color);
-      if (hoverRequestId.current === requestId) setGreetingAccent(color);
+      if (hoverRequestId.current === requestId) applyGreetingAccent(color);
     });
   };
 
   const handleQuickItemLeave = () => {
     hoverRequestId.current += 1;
-    setGreetingAccent(DEFAULT_GREETING_ACCENT);
+    setIsGreetingAccentActive(false);
   };
 
   const playOrToggle = (track: Track) => {
@@ -332,10 +341,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* Top Gradient Banner Header */}
       <div className="relative overflow-hidden rounded-2xl border border-white/[0.05] bg-gradient-to-b from-[#A855F7]/30 via-[#181818]/70 to-[#121212] p-6 sm:p-8">
         <div
-          className="pointer-events-none absolute inset-0 transition-opacity duration-500"
+          className="pointer-events-none absolute inset-0 will-change-opacity transition-opacity duration-700 ease-out"
           style={{
             background: `linear-gradient(to bottom, ${colorWithAlpha(greetingAccent, 0.44)}, rgba(24, 24, 24, 0.72), #121212)`,
-            opacity: greetingAccent === DEFAULT_GREETING_ACCENT ? 0 : 1,
+            opacity: isGreetingAccentActive ? 1 : 0,
           }}
         />
         <div className="relative mb-6 flex items-center justify-between">
