@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
+  AtSign,
   BadgeInfo,
   User,
   Edit3,
@@ -16,7 +17,7 @@ import {
   Settings,
   MoreHorizontal,
   Play,
-  Camera, Upload,
+  Camera,
   ChevronDown,
   ChevronUp,
   X,
@@ -37,6 +38,8 @@ import {
   Save,
   UserCog,
   Users,
+  ImagePlus,
+  Tag,
 } from 'lucide-react';
 import { UserProfile, Track, Playlist, Artist } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
@@ -157,6 +160,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const [isReadingAvatarFile, setIsReadingAvatarFile] = useState(false);
 
+  const resetProfileDraft = () => {
+    if (!userProfile) return;
+    setDisplayName(userProfile.displayName || '');
+    setUsername(userProfile.username || '');
+    setBio(userProfile.bio || '');
+    setAvatarUrl(userProfile.avatarUrl || '');
+    setFavoriteGenres(userProfile.favoriteGenres || []);
+    setNewGenre('');
+  };
+
+  useEffect(() => {
+    if (!userProfile || isEditing) return;
+    resetProfileDraft();
+  }, [userProfile?.id, userProfile?.displayName, userProfile?.username, userProfile?.bio, userProfile?.avatarUrl, userProfile?.favoriteGenres, isEditing]);
+
+  const openProfileEditor = () => {
+    if (!isEditing) resetProfileDraft();
+    setActiveSubTab('settings');
+    setIsEditing(true);
+  };
+
+  const closeProfileEditor = () => {
+    resetProfileDraft();
+    setIsEditing(false);
+  };
+
 
   const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -192,10 +221,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
 
   const handleAddGenre = () => {
-    if (newGenre.trim() && !favoriteGenres.includes(newGenre.trim())) {
-      setFavoriteGenres([...favoriteGenres, newGenre.trim()]);
-      setNewGenre('');
-    }
+    const cleanGenre = newGenre.trim();
+    if (!cleanGenre || cleanGenre.length > 80 || favoriteGenres.length >= 20) return;
+    if (favoriteGenres.some((genre) => genre.toLowerCase() === cleanGenre.toLowerCase())) return;
+    setFavoriteGenres([...favoriteGenres, cleanGenre]);
+    setNewGenre('');
   };
 
   const handleRemoveGenre = (genre: string) => {
@@ -312,7 +342,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         <div className="flex flex-col md:flex-row items-center md:items-end gap-6 sm:gap-8">
           {/* Circular Avatar with Edit Overlay */}
           <div
-            onClick={() => { setActiveSubTab('overview'); setIsEditing(true); }}
+            onClick={openProfileEditor}
             className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-full overflow-hidden shadow-2xl border-4 border-black/40 group cursor-pointer flex-shrink-0"
             title="Click to edit profile avatar"
           >
@@ -375,16 +405,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           )}
 
           <button
-            onClick={() => {
-              if (isEditing) setIsEditing(false);
-              else {
-                setActiveSubTab('overview');
-                setIsEditing(true);
-              }
-            }}
+            onClick={openProfileEditor}
             className="px-5 py-2.5 rounded-full border border-zinc-500 hover:border-white text-xs font-bold text-white transition-all hover:scale-105 active:scale-95"
           >
-            {isEditing ? 'Cancel Editing' : 'Edit Profile'}
+            {isEditing ? 'Continue Editing' : 'Edit Profile'}
           </button>
 
           <button
@@ -425,116 +449,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       {/* SUB-TAB 1: OVERVIEW & ANALYTICS */}
       {activeSubTab === 'overview' && (
         <div className="space-y-8 animate-in fade-in">
-          {/* EDIT PROFILE FORM MODAL/PANEL */}
-          {isEditing && (
-            <form
-              onSubmit={handleSaveProfile}
-              className="p-6 rounded-2xl bg-[#181818] border border-[#D946EF]/40 space-y-4 shadow-2xl"
-            >
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                  <Edit3 className="w-4 h-4 text-[#D946EF]" />
-                  <span>Edit Profile Details</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="text-zinc-400 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                    Display Name
-                  </label>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/15 text-xs text-white focus:outline-none focus:ring-2 focus:ring-[#D946EF]"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/15 text-xs text-white focus:outline-none focus:ring-2 focus:ring-[#D946EF]"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                  Bio / Status
-                </label>
-                <textarea
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  rows={2}
-                  className="w-full px-3.5 py-2 rounded-xl bg-white/5 border border-white/15 text-xs text-white focus:outline-none focus:ring-2 focus:ring-[#D946EF] resize-none"
-                />
-              </div>
-
-              {/* Avatar Upload / Presets */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                    Profile Photo
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => avatarFileInputRef.current?.click()}
-                    disabled={isReadingAvatarFile}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-[11px] font-bold text-white transition-colors disabled:opacity-50"
-                  >
-                    <Upload className="w-3 h-3" />
-                    <span>{isReadingAvatarFile ? 'Reading...' : 'Upload Your Own Photo'}</span>
-                  </button>
-                  <input
-                    ref={avatarFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarFileUpload}
-                    className="hidden"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAvatarUrl('')}
-                  className="text-[11px] text-zinc-500 hover:text-white transition-colors underline underline-offset-2"
-                >
-                  Remove Profile Photo
-                </button>
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-xs font-black text-white hover:scale-105 transition-transform shadow-lg"
-                >
-                  Save Profile
-                </button>
-              </div>
-            </form>
-          )}
-
           {/* Listening Stats Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="p-4 rounded-xl bg-[#181818] border border-white/5 space-y-1">
@@ -948,9 +862,120 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
           </header>
 
+          {isEditing && (
+            <form onSubmit={handleSaveProfile} className="workspace-card section-reveal overflow-hidden rounded-3xl border border-[#D946EF]/25 bg-[#181818] shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
+              <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-gradient-to-r from-[#2a1833] via-[#201723] to-[#181818] px-5 py-5 sm:px-7 sm:py-6">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-[0_12px_32px_rgba(168,85,247,0.25)]">
+                    <Edit3 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">Public profile</p>
+                    <h3 className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl">Edit profile details</h3>
+                    <p className="mt-1 text-xs text-zinc-400">Changes update your listener profile and artist identity.</p>
+                  </div>
+                </div>
+                <button type="button" onClick={closeProfileEditor} className="control-press rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-400 hover:bg-white/10 hover:text-white" aria-label="Close profile editor">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="grid items-start gap-6 p-5 sm:p-7 lg:grid-cols-[0.82fr_1.18fr]">
+                <section className="rounded-3xl border border-white/10 bg-gradient-to-b from-[#26182f] to-[#121212] p-5 sm:p-6">
+                  <div className="relative mx-auto flex aspect-square w-full max-w-[300px] items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-black/25 shadow-2xl">
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#A855F7]/25 via-transparent to-[#D946EF]/15" />
+                    <img
+                      src={avatarUrl || DEFAULT_AVATAR_URL}
+                      alt="Profile preview"
+                      onError={(event) => { event.currentTarget.src = DEFAULT_AVATAR_URL; }}
+                      className="relative h-[72%] w-[72%] rounded-full border-4 border-[#D946EF]/60 object-cover shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
+                    />
+                    <span className="absolute bottom-4 left-4 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.18em] text-[#F0ABFC]">Live preview</span>
+                  </div>
+
+                  <div className="mt-5 text-center">
+                    <h4 className="truncate text-xl font-black tracking-tight text-white">{displayName.trim() || 'Your display name'}</h4>
+                    <p className="mt-1 truncate text-xs font-semibold text-zinc-500">@{username.trim() || 'username'}</p>
+                    <p className="mx-auto mt-3 line-clamp-3 max-w-sm text-xs leading-5 text-zinc-400">{bio.trim() || 'Add a short bio to introduce yourself.'}</p>
+                  </div>
+
+                  <input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarFileUpload} className="hidden" />
+                  <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                    <button type="button" onClick={() => avatarFileInputRef.current?.click()} disabled={isReadingAvatarFile} className="control-press flex items-center justify-center gap-2 rounded-2xl border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-3 text-xs font-black text-[#F0ABFC] hover:bg-[#D946EF]/15 disabled:opacity-50">
+                      <ImagePlus className="h-4 w-4" /> {isReadingAvatarFile ? 'Reading photo…' : 'Choose photo'}
+                    </button>
+                    <button type="button" onClick={() => setAvatarUrl('')} className="control-press rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-3 text-xs font-bold text-zinc-400 hover:bg-white/[0.08] hover:text-white">Remove photo</button>
+                  </div>
+                  <p className="mt-3 text-center text-[9px] font-semibold leading-4 text-zinc-600">JPG, PNG, WebP or GIF. Uploaded photos are stored with your account.</p>
+                </section>
+
+                <section className="rounded-3xl border border-white/[0.08] bg-black/15 p-5 sm:p-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400">Display name</span>
+                      <div className="relative">
+                        <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+                        <input type="text" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={80} required className="w-full rounded-2xl border border-white/10 bg-white/[0.045] py-3.5 pl-11 pr-4 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10" />
+                      </div>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400">Username</span>
+                      <div className="relative">
+                        <AtSign className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+                        <input type="text" value={username} onChange={(event) => setUsername(event.target.value)} minLength={3} maxLength={32} pattern="[A-Za-z0-9_.-]{3,32}" title="Use 3–32 letters, numbers, dots, underscores or hyphens" required className="w-full rounded-2xl border border-white/10 bg-white/[0.045] py-3.5 pl-11 pr-4 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10" />
+                      </div>
+                    </label>
+                  </div>
+
+                  <label className="mt-4 block">
+                    <span className="mb-2 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400"><span>Bio / status</span><span className="text-[9px] font-bold normal-case tracking-normal text-zinc-600">{bio.length}/500</span></span>
+                    <textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={500} rows={4} placeholder="Tell listeners a little about yourself..." className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-3.5 text-sm leading-6 text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10" />
+                  </label>
+
+                  <div className="mt-5 rounded-3xl border border-white/[0.08] bg-white/[0.025] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2"><Tag className="h-4 w-4 text-[#D946EF]" /><span className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400">Favorite genres</span></div>
+                      <span className="text-[9px] font-bold text-zinc-600">{favoriteGenres.length}/20</span>
+                    </div>
+
+                    {favoriteGenres.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {favoriteGenres.map((genre) => (
+                          <span key={genre} className="flex items-center gap-1.5 rounded-full border border-[#D946EF]/20 bg-[#D946EF]/10 py-1.5 pl-3 pr-1.5 text-[10px] font-black text-[#F0ABFC]">
+                            {genre}
+                            <button type="button" onClick={() => handleRemoveGenre(genre)} className="rounded-full p-1 text-[#F0ABFC]/70 hover:bg-white/10 hover:text-white" aria-label={`Remove ${genre}`}><X className="h-3 w-3" /></button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="mt-3 flex gap-2">
+                      <input
+                        type="text"
+                        value={newGenre}
+                        onChange={(event) => setNewGenre(event.target.value)}
+                        onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); handleAddGenre(); } }}
+                        maxLength={80}
+                        placeholder="Add a genre"
+                        className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/60"
+                      />
+                      <button type="button" onClick={handleAddGenre} disabled={!newGenre.trim() || favoriteGenres.length >= 20} className="control-press flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-[#E879F9] hover:bg-[#D946EF]/15 disabled:cursor-not-allowed disabled:opacity-35" aria-label="Add favorite genre"><Plus className="h-4 w-4" /></button>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 flex flex-col-reverse gap-3 border-t border-white/10 pt-5 sm:flex-row sm:justify-end">
+                    <button type="button" onClick={closeProfileEditor} className="control-press rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-zinc-300 hover:bg-white/10 hover:text-white">Cancel</button>
+                    <button type="submit" disabled={!displayName.trim() || !username.trim()} className="control-press flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-6 py-3 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"><Save className="h-4 w-4" /> Save profile</button>
+                  </div>
+                </section>
+              </div>
+            </form>
+          )}
+
           <div className="grid items-start gap-6 lg:grid-cols-[0.88fr_1.12fr]">
             <div className="space-y-6">
-              <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-5 sm:p-6">
+              {!isEditing && <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-5 sm:p-6">
                 <div className="flex items-center gap-4">
                   <img src={userProfile.avatarUrl || DEFAULT_AVATAR_URL} alt="" className="h-16 w-16 rounded-2xl border border-white/10 object-cover shadow-xl" />
                   <div className="min-w-0 flex-1">
@@ -961,12 +986,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </div>
                 <p className="mt-5 text-xs leading-5 text-zinc-400">Change your photo, display name, username, bio and favorite genres from the profile editor.</p>
                 <button
-                  onClick={() => { setActiveSubTab('overview'); setIsEditing(true); }}
+                  onClick={openProfileEditor}
                   className="control-press mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#D946EF]/25 bg-[#D946EF]/10 px-4 py-3 text-xs font-black text-[#F0ABFC] hover:bg-[#D946EF]/15"
                 >
                   <Edit3 className="h-4 w-4" /> Edit profile details
                 </button>
-              </section>
+              </section>}
 
               <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
                 <div className="flex items-start gap-3">
