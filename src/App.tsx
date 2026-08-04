@@ -805,6 +805,10 @@ export default function App() {
     audioEngine.setOnEnded(() => {
       playbackRef.current.handleNextTrack();
     });
+
+    audioEngine.setOnPlaybackStateChange((playing) => {
+      setIsPlaying(playing);
+    });
   }, []);
 
   // Handle Audio Playback & Timer
@@ -1082,6 +1086,51 @@ export default function App() {
       setTracks(previousTracks);
       setCurrentTrack(previousCurrentTrack);
       showToast('Could not update liked tracks.');
+    }
+  };
+
+  const handleSetReleaseLiked = async (trackIds: string[], shouldLike: boolean): Promise<boolean> => {
+    const uniqueIds = new Set(trackIds.filter(Boolean));
+    if (uniqueIds.size === 0 || !tracks.some((track) => uniqueIds.has(track.id))) {
+      showToast('404 — Release tracks not found.');
+      return false;
+    }
+    if (!userProfile) {
+      showToast('Sign in to save tracks.');
+      return false;
+    }
+
+    const previousTracks = tracks;
+    const previousCurrentTrack = currentTrack;
+    const nextTracks = tracks.map((track) => uniqueIds.has(track.id) ? { ...track, isLiked: shouldLike } : track);
+    const nextCurrentTrack = currentTrack && uniqueIds.has(currentTrack.id)
+      ? { ...currentTrack, isLiked: shouldLike }
+      : currentTrack;
+
+    setTracks(nextTracks);
+    setCurrentTrack(nextCurrentTrack);
+
+    try {
+      const likedTrackIds = nextTracks.filter((track) => track.isLiked).map((track) => track.id);
+      const response = await fetch(`/api/user-state/${userProfile.id}/liked-tracks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ likedTrackIds }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setTracks(previousTracks);
+        setCurrentTrack(previousCurrentTrack);
+        showToast(data?.error || 'Could not update liked tracks.');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error syncing release liked tracks:', error);
+      setTracks(previousTracks);
+      setCurrentTrack(previousCurrentTrack);
+      showToast('Could not update liked tracks.');
+      return false;
     }
   };
 
@@ -1704,6 +1753,27 @@ export default function App() {
     }
   };
 
+  const handleChangePassword = async (currentPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    if (!userProfile) return { success: false, error: 'Sign in to change your password.' };
+
+    try {
+      const response = await fetch(`/api/users/${userProfile.id}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.success) {
+        return { success: false, error: data?.error || 'Password update failed.' };
+      }
+      showToast('Password updated successfully!');
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to update account password:', error);
+      return { success: false, error: 'Password update failed — please try again.' };
+    }
+  };
+
   const progressFraction = currentTrack?.duration ? currentTimeSeconds / currentTrack.duration : 0;
   const ownedPlaylists = userProfile ? playlists.filter((playlist) => playlist.userId === userProfile.id) : [];
   const selectedPlaylist = playlists.find((playlist) => playlist.id === selectedPlaylistId) || null;
@@ -2022,6 +2092,7 @@ export default function App() {
                 onEditTrack={(tr) => setEditingTrack(tr)}
                 onOpenAddTrackModal={() => openWorkspacePanel('upload')}
                 artists={artists}
+                onChangePassword={handleChangePassword}
               />
             )}
 
@@ -2057,6 +2128,8 @@ export default function App() {
                 onPlayTrack={handlePlayTrack}
                 onTogglePlay={handleTogglePlay}
                 onToggleLike={handleToggleLike}
+                onSetReleaseLiked={handleSetReleaseLiked}
+                onEditTrack={(track) => setEditingTrack(track)}
                 onSelectArtist={handleSelectArtist}
                 onSelectAlbum={handleSelectAlbum}
                 onGoBack={handleGoBack}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
+  BadgeInfo,
   User,
   Edit3,
   Clock,
@@ -26,6 +27,16 @@ import {
   BarChart3,
   Disc3,
   ListMusic,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Laptop2,
+  LockKeyhole,
+  LogOut,
+  Mail,
+  Save,
+  UserCog,
+  Users,
 } from 'lucide-react';
 import { UserProfile, Track, Playlist, Artist } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
@@ -46,6 +57,7 @@ interface ProfileViewProps {
   onEditTrack?: (track: Track) => void;
   onOpenAddTrackModal?: () => void;
   artists?: Artist[];
+  onChangePassword?: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 interface ReliableArtistImageProps {
@@ -100,6 +112,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onEditTrack,
   onOpenAddTrackModal,
   artists = [],
+  onChangePassword,
 }) => {
   // Personal history is resolved from the current account's server-backed recent track IDs.
   // An empty history remains empty instead of borrowing another account's catalog data.
@@ -125,8 +138,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       return { profile, fallbackAvatar: trackCover || DEFAULT_AVATAR_URL };
     })
     .filter((item): item is { profile: Artist; fallbackAvatar: string } => Boolean(item));
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'settings'>('overview');
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'information' | 'settings'>('overview');
   const [isEditing, setIsEditing] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordStatus, setPasswordStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Edit profile form state
   const [displayName, setDisplayName] = useState(userProfile?.displayName || '');
@@ -181,6 +200,43 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   const handleRemoveGenre = (genre: string) => {
     setFavoriteGenres(favoriteGenres.filter((g) => g !== genre));
+  };
+
+  const handleChangePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordStatus(null);
+
+    if (!currentPassword) {
+      setPasswordStatus({ type: 'error', message: 'Enter your current password.' });
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordStatus({ type: 'error', message: 'Your new password must contain at least 8 characters.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordStatus({ type: 'error', message: 'The new passwords do not match.' });
+      return;
+    }
+    if (!onChangePassword) {
+      setPasswordStatus({ type: 'error', message: 'Password changes are unavailable right now.' });
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const result = await onChangePassword(currentPassword, newPassword);
+      if (!result.success) {
+        setPasswordStatus({ type: 'error', message: result.error || 'Could not update your password.' });
+        return;
+      }
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordStatus({ type: 'success', message: 'Password updated successfully.' });
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   // -------------------------------------------------------------
@@ -256,7 +312,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         <div className="flex flex-col md:flex-row items-center md:items-end gap-6 sm:gap-8">
           {/* Circular Avatar with Edit Overlay */}
           <div
-            onClick={() => setIsEditing(true)}
+            onClick={() => { setActiveSubTab('overview'); setIsEditing(true); }}
             className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-full overflow-hidden shadow-2xl border-4 border-black/40 group cursor-pointer flex-shrink-0"
             title="Click to edit profile avatar"
           >
@@ -319,7 +375,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           )}
 
           <button
-            onClick={() => setIsEditing(!isEditing)}
+            onClick={() => {
+              if (isEditing) setIsEditing(false);
+              else {
+                setActiveSubTab('overview');
+                setIsEditing(true);
+              }
+            }}
             className="px-5 py-2.5 rounded-full border border-zinc-500 hover:border-white text-xs font-bold text-white transition-all hover:scale-105 active:scale-95"
           >
             {isEditing ? 'Cancel Editing' : 'Edit Profile'}
@@ -334,31 +396,30 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       </div>
 
-      {/* Sub-Navigation Bar */}
-      <div className="-mx-3 flex max-w-[calc(100%_+_1.5rem)] items-center space-x-2 overflow-x-hidden border-b border-white/10 bg-[#121212] px-3 py-3.5 mt-0 mb-6 sm:-mx-6 sm:max-w-[calc(100%_+_3rem)] sm:px-6">
-        <button
-          onClick={() => setActiveSubTab('overview')}
-          className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
-            activeSubTab === 'overview'
-              ? 'bg-white text-black shadow'
-              : 'text-zinc-400 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          Overview & Listening
-        </button>
-
-
-        <button
-          onClick={() => setActiveSubTab('settings')}
-          className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center space-x-1.5 ${
-            activeSubTab === 'settings'
-              ? 'bg-white text-black shadow'
-              : 'text-zinc-400 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          <Settings className="w-3.5 h-3.5" />
-          <span>Account Information</span>
-        </button>
+      {/* Profile workspace navigation */}
+      <div className="custom-scrollbar mb-7 flex max-w-full items-center gap-2 overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#181818] p-2 shadow-xl">
+        {([
+          { key: 'overview', label: 'Overview & Listening', icon: Headphones },
+          { key: 'information', label: 'Account Information', icon: BadgeInfo },
+          { key: 'settings', label: 'Account Settings', icon: Settings },
+        ] as const).map(({ key, label, icon: Icon }) => {
+          const active = activeSubTab === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setActiveSubTab(key)}
+              className={`control-press flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-black transition-all ${
+                active
+                  ? 'border-[#C084FC]/50 bg-gradient-to-r from-[#A855F7]/30 to-[#D946EF]/20 text-white shadow-[0_10px_28px_rgba(168,85,247,0.14)]'
+                  : 'border-transparent text-zinc-400 hover:border-white/[0.08] hover:bg-white/[0.055] hover:text-white'
+              }`}
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon className={`h-4 w-4 ${active ? 'text-[#F0ABFC]' : 'text-zinc-500'}`} />
+              <span>{label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* SUB-TAB 1: OVERVIEW & ANALYTICS */}
@@ -786,33 +847,195 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       )}
 
+      {/* ACCOUNT INFORMATION */}
+      {activeSubTab === 'information' && (
+        <div className="animate-in space-y-6 fade-in">
+          <header className="workspace-header flex items-start gap-4 border-b border-white/10 pb-6">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
+              <BadgeInfo className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
+                <Sparkles className="h-3.5 w-3.5" /> Account overview
+              </div>
+              <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Account information</h2>
+              <p className="mt-1 text-xs text-zinc-400 sm:text-sm">Your authenticated identity and server-backed activity in one place.</p>
+            </div>
+          </header>
+
+          <div className="grid items-start gap-6 lg:grid-cols-[1.08fr_0.92fr]">
+            <section className="workspace-card section-reveal overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-5 sm:p-7">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+                <img src={userProfile.avatarUrl || DEFAULT_AVATAR_URL} alt={userProfile.displayName} className="h-24 w-24 shrink-0 rounded-3xl border-2 border-[#D946EF]/50 object-cover shadow-2xl" />
+                <div className="min-w-0 flex-1">
+                  <span className="rounded-full border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-[#F0ABFC]">{userProfile.isArtist ? 'Artist account' : 'Listener account'}</span>
+                  <h3 className="mt-3 truncate text-2xl font-black tracking-tight text-white">{userProfile.displayName}</h3>
+                  <p className="mt-1 truncate text-xs font-semibold text-zinc-400">@{userProfile.username}</p>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-2 border-t border-white/10 pt-5">
+                {[
+                  { label: 'Email address', value: userProfile.email, icon: Mail },
+                  { label: 'Username', value: `@${userProfile.username}`, icon: User },
+                  { label: 'Account ID', value: userProfile.id, icon: ShieldCheck },
+                  { label: 'Joined', value: userProfile.createdAt ? new Date(userProfile.createdAt).toLocaleDateString() : 'Unavailable', icon: Clock },
+                ].map(({ label, value, icon: Icon }) => (
+                  <div key={label} className="flex min-w-0 items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.035] px-4 py-3.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-[#E879F9]"><Icon className="h-4 w-4" /></div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[9px] font-black uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+                      <p className="mt-0.5 truncate text-xs font-bold text-zinc-200" title={value}>{value}</p>
+                    </div>
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <div className="space-y-6">
+              <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Account snapshot</p>
+                    <h3 className="mt-1 text-lg font-black tracking-tight text-white">Your activity</h3>
+                  </div>
+                  <BarChart3 className="h-5 w-5 text-[#D946EF]" />
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Owned playlists', value: realPlaylistsCount, icon: ListMusic },
+                    { label: 'Saved plays', value: tracksPlayedCount.toLocaleString(), icon: Play },
+                    { label: 'Followers', value: followersCount.toLocaleString(), icon: Users },
+                    { label: 'Following', value: followingCount.toLocaleString(), icon: User },
+                  ].map(({ label, value, icon: Icon }) => (
+                    <div key={label} className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4">
+                      <Icon className="h-4 w-4 text-[#E879F9]" />
+                      <p className="mt-3 text-xl font-black text-white">{value}</p>
+                      <p className="mt-1 text-[9px] font-black uppercase tracking-wider text-zinc-500">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="workspace-card section-reveal rounded-3xl border border-[#D946EF]/20 bg-[#D946EF]/[0.07] p-5 sm:p-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#D946EF]/15 text-[#F0ABFC]"><UserCog className="h-5 w-5" /></div>
+                  <div><h3 className="text-sm font-black text-white">Need to make a change?</h3><p className="mt-0.5 text-xs text-zinc-400">Profile and security controls are separated for clarity.</p></div>
+                </div>
+                <button onClick={() => setActiveSubTab('settings')} className="control-press mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#D946EF]/25 bg-[#D946EF]/10 px-4 py-3 text-xs font-black text-[#F0ABFC] hover:bg-[#D946EF]/15">
+                  Open account settings <Settings className="h-4 w-4" />
+                </button>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ACCOUNT SETTINGS */}
       {activeSubTab === 'settings' && (
-        <div className="space-y-6 animate-in fade-in">
-          <div className="space-y-2">
-            <h2 className="text-xl font-bold text-white">Account Information</h2>
-            <p className="text-xs text-zinc-400">These values come from the authenticated account and server-side activity records.</p>
-          </div>
+        <div className="animate-in space-y-6 fade-in">
+          <header className="workspace-header flex items-start gap-4 border-b border-white/10 pb-6">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
+              <Settings className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
+                <Sparkles className="h-3.5 w-3.5" /> Personal controls
+              </div>
+              <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Account settings</h2>
+              <p className="mt-1 text-xs text-zinc-400 sm:text-sm">Manage your public identity, password and active browser session.</p>
+            </div>
+          </header>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="rounded-2xl bg-[#181818] border border-white/10 p-5">
-              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Account type</p>
-              <p className="mt-2 text-sm font-bold text-white">{userProfile.isArtist ? 'Artist' : 'Listener'}</p>
+          <div className="grid items-start gap-6 lg:grid-cols-[0.88fr_1.12fr]">
+            <div className="space-y-6">
+              <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-5 sm:p-6">
+                <div className="flex items-center gap-4">
+                  <img src={userProfile.avatarUrl || DEFAULT_AVATAR_URL} alt="" className="h-16 w-16 rounded-2xl border border-white/10 object-cover shadow-xl" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">Public identity</p>
+                    <h3 className="mt-1 truncate text-lg font-black text-white">{userProfile.displayName}</h3>
+                    <p className="truncate text-xs text-zinc-500">@{userProfile.username}</p>
+                  </div>
+                </div>
+                <p className="mt-5 text-xs leading-5 text-zinc-400">Change your photo, display name, username, bio and favorite genres from the profile editor.</p>
+                <button
+                  onClick={() => { setActiveSubTab('overview'); setIsEditing(true); }}
+                  className="control-press mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#D946EF]/25 bg-[#D946EF]/10 px-4 py-3 text-xs font-black text-[#F0ABFC] hover:bg-[#D946EF]/15"
+                >
+                  <Edit3 className="h-4 w-4" /> Edit profile details
+                </button>
+              </section>
+
+              <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/10 text-emerald-300"><Laptop2 className="h-5 w-5" /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-black text-white">This browser</h3><span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-300">Active now</span></div>
+                    <p className="mt-1 text-xs text-zinc-500">Web Player session for @{userProfile.username}</p>
+                  </div>
+                </div>
+                <button onClick={onLogout} className="control-press mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-xs font-black text-red-300 hover:bg-red-500/15">
+                  <LogOut className="h-4 w-4" /> Log out of this session
+                </button>
+              </section>
             </div>
-            <div className="rounded-2xl bg-[#181818] border border-white/10 p-5">
-              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Joined</p>
-              <p className="mt-2 text-sm font-bold text-white">
-                {userProfile.createdAt ? new Date(userProfile.createdAt).toLocaleDateString() : 'Unavailable'}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-[#181818] border border-white/10 p-5">
-              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Owned playlists</p>
-              <p className="mt-2 text-sm font-bold text-white">{realPlaylistsCount}</p>
-            </div>
-            <div className="rounded-2xl bg-[#181818] border border-white/10 p-5">
-              <p className="text-[10px] uppercase tracking-widest text-zinc-500">Saved plays</p>
-              <p className="mt-2 text-sm font-bold text-white">{tracksPlayedCount.toLocaleString()}</p>
-            </div>
+
+            <form onSubmit={handleChangePassword} className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-7">
+              <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-5">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">Login & security</p>
+                  <h3 className="mt-1 text-xl font-black tracking-tight text-white">Change password</h3>
+                  <p className="mt-1 text-xs leading-5 text-zinc-500">Confirm your current password before choosing a new one.</p>
+                </div>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#A855F7]/15 text-[#E879F9]"><LockKeyhole className="h-5 w-5" /></div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                {[
+                  { label: 'Current password', value: currentPassword, setter: setCurrentPassword, autoComplete: 'current-password' },
+                  { label: 'New password', value: newPassword, setter: setNewPassword, autoComplete: 'new-password' },
+                  { label: 'Confirm new password', value: confirmPassword, setter: setConfirmPassword, autoComplete: 'new-password' },
+                ].map(({ label, value, setter, autoComplete }) => (
+                  <label key={label} className="block">
+                    <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400">{label}</span>
+                    <div className="relative">
+                      <KeyRound className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+                      <input
+                        type={showPasswords ? 'text' : 'password'}
+                        value={value}
+                        onChange={(event) => { setter(event.target.value); setPasswordStatus(null); }}
+                        autoComplete={autoComplete}
+                        maxLength={128}
+                        required
+                        className="w-full rounded-2xl border border-white/10 bg-white/[0.045] py-3.5 pl-11 pr-12 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10"
+                      />
+                      <button type="button" onClick={() => setShowPasswords((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-zinc-500 hover:bg-white/[0.06] hover:text-white" aria-label={showPasswords ? 'Hide passwords' : 'Show passwords'}>
+                        {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <div className="mt-4 flex items-start gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 text-[10px] leading-5 text-zinc-500">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#D946EF]" /> Use at least 8 characters. Your password is securely hashed and is never shown in your profile.
+              </div>
+
+              {passwordStatus && (
+                <div className={`mt-4 flex items-center gap-2 rounded-2xl border px-4 py-3 text-xs font-bold ${passwordStatus.type === 'success' ? 'border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-200' : 'border-red-400/25 bg-red-400/[0.08] text-red-200'}`}>
+                  {passwordStatus.type === 'success' ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <X className="h-4 w-4 shrink-0" />}
+                  {passwordStatus.message}
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end border-t border-white/10 pt-5">
+                <button type="submit" disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword} className="control-press flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-6 py-3 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45">
+                  {isChangingPassword ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Updating…</> : <><Save className="h-4 w-4" /> Update password</>}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

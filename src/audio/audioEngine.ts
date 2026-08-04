@@ -14,6 +14,7 @@ class AudioEngine {
   private currentAudioUrl = '';
   private onTimeUpdateCallback: ((currentTime: number, duration: number) => void) | null = null;
   private onEndedCallback: (() => void) | null = null;
+  private onPlaybackStateChangeCallback: ((isPlaying: boolean) => void) | null = null;
   private currentVolume = 0.8;
 
   constructor() {
@@ -28,8 +29,29 @@ class AudioEngine {
       }
     };
 
+    // Native media keys can control the underlying audio element without
+    // going through React. Mirror those real browser events back to the UI so
+    // every play/pause source (mouse, Space, headset or keyboard media key)
+    // shares one authoritative playback state.
+    this.audio.onplay = () => {
+      this.isRealAudioPlaying = true;
+      this.onPlaybackStateChangeCallback?.(true);
+    };
+
+    this.audio.onpause = () => {
+      // The ended handler owns the state transition and queue advance when a
+      // track naturally finishes, avoiding a late pause event overriding the
+      // next track's playing state.
+      if (this.audio.ended) return;
+      this.isRealAudioPlaying = false;
+      this.onPlaybackStateChangeCallback?.(false);
+    };
+
     this.audio.onended = () => {
-      if (this.isRealAudioPlaying && this.onEndedCallback) {
+      const shouldAdvance = this.isRealAudioPlaying;
+      this.isRealAudioPlaying = false;
+      this.onPlaybackStateChangeCallback?.(false);
+      if (shouldAdvance && this.onEndedCallback) {
         this.onEndedCallback();
       }
     };
@@ -152,6 +174,10 @@ class AudioEngine {
 
   public setOnEnded(cb: () => void) {
     this.onEndedCallback = cb;
+  }
+
+  public setOnPlaybackStateChange(cb: (isPlaying: boolean) => void) {
+    this.onPlaybackStateChangeCallback = cb;
   }
 
   public playTrack(track: Track, seekTimeSeconds = 0) {

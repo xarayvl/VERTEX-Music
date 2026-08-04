@@ -1,6 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Edit3, LogOut, Play, Upload, User, X } from 'lucide-react';
-import { UserProfile, Track } from '../../types';
+import {
+  AtSign,
+  CalendarDays,
+  Camera,
+  Clock3,
+  Edit3,
+  Headphones,
+  LogOut,
+  Play,
+  Save,
+  Sparkles,
+  Upload,
+  UserRound,
+  Users,
+  X,
+} from 'lucide-react';
+import { Track, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
 interface ProfileModalProps {
@@ -40,6 +55,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     setAvatarUrl(userProfile.avatarUrl || DEFAULT_AVATAR_URL);
   }, [userProfile]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setIsEditing(false);
+      return;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleAvatarFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,17 +97,45 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     setIsEditing(false);
   };
 
+  const handleBackdropClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) onClose();
+  };
+
   if (!userProfile) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-in fade-in duration-200">
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#181818] p-6 shadow-2xl">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-extrabold text-white">Account required</h2>
-            <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white"><X className="w-5 h-5" /></button>
+      <div
+        className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/80 px-0 pt-16 animate-in fade-in duration-200 sm:p-4"
+        onMouseDown={handleBackdropClick}
+      >
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="profile-auth-title"
+          className="w-full max-w-xl rounded-t-[2rem] border border-white/10 bg-gradient-to-b from-[#25142d] to-[#141416] p-6 shadow-[0_-24px_80px_rgba(0,0,0,0.65)] animate-in slide-in-from-bottom-8 duration-300 sm:rounded-[2rem]"
+        >
+          <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-white/15 sm:hidden" />
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#D946EF]/25 bg-[#D946EF]/15 text-[#F0ABFC]">
+              <UserRound className="h-6 w-6" />
+            </div>
+            <button onClick={onClose} className="rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white" aria-label="Close profile panel">
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <p className="mt-3 text-sm text-zinc-400">Sign in to view and edit your server-backed profile.</p>
-          <button onClick={() => { onClose(); onOpenAuthModal?.(); }} className="mt-5 w-full rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] py-3 text-xs font-bold text-white">Sign In / Register</button>
-        </div>
+          <p className="mt-6 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">Your profile</p>
+          <h2 id="profile-auth-title" className="mt-2 text-2xl font-black tracking-tight text-white">Sign in to make it yours</h2>
+          <p className="mt-2 max-w-md text-sm leading-6 text-zinc-400">View your listening activity, update your photo and personalize how other people see you.</p>
+          <button
+            onClick={() => {
+              onClose();
+              onOpenAuthModal?.();
+            }}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] py-3.5 text-sm font-black text-white shadow-lg shadow-[#A855F7]/20 transition-transform hover:scale-[1.01]"
+          >
+            <Sparkles className="h-4 w-4" />
+            Sign In / Register
+          </button>
+        </section>
       </div>
     );
   }
@@ -87,61 +143,177 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const recent = recentTracks.filter((track) => Boolean(track?.id)).slice(0, 5);
   const accountType = userProfile.isArtist ? 'Artist' : 'Listener';
   const joinedDate = userProfile.createdAt ? new Date(userProfile.createdAt).toLocaleDateString() : 'Unavailable';
+  const stats = [
+    { label: 'Hours', value: ((userProfile.stats?.secondsListened || 0) / 3600).toFixed(1), icon: Clock3 },
+    { label: 'Plays', value: userProfile.stats?.tracksPlayed || 0, icon: Headphones },
+    { label: 'Followers', value: userProfile.stats?.followersCount || 0, icon: Users },
+    { label: 'Following', value: userProfile.stats?.followingCount || 0, icon: UserRound },
+  ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/10 bg-[#181818] shadow-2xl flex flex-col">
-        <header className="flex items-center justify-between border-b border-white/10 bg-[#121212] px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#D946EF]/20 text-[#D946EF] flex items-center justify-center"><User className="w-5 h-5" /></div>
-            <div><h2 className="text-base font-extrabold text-white">Account & Profile</h2><p className="text-[11px] text-zinc-400">Authenticated account data</p></div>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white"><X className="w-5 h-5" /></button>
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-          <section className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-            <img src={avatarUrl || DEFAULT_AVATAR_URL} onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR_URL; }} alt={displayName} className="w-20 h-20 rounded-full object-cover border-2 border-[#D946EF]" />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2"><h3 className="text-xl font-extrabold text-white truncate">{displayName}</h3><span className="rounded-full bg-[#D946EF]/20 px-2 py-0.5 text-[10px] font-bold text-[#D946EF]">{accountType} account</span></div>
-              <p className="text-xs text-zinc-400">@{username} • joined {joinedDate}</p>
-              <p className="mt-2 text-xs text-zinc-300 line-clamp-2">{bio || 'No biography added.'}</p>
+    <div
+      className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/80 px-0 pt-10 animate-in fade-in duration-200 sm:p-4"
+      onMouseDown={handleBackdropClick}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profile-panel-title"
+        className="flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-[2rem] border border-white/10 bg-gradient-to-b from-[#24142c] via-[#18181b] to-[#111113] shadow-[0_-28px_100px_rgba(0,0,0,0.78)] animate-in slide-in-from-bottom-8 duration-300 sm:max-h-[90dvh] sm:rounded-[2rem]"
+      >
+        <div className="relative border-b border-white/[0.08] px-5 pb-4 pt-3 sm:px-7 sm:pt-5">
+          <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/15 sm:hidden" />
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-[0.26em] text-[#D8B4FE]">Personal space</p>
+              <h2 id="profile-panel-title" className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl">Profile & account</h2>
             </div>
-            <button onClick={() => setIsEditing((value) => !value)} className="rounded-full bg-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/20 transition-colors flex items-center gap-2"><Edit3 className="w-3.5 h-3.5" />{isEditing ? 'Cancel' : 'Edit'}</button>
-          </section>
-
-          {isEditing && (
-            <form onSubmit={handleSave} className="space-y-4 rounded-2xl border border-[#D946EF]/30 bg-black/30 p-5 animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label className="space-y-1"><span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Display name</span><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={80} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-[#D946EF]" /></label>
-                <label className="space-y-1"><span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Username</span><input value={username} onChange={(e) => setUsername(e.target.value)} maxLength={32} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-[#D946EF]" /></label>
-              </div>
-              <label className="block space-y-1"><span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Bio</span><textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={500} rows={3} className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-[#D946EF]" /></label>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => avatarFileInputRef.current?.click()} disabled={isReadingAvatarFile} className="rounded-full bg-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/20 disabled:opacity-50 flex items-center gap-2"><Upload className="w-3.5 h-3.5" />{isReadingAvatarFile ? 'Reading…' : 'Upload photo'}</button><button type="button" onClick={() => setAvatarUrl('')} className="rounded-full px-3 py-2 text-xs font-bold text-zinc-400 hover:bg-white/10 hover:text-white transition-colors">Remove Profile Photo</button><input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarFileUpload} className="hidden" /></div>
-                <button type="submit" className="rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-2 text-xs font-bold text-white">Save Changes</button>
-              </div>
-            </form>
-          )}
-
-          <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="rounded-xl border border-white/5 bg-white/5 p-3 text-center"><p className="text-xl font-extrabold text-white">{((userProfile.stats?.secondsListened || 0) / 3600).toFixed(1)}</p><p className="text-[10px] uppercase text-zinc-400">Hours</p></div>
-            <div className="rounded-xl border border-white/5 bg-white/5 p-3 text-center"><p className="text-xl font-extrabold text-white">{userProfile.stats?.tracksPlayed || 0}</p><p className="text-[10px] uppercase text-zinc-400">Plays</p></div>
-            <div className="rounded-xl border border-white/5 bg-white/5 p-3 text-center"><p className="text-xl font-extrabold text-white">{userProfile.stats?.followersCount || 0}</p><p className="text-[10px] uppercase text-zinc-400">Followers</p></div>
-            <div className="rounded-xl border border-white/5 bg-white/5 p-3 text-center"><p className="text-xl font-extrabold text-white">{userProfile.stats?.followingCount || 0}</p><p className="text-[10px] uppercase text-zinc-400">Following</p></div>
-          </section>
-
-          <section>
-            <h3 className="text-sm font-extrabold text-white">Recently played</h3>
-            {recent.length === 0 ? <p className="mt-3 text-xs text-zinc-500">No saved listening history yet.</p> : <div className="mt-3 space-y-2">{recent.map((track) => <button key={track.id} onClick={() => onPlayTrack?.(track)} className="w-full flex items-center gap-3 rounded-xl p-2 text-left hover:bg-white/10 transition-colors"><img src={track.coverUrl || DEFAULT_AVATAR_URL} onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR_URL; }} alt="" className="w-10 h-10 rounded-lg object-cover" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-white">{track.title}</p><p className="truncate text-[11px] text-zinc-400">{track.artist}</p></div><Play className="w-4 h-4 text-[#D946EF]" /></button>)}</div>}
-          </section>
+            <button onClick={onClose} className="rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-400 transition-all hover:rotate-6 hover:bg-white/10 hover:text-white" aria-label="Close profile panel">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
-        <footer className="flex items-center justify-between border-t border-white/10 bg-[#121212] p-4">
-          <button onClick={() => { onClose(); onLogout?.(); }} className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/15 px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/25"><LogOut className="w-4 h-4" />Log out</button>
-          <button onClick={onClose} className="rounded-xl bg-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/20">Done</button>
+        <div className="custom-scrollbar flex-1 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">
+          <div className="space-y-5">
+            <section className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.055] p-5 sm:p-6">
+              <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-[#D946EF]/20 blur-3xl" />
+              <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
+                <div className="relative shrink-0 self-start">
+                  <img
+                    src={avatarUrl || DEFAULT_AVATAR_URL}
+                    onError={(event) => { event.currentTarget.src = DEFAULT_AVATAR_URL; }}
+                    alt={displayName}
+                    className="h-24 w-24 rounded-[1.75rem] border-2 border-[#D946EF]/70 object-cover shadow-2xl shadow-[#D946EF]/15 sm:h-28 sm:w-28"
+                  />
+                  <div className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl border-4 border-[#19131c] bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white">
+                    <Camera className="h-4 w-4" />
+                  </div>
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="max-w-full truncate text-2xl font-black tracking-tight text-white sm:text-3xl">{displayName}</h3>
+                    <span className="rounded-full border border-[#D946EF]/25 bg-[#D946EF]/15 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-[#F0ABFC]">{accountType}</span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400">
+                    <span className="flex items-center gap-1.5"><AtSign className="h-3.5 w-3.5" />{username}</span>
+                    <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Joined {joinedDate}</span>
+                  </div>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300">{bio || 'Add a short bio so listeners know a little more about you.'}</p>
+                </div>
+
+                <button
+                  onClick={() => setIsEditing((value) => !value)}
+                  className={`flex shrink-0 items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-black transition-all ${isEditing ? 'border-white/10 bg-white/10 text-white hover:bg-white/15' : 'border-[#D946EF]/25 bg-[#D946EF]/15 text-[#F5D0FE] hover:bg-[#D946EF]/25'}`}
+                >
+                  <Edit3 className="h-4 w-4" />
+                  {isEditing ? 'Cancel editing' : 'Edit profile'}
+                </button>
+              </div>
+            </section>
+
+            {isEditing && (
+              <form onSubmit={handleSave} className="rounded-[1.75rem] border border-[#D946EF]/25 bg-black/25 p-5 animate-in fade-in slide-in-from-top-2 duration-200 sm:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">Make it personal</p>
+                    <h3 className="mt-1 text-base font-black text-white">Edit profile details</h3>
+                  </div>
+                  <span className="hidden rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold text-zinc-400 sm:inline">Changes save to your account</span>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Display name</span>
+                    <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={80} className="w-full rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm font-semibold text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-[#D946EF]/60 focus:bg-white/[0.08]" />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Username</span>
+                    <div className="relative">
+                      <AtSign className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                      <input value={username} onChange={(event) => setUsername(event.target.value)} maxLength={32} className="w-full rounded-2xl border border-white/10 bg-white/[0.055] py-3 pl-10 pr-4 text-sm font-semibold text-white outline-none transition-colors focus:border-[#D946EF]/60 focus:bg-white/[0.08]" />
+                    </div>
+                  </label>
+                </div>
+
+                <label className="mt-4 block space-y-2">
+                  <span className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                    <span>Bio</span>
+                    <span className="font-semibold normal-case tracking-normal text-zinc-600">{bio.length}/500</span>
+                  </span>
+                  <textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={500} rows={3} className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm leading-6 text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-[#D946EF]/60 focus:bg-white/[0.08]" placeholder="Tell people about yourself..." />
+                </label>
+
+                <div className="mt-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => avatarFileInputRef.current?.click()} disabled={isReadingAvatarFile} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3.5 py-2.5 text-xs font-black text-white transition-colors hover:bg-white/10 disabled:opacity-50">
+                      <Upload className="h-4 w-4" />
+                      {isReadingAvatarFile ? 'Reading photo…' : 'Choose photo'}
+                    </button>
+                    <button type="button" onClick={() => setAvatarUrl('')} className="rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-white">Remove photo</button>
+                    <input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarFileUpload} className="hidden" />
+                  </div>
+                  <button type="submit" className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-[#A855F7]/20 transition-transform hover:scale-[1.02]">
+                    <Save className="h-4 w-4" />
+                    Save changes
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {stats.map(({ label, value, icon: Icon }) => (
+                <div key={label} className="group rounded-2xl border border-white/[0.07] bg-white/[0.045] p-4 transition-colors hover:border-[#D946EF]/20 hover:bg-white/[0.07]">
+                  <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-xl bg-[#D946EF]/12 text-[#E879F9] transition-transform group-hover:scale-105"><Icon className="h-4 w-4" /></div>
+                  <p className="text-xl font-black tracking-tight text-white">{value}</p>
+                  <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+                </div>
+              ))}
+            </section>
+
+            <section className="rounded-[1.75rem] border border-white/[0.08] bg-white/[0.035] p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">Listening activity</p>
+                  <h3 className="mt-1 text-base font-black text-white">Recently played</h3>
+                </div>
+                <Headphones className="h-5 w-5 text-zinc-600" />
+              </div>
+
+              {recent.length === 0 ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center">
+                  <p className="text-sm font-bold text-zinc-400">Your listening history is quiet</p>
+                  <p className="mt-1 text-xs text-zinc-600">Played songs will appear here.</p>
+                </div>
+              ) : (
+                <div className="mt-3 grid gap-1 sm:grid-cols-2">
+                  {recent.map((track) => (
+                    <button key={track.id} onClick={() => onPlayTrack?.(track)} className="group flex min-w-0 items-center gap-3 rounded-2xl p-2.5 text-left transition-colors hover:bg-white/[0.07]">
+                      <img src={track.coverUrl || DEFAULT_AVATAR_URL} onError={(event) => { event.currentTarget.src = DEFAULT_AVATAR_URL; }} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover shadow" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-black text-white transition-colors group-hover:text-[#F0ABFC]">{track.title}</p>
+                        <p className="mt-0.5 truncate text-xs text-zinc-500">{track.artist}</p>
+                      </div>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-[#E879F9] transition-colors group-hover:bg-[#D946EF] group-hover:text-white">
+                        <Play className="h-3.5 w-3.5 fill-current" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+
+        <footer className="flex items-center justify-between gap-3 border-t border-white/[0.08] bg-black/20 px-5 py-4 sm:px-7">
+          <button onClick={() => { onClose(); onLogout?.(); }} className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-xs font-black text-red-300 transition-colors hover:bg-red-500/20 hover:text-red-200">
+            <LogOut className="h-4 w-4" />
+            Log out
+          </button>
+          <button onClick={onClose} className="rounded-xl border border-white/10 bg-white/[0.07] px-5 py-2.5 text-xs font-black text-white transition-colors hover:bg-white/15">Done</button>
         </footer>
-      </div>
+      </section>
     </div>
   );
 };

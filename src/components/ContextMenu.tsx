@@ -157,6 +157,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const activeTrack = target.track || (target.category === 'player' ? currentTrack : null);
   const activePlaylist = target.playlist;
   const activeArtist = target.artist;
+  const isActiveTrackCurrent = Boolean(activeTrack && currentTrack?.id === activeTrack.id);
+  const contextLabel = target.elementName || (
+    activeTrack
+      ? `Song: ${activeTrack.title}`
+      : activePlaylist
+        ? `Playlist: ${activePlaylist.title}`
+        : activeArtist
+          ? `Artist: ${activeArtist.name}`
+          : 'VERTEX Context Menu'
+  );
 
   const handleCopyLink = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -174,16 +184,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       <div className="px-3 py-1.5 mb-1.5 border-b border-white/10 flex items-center justify-between text-[11px] text-zinc-400">
         <div className="flex items-center space-x-1.5 truncate pr-2">
           <Sparkles className="w-3.5 h-3.5 text-[#D946EF] flex-shrink-0" />
-          <span className="truncate font-semibold text-white">
-            {target.elementName ||
-              (activeTrack
-                ? `Song: ${activeTrack.title}`
-                : activePlaylist
-                ? `Playlist: ${activePlaylist.title}`
-                : activeArtist
-                ? `Artist: ${activeArtist.name}`
-                : 'VERTEX Context Menu')}
-          </span>
+          <span className="truncate font-semibold text-white">{contextLabel}</span>
         </div>
       </div>
 
@@ -206,13 +207,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
           <button
             onClick={() => {
-              onPlayTrack(activeTrack);
+              if (isActiveTrackCurrent) onTogglePlay();
+              else onPlayTrack(activeTrack);
               onClose();
             }}
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-gradient-to-r hover:from-[#A855F7]/30 hover:to-[#D946EF]/20 hover:text-white transition-colors"
           >
-            <Play className="w-4 h-4 text-[#C084FC]" />
-            <span className="font-semibold text-white">Play Song</span>
+            {isActiveTrackCurrent && isPlaying ? <Pause className="w-4 h-4 fill-current text-[#C084FC]" /> : <Play className="w-4 h-4 fill-current text-[#C084FC]" />}
+            <span className="font-semibold text-white">{isActiveTrackCurrent && isPlaying ? 'Pause Song' : isActiveTrackCurrent ? 'Resume Song' : 'Play Song'}</span>
           </button>
 
           <button

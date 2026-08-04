@@ -40,6 +40,7 @@ button,
 .fade-in { --utility-opacity-from: 0; }
 .zoom-in-95 { --utility-scale-from: 0.95; }
 .slide-in-from-bottom-4 { --utility-y-from: 1rem; }
+.slide-in-from-bottom-8 { --utility-y-from: 2rem; }
 @keyframes utilityEnter {
   from {
     opacity: var(--utility-opacity-from, 1);

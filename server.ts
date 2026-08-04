@@ -1154,6 +1154,55 @@ async function startServer() {
     }
   });
 
+  // Change the signed-in user's password after verifying the current one.
+  // This intentionally lives outside the general profile update route so a
+  // forged profile payload can never overwrite authentication credentials.
+  app.put("/api/users/:userId/password", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      }
+      if (sessionUserId !== userId) {
+        return res.status(403).json({ error: "Forbidden: You can only change your own password." });
+      }
+
+      const { currentPassword, newPassword } = req.body || {};
+      if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+        return res.status(400).json({ error: "Current and new passwords are required." });
+      }
+      if (!currentPassword || currentPassword.length > 128) {
+        return res.status(400).json({ error: "Enter a valid current password." });
+      }
+      if (newPassword.length < 8 || newPassword.length > 128) {
+        return res.status(400).json({ error: "New password must be between 8 and 128 characters." });
+      }
+      if (currentPassword === newPassword) {
+        return res.status(400).json({ error: "New password must be different from your current password." });
+      }
+
+      const db = await readDBAsync();
+      const index = db.users.findIndex((user) => user.id === userId);
+      if (index === -1) return res.status(404).json({ error: "User not found." });
+
+      const user = db.users[index];
+      const currentMatches = user.password.startsWith("$2a$") || user.password.startsWith("$2b$") || user.password.startsWith("$2y$")
+        ? await bcrypt.compare(currentPassword, user.password)
+        : user.password === currentPassword;
+      if (!currentMatches) {
+        return res.status(401).json({ error: "Current password is incorrect." });
+      }
+
+      db.users[index] = { ...user, password: await bcrypt.hash(newPassword, 10) };
+      await writeDBAsync(db);
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Change Password Error:", error);
+      return res.status(500).json({ error: "Failed to change password." });
+    }
+  });
+
   // Persist cumulative listening-time stats (seconds/hours listened).
   // The client pings this every ~15s while a track is playing so the
   // "hours listened" stat on the profile is real and survives redeploys

@@ -319,7 +319,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
         <div className="space-y-8">
           {/* Top Result Card & Songs Section */}
           {(filterType === 'all' || filterType === 'songs') && (
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-12">
               {/* TOP RESULT CARD (5 columns) */}
               {topResult && filterType === 'all' && (
                 <div
@@ -327,7 +327,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   data-artist-id={topResult.type === 'artist' ? topResult.item.id : undefined}
                   data-playlist-id={topResult.type === 'playlist' ? topResult.item.id : undefined}
                   data-context-type={topResult.type}
-                  className="md:col-span-5 flex flex-col justify-between bg-[#18181a] border border-white/10 hover:border-[#D946EF]/40 p-5 rounded-2xl transition-all relative group cursor-pointer shadow-xl"
+                  className={`group relative self-start rounded-2xl border border-white/10 bg-[#18181a] p-5 shadow-xl transition-all hover:border-[#D946EF]/40 md:col-span-5 ${topResult.type === 'track' ? 'pb-20' : ''}`}
                 >
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -435,7 +435,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   {topResult.type === 'artist' && (
                     <button
                       onClick={() => handleArtistClick(topResult.item)}
-                      className="mt-4 w-fit px-4 py-2 bg-white/10 hover:bg-[#D946EF] hover:text-white text-zinc-200 rounded-full text-xs font-extrabold transition-all"
+                      className="mt-5 w-fit px-4 py-2 bg-white/10 hover:bg-[#D946EF] hover:text-white text-zinc-200 rounded-full text-xs font-extrabold transition-all"
                     >
                       View Profile
                     </button>
@@ -444,7 +444,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   {topResult.type === 'playlist' && (
                     <button
                       onClick={() => onSelectPlaylist(topResult.item)}
-                      className="mt-4 w-fit px-4 py-2 bg-white/10 hover:bg-[#D946EF] hover:text-white text-zinc-200 rounded-full text-xs font-extrabold transition-all"
+                      className="mt-5 w-fit px-4 py-2 bg-white/10 hover:bg-[#D946EF] hover:text-white text-zinc-200 rounded-full text-xs font-extrabold transition-all"
                     >
                       Open Playlist
                     </button>
@@ -558,14 +558,14 @@ export const SearchView: React.FC<SearchViewProps> = ({
               {matchedArtists.length === 0 ? (
                 <p className="text-xs text-zinc-400 italic py-2">No matching artists or user profiles found.</p>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 items-start gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                   {matchedArtists.map((art) => (
                     <div
                       key={art.id || art.name}
                       data-artist-id={art.id}
                       data-context-type="artist"
                       onClick={() => handleArtistClick(art)}
-                      className="bg-[#18181a] border border-white/5 hover:border-[#D946EF]/40 hover:bg-[#222226] p-4 rounded-2xl text-center flex flex-col items-center group cursor-pointer transition-all shadow-md hover:shadow-xl"
+                      className="group flex self-start cursor-pointer flex-col items-center rounded-2xl border border-white/5 bg-[#18181a] p-4 text-center shadow-md transition-all hover:border-[#D946EF]/40 hover:bg-[#222226] hover:shadow-xl"
                     >
                       <div className="relative mb-3">
                         <img

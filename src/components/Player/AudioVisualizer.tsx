@@ -64,9 +64,11 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     const render = () => {
       ctx.clearRect(0, 0, width, h);
 
-      const freqData = isPlaying
-        ? audioEngine.getFrequencyData()
-        : new Uint8Array(barCount).fill(8);
+      // Real analyser data drives playback; when paused the audio engine
+      // deliberately returns its smooth synthetic spectrum. Keeping the same
+      // rendering path gives every pause method the animated idle state that
+      // previously appeared only after a hardware media-key pause.
+      const freqData = audioEngine.getFrequencyData();
 
       if (variant === 'bars') {
         const gap = 4;
@@ -80,7 +82,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
         for (let i = 0; i < barCount; i++) {
           // sample frequency value
           const dataVal = freqData[i % freqData.length] || 12;
-          const normalized = isPlaying ? Math.min(1, Math.max(0.08, dataVal / 255)) : 0.08;
+          const normalized = Math.min(1, Math.max(0.08, dataVal / 255));
           const barHeight = Math.min(maxBarHeight, Math.max(4, normalized * maxBarHeight));
 
           const x = i * (barWidth + gap);
@@ -97,7 +99,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
           ctx.fill();
 
           // Top glow dot
-          if (isPlaying && normalized > 0.3) {
+          if (normalized > 0.3) {
             ctx.shadowColor = accentColor;
             ctx.shadowBlur = 8;
             ctx.fillStyle = '#FFFFFF';
@@ -121,7 +123,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
 
         for (let i = 0; i < barCount; i++) {
           const val = freqData[i % freqData.length] || 10;
-          const v = isPlaying ? (val / 255) * (h / 2) : 3;
+          const v = (val / 255) * (h / 2);
           const y = h / 2 + (i % 2 === 0 ? v : -v);
 
           if (i === 0) ctx.moveTo(x, y);
@@ -140,7 +142,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
         const barG = 2;
         for (let i = 0; i < 4; i++) {
           const val = freqData[i * 2] || 10;
-          const bh = isPlaying ? Math.max(3, (val / 255) * h) : 4;
+          const bh = Math.max(3, (val / 255) * h);
           const x = i * (barW + barG);
           const y = (h - bh) / 2;
 

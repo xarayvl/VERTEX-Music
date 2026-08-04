@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Pause, Heart, Clock, MoreHorizontal, ListPlus, FolderPlus, Copy, ChevronRight, Plus, Music2, User } from 'lucide-react';
+import { Play, Pause, Heart, Clock, MoreHorizontal, ListPlus, FolderPlus, Copy, ChevronRight, Plus, Music2, User, Edit3 } from 'lucide-react';
 import { Track, Artist, UserProfile, Playlist } from '../../types';
 
 interface AlbumViewProps {
@@ -11,6 +11,8 @@ interface AlbumViewProps {
   onPlayTrack: (track: Track) => void;
   onTogglePlay?: () => void;
   onToggleLike: (trackId: string) => void;
+  onSetReleaseLiked: (trackIds: string[], shouldLike: boolean) => Promise<boolean>;
+  onEditTrack?: (track: Track) => void;
   onSelectArtist: (artist: Artist | string) => void;
   onSelectAlbum: (track: Track) => void;
   onGoBack?: () => void;
@@ -32,8 +34,11 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   onPlayTrack,
   onTogglePlay,
   onToggleLike,
+  onSetReleaseLiked,
+  onEditTrack,
   onSelectArtist,
   onSelectAlbum,
+  userProfile,
   playlists = [],
   onAddToQueue,
   onAddTracksToQueue,
@@ -88,12 +93,17 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   const isCurrentAlbumActive = albumTracks.some((t) => t.id === currentTrackId);
   const isCurrentAlbumPlaying = isCurrentAlbumActive && isPlaying;
 
-  // Track the most up-to-date version of the track in allTracks to synchronize Heart state
-  const freshAlbumTrack = allTracks.find((t) => t.id === albumTrack.id) || albumTrack;
+  // Track the freshest liked state for the whole release. Albums are saved as
+  // one action instead of only toggling the representative track.
+  const freshAlbumTracks = albumTracks.map((track) => allTracks.find((item) => item.id === track.id) || track);
+  const isReleaseLiked = freshAlbumTracks.length > 0 && freshAlbumTracks.every((track) => track.isLiked);
+  const isReleaseOwner = Boolean(userProfile?.id && albumTrack.userId === userProfile.id);
+  const primaryTrack = albumTracks[0] || albumTrack;
 
   // Dropdown context menu state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showPlaylistSubmenu, setShowPlaylistSubmenu] = useState(false);
+  const [isLikePending, setIsLikePending] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -180,6 +190,29 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
     closeMenu();
   };
 
+  const toggleReleaseLike = async (closeAfter = false) => {
+    if (isLikePending) return;
+    setIsLikePending(true);
+    const shouldLike = !isReleaseLiked;
+    try {
+      const succeeded = await onSetReleaseLiked(albumTracks.map((track) => track.id), shouldLike);
+      if (succeeded) {
+        showToast?.(
+          shouldLike
+            ? albumTracks.length > 1
+              ? `Saved ${albumTracks.length} songs from this release to Liked Songs`
+              : `Added "${primaryTrack.title}" to Liked Songs`
+            : albumTracks.length > 1
+              ? `Removed this release from Liked Songs`
+              : `Removed "${primaryTrack.title}" from Liked Songs`
+        );
+      }
+    } finally {
+      setIsLikePending(false);
+      if (closeAfter) closeMenu();
+    }
+  };
+
   const effectiveYear = albumTrack.releaseYear || (albumTrack.createdAt ? new Date(albumTrack.createdAt).getFullYear() : new Date().getFullYear());
   const formattedReleaseDate = albumTrack.createdAt ? new Date(albumTrack.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : `Released ${effectiveYear}`;
 
@@ -249,17 +282,12 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
           )}
         </button>
         <button
-          onClick={() => {
-            onToggleLike(freshAlbumTrack.id);
-            showToast?.(
-              freshAlbumTrack.isLiked
-                ? `Removed "${freshAlbumTrack.title}" from Liked Songs`
-                : `Added "${freshAlbumTrack.title}" to Liked Songs`
-            );
-          }}
-          className={`${freshAlbumTrack.isLiked ? 'text-[#D946EF]' : 'text-zinc-400 hover:text-white'} transition-colors`}
+          onClick={() => void toggleReleaseLike()}
+          disabled={isLikePending}
+          className={`${isReleaseLiked ? 'text-[#D946EF]' : 'text-zinc-400 hover:text-white'} transition-colors disabled:cursor-wait disabled:opacity-50`}
+          aria-label={isReleaseLiked ? 'Remove release from Liked Songs' : 'Save release to Liked Songs'}
         >
-          <Heart className={`w-8 h-8 ${freshAlbumTrack.isLiked ? 'fill-[#D946EF]' : ''}`} />
+          <Heart className={`w-8 h-8 ${isReleaseLiked ? 'fill-[#D946EF]' : ''}`} />
         </button>
         <div className="relative">
           <button
@@ -278,10 +306,52 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
               ref={menuPanelRef}
               role="menu"
               onClick={(event) => event.stopPropagation()}
-              className="fixed z-[1000] w-64 max-h-[calc(100dvh-24px)] overflow-y-auto rounded-2xl border border-white/12 bg-[#161618] p-1.5 text-xs font-medium text-zinc-200 shadow-[0_24px_70px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-100 select-none"
+              className="custom-scrollbar fixed z-[1000] w-72 max-h-[calc(100dvh-24px)] overflow-y-auto rounded-2xl border border-white/12 bg-[#161618] p-1.5 text-xs font-medium text-zinc-200 shadow-[0_24px_70px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-100 select-none"
               style={{ top: menuPosition.top, left: menuPosition.left }}
             >
+              <div className="mb-1.5 flex items-center gap-3 border-b border-white/10 px-2.5 py-2.5">
+                <img src={albumTrack.coverUrl} alt="" referrerPolicy="no-referrer" className="h-10 w-10 shrink-0 rounded-xl object-cover shadow" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE]">{albumTracks.length > 1 ? 'Release actions' : 'Song actions'}</p>
+                  <p className="mt-0.5 truncate text-sm font-black text-white">{albumTrack.releaseTitle || primaryTrack.title}</p>
+                </div>
+              </div>
+
               <div className="space-y-0.5">
+                {isReleaseOwner && onEditTrack && (
+                  <button
+                    onClick={() => {
+                      onEditTrack(primaryTrack);
+                      closeMenu();
+                    }}
+                    className="flex w-full items-center space-x-2.5 rounded-xl px-3 py-2.5 text-left font-semibold text-[#E9D5FF] transition-colors hover:bg-[#A855F7]/20 hover:text-white"
+                  >
+                    <Edit3 className="h-4 w-4 text-[#D946EF]" />
+                    <span>{albumTracks.length > 1 ? 'Edit release & tracklist' : 'Edit song'}</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    if (isCurrentAlbumActive && onTogglePlay) onTogglePlay();
+                    else onPlayTrack(primaryTrack);
+                    closeMenu();
+                  }}
+                  className="flex w-full items-center space-x-2.5 rounded-xl px-3 py-2.5 text-left font-semibold text-white transition-colors hover:bg-gradient-to-r hover:from-[#A855F7]/30 hover:to-[#D946EF]/20"
+                >
+                  {isCurrentAlbumPlaying ? <Pause className="h-4 w-4 fill-current text-[#F0ABFC]" /> : <Play className="h-4 w-4 fill-current text-[#F0ABFC]" />}
+                  <span>{isCurrentAlbumPlaying ? 'Pause' : isCurrentAlbumActive ? 'Resume' : albumTracks.length > 1 ? 'Play release' : 'Play song'}</span>
+                </button>
+
+                <button
+                  onClick={() => void toggleReleaseLike(true)}
+                  disabled={isLikePending}
+                  className="flex w-full items-center space-x-2.5 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-50"
+                >
+                  <Heart className={`h-4 w-4 ${isReleaseLiked ? 'fill-[#D946EF] text-[#D946EF]' : 'text-zinc-400'}`} />
+                  <span>{isReleaseLiked ? 'Remove from Liked Songs' : albumTracks.length > 1 ? 'Save release to Liked Songs' : 'Save to Liked Songs'}</span>
+                </button>
+
                 {/* Add to Queue */}
                 <button
                   onClick={() => {
@@ -290,21 +360,21 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                     showToast?.(albumTracks.length > 1 ? `Added ${albumTracks.length} release tracks to queue` : `Added "${albumTracks[0]?.title || albumTrack.title}" to queue`);
                     closeMenu();
                   }}
-                  className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
+                  className="w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
                 >
                   <ListPlus className="w-4 h-4 text-zinc-400" />
-                  <span>{albumTracks.length > 1 ? 'Add release to Queue' : 'Add to Queue'}</span>
+                  <span>{albumTracks.length > 1 ? 'Add release to queue' : 'Add to queue'}</span>
                 </button>
 
                 {/* Add to Playlist */}
                 <div className="relative">
                   <button
                     onClick={() => setShowPlaylistSubmenu((open) => !open)}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
                   >
                     <div className="flex items-center space-x-2.5">
                       <FolderPlus className="w-4 h-4 text-zinc-400" />
-                      <span>Add to Playlist</span>
+                      <span>{albumTracks.length > 1 ? 'Add release to playlist' : 'Add to playlist'}</span>
                     </div>
                     <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
                   </button>
@@ -346,13 +416,15 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   )}
                 </div>
 
+                <div className="my-1 h-px bg-white/[0.08]" />
+
                 {/* Go to Artist */}
                 <button
                   onClick={() => {
                     onSelectArtist(albumTrack.userId || '');
                     closeMenu();
                   }}
-                  className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
+                  className="w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
                 >
                   <User className="w-4 h-4 text-zinc-400" />
                   <span>Go to Artist</span>
@@ -361,10 +433,10 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                 {/* Copy Link / Share */}
                 <button
                   onClick={() => void copyReleaseLink()}
-                  className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
+                  className="w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
                 >
                   <Copy className="w-4 h-4 text-zinc-400" />
-                  <span>Copy Link / Share</span>
+                  <span>{albumTracks.length > 1 ? 'Copy album link' : 'Copy song link'}</span>
                 </button>
               </div>
             </div>,
