@@ -37,6 +37,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
 }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [rateLimitSeconds, setRateLimitSeconds] = useState(0);
+  const [quotaNotice, setQuotaNotice] = useState('');
   const [thinkingPhaseIdx, setThinkingPhaseIdx] = useState(0);
   const [showAiGenPanel, setShowAiGenPanel] = useState(false);
   const [aiGenPrompt, setAiGenPrompt] = useState('Chill lofi beat with rainy atmosphere and soft piano');
@@ -65,6 +67,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
     return () => clearInterval(interval);
   }, [isLoading]);
 
+  useEffect(() => {
+    if (rateLimitSeconds <= 0) return;
+    const timeout = window.setTimeout(() => {
+      setRateLimitSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1_000);
+    return () => window.clearTimeout(timeout);
+  }, [rateLimitSeconds]);
+
   const toggleSources = (id: string) => {
     setExpandedSources((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -78,7 +88,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const handleSendMessage = async (customText?: string) => {
     const textToSend = customText || input;
-    if (!textToSend.trim() || isLoading) return;
+    if (!textToSend.trim() || isLoading || rateLimitSeconds > 0) return;
 
     const userMsg: ChatMessage = {
       id: createMessageId('user'),
@@ -93,10 +103,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
     try {
       // Build conversation history for API
-      const historyPayload = messages.map((m) => ({
-        role: m.sender === 'user' ? 'user' : 'model',
-        text: m.text,
-      }));
+      const historyPayload = messages
+        .filter((message) => !(message.sender === 'ai' && /^(?:⚠️|⏳)/.test(message.text)))
+        .slice(-20)
+        .map((message) => ({
+          role: message.sender === 'user' ? 'user' : 'model',
+          text: message.text.slice(0, 8_000),
+        }));
 
       const token = localStorage.getItem('vertex_session_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -112,11 +125,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         const err = new Error(data.error || 'Failed to communicate with AI');
         (err as any).rateLimited = !!data.rateLimited;
+        (err as any).quotaExhausted = !!data.quotaExhausted;
+        (err as any).retryAfterSeconds = Number(data.retryAfterSeconds || res.headers.get('Retry-After') || 0);
         throw err;
       }
 
@@ -145,9 +160,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
       };
 
       onUpdateMessages((prev) => [...prev, aiMsg]);
+      setQuotaNotice('');
     } catch (err: any) {
       console.error('Chat error:', err);
       const isRateLimited = !!err?.rateLimited;
+      const retryAfterSeconds = Math.max(0, Math.min(300, Math.ceil(Number(err?.retryAfterSeconds || 0))));
+      if (isRateLimited) {
+        setRateLimitSeconds(retryAfterSeconds || 15);
+        if (err?.quotaExhausted) setQuotaNotice(err.message);
+      }
       const errorMsg: ChatMessage = {
         id: createMessageId('err'),
         sender: 'ai',
@@ -602,7 +623,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <button
                 key={index}
                 onClick={() => handleSendMessage(suggestion.prompt)}
-                disabled={isLoading}
+                disabled={isLoading || rateLimitSeconds > 0}
                 className="control-press flex h-9 flex-shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 text-[11px] font-bold text-zinc-400 hover:border-[#A855F7]/30 hover:bg-[#A855F7]/10 hover:text-white disabled:opacity-40 sm:h-auto sm:py-1.5"
               >
                 <Sparkles className="h-3 w-3 text-[#D946EF]" />
@@ -614,6 +635,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
         )}
 
         <div className="flex-shrink-0 border-t border-white/[0.06] bg-[#141414] p-2.5 sm:p-4 md:border-t-0">
+          {quotaNotice && (
+            <div className="mb-2 flex items-start gap-2 rounded-2xl border border-amber-400/20 bg-amber-400/[0.08] px-3 py-2.5 text-[11px] leading-relaxed text-amber-100">
+              <span className="mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-amber-400" />
+              <span>
+                {quotaNotice}
+                {rateLimitSeconds > 0 && ` Requests are paused for ${rateLimitSeconds}s to prevent repeated failures.`}
+              </span>
+            </div>
+          )}
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -625,13 +655,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
               type="text"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask about music, artists, genres or your next playlist..."
-              disabled={isLoading}
+              placeholder={rateLimitSeconds > 0 ? `Gemini paused · retry in ${rateLimitSeconds}s` : 'Ask about music, artists, genres or your next playlist...'}
+              disabled={isLoading || rateLimitSeconds > 0}
               className="min-w-0 flex-1 bg-transparent px-2.5 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 disabled:opacity-50 sm:px-3"
             />
             <button
               type="submit"
-              disabled={!input.trim() || isLoading}
+              disabled={!input.trim() || isLoading || rateLimitSeconds > 0}
             className="control-press flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-md hover:brightness-110 disabled:cursor-not-allowed disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 sm:h-10 sm:w-10 sm:rounded-xl"
               aria-label="Send message"
             >

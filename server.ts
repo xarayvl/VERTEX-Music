@@ -1974,25 +1974,108 @@ async function startServer() {
     }
   });
 
-// Helper to return clean API errors without claiming that content was created.
-function parseCleanErrorMessage(err: any): { message: string; rateLimited: boolean } {
-  if (!err) return { message: "An unexpected error occurred.", rateLimited: false };
-  let msg = typeof err === "string" ? err : err.message || String(err);
-  if (msg.startsWith("{") || msg.includes('"error":')) {
+type ProviderErrorInfo = {
+  message: string;
+  providerMessage: string;
+  rateLimited: boolean;
+  quotaExhausted: boolean;
+  retryAfterSeconds: number;
+};
+
+let geminiChatCooldownUntil = 0;
+let geminiChatCooldownWasQuotaExhausted = false;
+
+// Gemini's JS SDK prefixes structured errors with "ApiError:", so parse the
+// embedded JSON instead of passing a large raw provider payload to the client.
+function parseCleanErrorMessage(err: any): ProviderErrorInfo {
+  if (!err) {
+    return {
+      message: "An unexpected AI provider error occurred.",
+      providerMessage: "Unknown provider error",
+      rateLimited: false,
+      quotaExhausted: false,
+      retryAfterSeconds: 0,
+    };
+  }
+
+  const rawMessage = typeof err === "string" ? err : err.message || String(err);
+  let providerMessage = rawMessage;
+  let providerCode = Number(err?.status || err?.code || err?.error?.code || 0);
+  const jsonStart = rawMessage.indexOf("{");
+  if (jsonStart >= 0) {
     try {
-      const parsed = JSON.parse(msg);
-      if (parsed?.error?.message) msg = parsed.error.message;
+      const parsed = JSON.parse(rawMessage.slice(jsonStart));
+      providerMessage = parsed?.error?.message || parsed?.message || providerMessage;
+      providerCode = Number(parsed?.error?.code || parsed?.code || providerCode || 0);
     } catch {
-      // Keep the original provider message.
+      // Some SDK errors contain non-JSON suffixes; classification below still
+      // uses the complete provider message.
     }
   }
-  const rateLimited = msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429") || msg.includes("Quota exceeded");
+
+  const classificationText = `${rawMessage} ${providerMessage}`.toLowerCase();
+  const rateLimited = providerCode === 429
+    || classificationText.includes("resource_exhausted")
+    || classificationText.includes("rate limit")
+    || classificationText.includes("too many requests");
+  // Google's generic 429 text mentions quota/billing even for temporary RPM
+  // or TPM limits. Only classify it as a longer-lived exhausted quota when
+  // the response identifies a daily/billing limit explicitly.
+  const quotaExhausted = rateLimited && (
+    classificationText.includes("requests per day")
+    || classificationText.includes("daily quota")
+    || classificationText.includes(" rpd")
+    || classificationText.includes("billing account is not active")
+    || classificationText.includes("billing account has been disabled")
+  );
+  const retryDelayMatch = classificationText.match(/retry(?:delay)?[^0-9]{0,20}(\d+(?:\.\d+)?)s/);
+  const retryAfterSeconds = rateLimited
+    ? Math.max(1, Math.min(300, Math.ceil(Number(retryDelayMatch?.[1] || (quotaExhausted ? 60 : 15)))))
+    : 0;
+
   return {
-    message: rateLimited
-      ? "VERTEX Music AI is experiencing high demand. No track was created; please try again later."
-      : msg,
+    message: quotaExhausted
+      ? "This project's Gemini API quota is exhausted. Check the Google AI Studio rate limits and billing for the project connected to GEMINI_API_KEY, then try again."
+      : rateLimited
+        ? `This Gemini request hit a temporary project/model limit. Please try again in about ${retryAfterSeconds} seconds.`
+        : providerMessage,
+    providerMessage,
     rateLimited,
+    quotaExhausted,
+    retryAfterSeconds,
   };
+}
+
+function shouldUseGeminiWebSearch(message: string): boolean {
+  return /\b(latest|current|today|tonight|yesterday|recent|new release|news|chart|ranking|tour|concert|schedule|price|202[4-9]|güncel|bugün|dün|son dakika|yeni çıkan|haber|liste|sıralama|turne|konser|program)\b/i.test(message);
+}
+
+function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> {
+  if (!Array.isArray(value)) return [];
+
+  const candidates = value.slice(-24).flatMap((item: any) => {
+    if (!item || (item.role !== "user" && item.role !== "model")) return [];
+    const text = typeof item.text === "string"
+      ? item.text.trim()
+      : typeof item.content === "string"
+        ? item.content.trim()
+        : "";
+    if (!text || (item.role === "model" && /^(?:⚠️|⏳)/.test(text))) return [];
+    return [{ role: item.role as "user" | "model", text: text.slice(0, 8_000) }];
+  });
+
+  const selected: typeof candidates = [];
+  let remainingCharacters = 24_000;
+  for (let index = candidates.length - 1; index >= 0 && selected.length < 20; index -= 1) {
+    const item = candidates[index];
+    if (remainingCharacters <= 0) break;
+    const text = item.text.slice(-remainingCharacters);
+    if (!text) continue;
+    selected.unshift({ ...item, text });
+    remainingCharacters -= text.length;
+  }
+
+  return selected.map((item) => ({ role: item.role, parts: [{ text: item.text }] }));
 }
 
   // AI Music Generation Endpoint using only real audio returned by Google Lyria.
@@ -2060,13 +2143,22 @@ function parseCleanErrorMessage(err: any): { message: string; rateLimited: boole
       });
     } catch (error: any) {
       console.error("Lyria AI Music Generation Error:", error);
-      const { message, rateLimited } = parseCleanErrorMessage(error);
-      return res.status(rateLimited ? 429 : 502).json({ error: message, rateLimited });
+      const { message, rateLimited, quotaExhausted, retryAfterSeconds } = parseCleanErrorMessage(error);
+      if (rateLimited) res.setHeader("Retry-After", String(retryAfterSeconds));
+      return res.status(rateLimited ? 429 : 502).json({ error: message, rateLimited, quotaExhausted, retryAfterSeconds });
     }
   });
 
   // Gemini AI Chat Endpoint
   app.post("/api/chat", async (req, res) => {
+    const requestDiagnostics = {
+      model: process.env.GEMINI_CHAT_MODEL?.trim() || "gemini-3.5-flash-lite",
+      keyFingerprint: "not-loaded",
+      historyMessages: 0,
+      historyCharacters: 0,
+      webSearchRequested: false,
+    };
+
     try {
       const { message, history, userId } = req.body;
 
@@ -2077,12 +2169,26 @@ function parseCleanErrorMessage(err: any): { message: string; rateLimited: boole
       if (!cleanMessage) return res.status(400).json({ error: "Message string is required" });
       if (cleanMessage.length > 20_000) return res.status(400).json({ error: "Message cannot exceed 20000 characters." });
 
+      const cooldownSeconds = Math.ceil((geminiChatCooldownUntil - Date.now()) / 1_000);
+      if (cooldownSeconds > 0) {
+        res.setHeader("Retry-After", String(cooldownSeconds));
+        return res.status(429).json({
+          error: geminiChatCooldownWasQuotaExhausted
+            ? `Gemini requests are paused after a quota error. Please try again in about ${cooldownSeconds} seconds. If the error returns, check this project's Google AI Studio rate limits and billing.`
+            : `Gemini is temporarily rate-limiting requests. Please try again in about ${cooldownSeconds} seconds.`,
+          rateLimited: true,
+          quotaExhausted: geminiChatCooldownWasQuotaExhausted,
+          retryAfterSeconds: cooldownSeconds,
+        });
+      }
+
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.status(500).json({
           error: "GEMINI_API_KEY is missing. Please configure your API key in Secrets.",
         });
       }
+      requestDiagnostics.keyFingerprint = crypto.createHash("sha256").update(apiKey).digest("hex").slice(0, 10);
 
       const ai = new GoogleGenAI({
         apiKey,
@@ -2167,35 +2273,30 @@ function parseCleanErrorMessage(err: any): { message: string; rateLimited: boole
         await writeDBAsync(db);
       }
 
-      const formattedHistory = Array.isArray(history)
-        ? history
-            .slice(-40)
-            .flatMap((item: any) => {
-              if (!item || (item.role !== "user" && item.role !== "model")) return [];
-              const text = typeof item.text === "string"
-                ? item.text.trim()
-                : typeof item.content === "string"
-                  ? item.content.trim()
-                  : "";
-              if (!text) return [];
-              return [{ role: item.role, parts: [{ text: text.slice(0, 20_000) }] }];
-            })
-        : [];
+      const formattedHistory = formatGeminiHistory(history);
+      const webSearchRequested = shouldUseGeminiWebSearch(cleanMessage);
+      const geminiChatModel = requestDiagnostics.model;
+      requestDiagnostics.historyMessages = formattedHistory.length;
+      requestDiagnostics.historyCharacters = formattedHistory.reduce(
+        (total, item) => total + item.parts.reduce((partTotal, part) => partTotal + part.text.length, 0),
+        0,
+      );
+      requestDiagnostics.webSearchRequested = webSearchRequested;
+      const chatConfig: any = {
+        systemInstruction:
+          "You are VERTEX Music AI, an expert, energetic VERTEX Music AI DJ, Producer, and Music Assistant. " +
+          "You give music recommendations, curate playlist ideas, explain musical genres and instruments, " +
+          "and assist with generating AI music using Lyria models (`lyria-3-clip-preview` or `lyria-3-pro-preview`). " +
+          "Keep responses friendly, engaging, and cleanly formatted with markdown bullet points or bold text. " +
+          "When mentioning song titles or artists, bold them clearly. " +
+          "When a live Google Search tool is available, use it for current events, recent releases, chart rankings, " +
+          "tour dates, news, or anything else that could have changed recently.",
+      };
+      if (webSearchRequested) chatConfig.tools = [{ googleSearch: {} }];
 
       const chat = ai.chats.create({
-        model: "gemini-3.5-flash-lite",
-        config: {
-          systemInstruction:
-            "You are VERTEX Music AI, an expert, energetic VERTEX Music AI DJ, Producer, and Music Assistant. " +
-            "You give music recommendations, curate playlist ideas, explain musical genres and instruments, " +
-            "and assist with generating AI music using Lyria models (`lyria-3-clip-preview` or `lyria-3-pro-preview`). " +
-            "Keep responses friendly, engaging, and cleanly formatted with markdown bullet points or bold text. " +
-            "When mentioning song titles or artists, bold them clearly. " +
-            "You have live Google Search access: use it whenever the user asks about current events, recent " +
-            "releases, chart rankings, tour dates, news, or anything else that could have changed recently, " +
-            "instead of relying only on what you already know.",
-          tools: [{ googleSearch: {} }],
-        },
+        model: geminiChatModel,
+        config: chatConfig,
         history: formattedHistory,
       });
 
@@ -2264,11 +2365,29 @@ function parseCleanErrorMessage(err: any): { message: string; rateLimited: boole
 
       return res.json({ reply: replyText, generatedTrack, webSearchUsed, searchQueries: webSearchQueries, sources });
     } catch (error: any) {
-      console.error("Gemini API Chat Error:", error);
-      const { message: cleanMsg, rateLimited } = parseCleanErrorMessage(error);
+      const { message: cleanMsg, providerMessage, rateLimited, quotaExhausted, retryAfterSeconds } = parseCleanErrorMessage(error);
+      console.error("Gemini API Chat Error:", {
+        ...requestDiagnostics,
+        rateLimited,
+        quotaExhausted,
+        message: providerMessage,
+      });
+      if (rateLimited) {
+        geminiChatCooldownUntil = Date.now() + retryAfterSeconds * 1_000;
+        geminiChatCooldownWasQuotaExhausted = quotaExhausted;
+        res.setHeader("Retry-After", String(retryAfterSeconds));
+      }
       return res.status(rateLimited ? 429 : 500).json({
         error: cleanMsg,
         rateLimited,
+        quotaExhausted,
+        retryAfterSeconds,
+        diagnostics: rateLimited ? {
+          model: requestDiagnostics.model,
+          historyMessages: requestDiagnostics.historyMessages,
+          historyCharacters: requestDiagnostics.historyCharacters,
+          webSearchRequested: requestDiagnostics.webSearchRequested,
+        } : undefined,
       });
     }
   });
