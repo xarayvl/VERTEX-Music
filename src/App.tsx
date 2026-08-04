@@ -1715,9 +1715,21 @@ export default function App() {
       }
 
       const persisted: UserProfile = { ...updatedProfile, ...data.user };
+      const canonicalArtistName = persisted.artistName || persisted.displayName;
+      const syncOwnedTrack = (track: Track): Track => track.userId === persisted.id
+        ? { ...track, artist: canonicalArtistName }
+        : track;
+      const syncedArtist = normalizePublicArtist(persisted);
+
       setUserProfile(persisted);
-      setSelectedArtist(persisted);
-      upsertArtist(normalizePublicArtist(persisted));
+      setTracks((previous) => previous.map(syncOwnedTrack));
+      setCurrentTrack((previous) => previous ? syncOwnedTrack(previous) : null);
+      setQueue((previous) => previous.map(syncOwnedTrack));
+      setRecentlyPlayed((previous) => previous.map(syncOwnedTrack));
+      setSelectedAlbumTrack((previous) => previous ? syncOwnedTrack(previous) : null);
+      setEditingTrack((previous) => previous ? syncOwnedTrack(previous) : null);
+      setSelectedArtist(syncedArtist);
+      upsertArtist(syncedArtist);
       showToast('Artist profile saved successfully!');
     } catch (error) {
       console.error('Failed to sync artist profile update with server:', error);
@@ -1733,11 +1745,20 @@ export default function App() {
       return;
     }
 
+    const nextDisplayName = updated.displayName.trim() || userProfile.displayName;
+    const displayNameChanged = nextDisplayName !== userProfile.displayName;
+    // A profile display-name edit is also an artist identity edit. Send an
+    // explicit sync instruction so the server updates the canonical artist
+    // label and every track owned by this immutable userId in one write.
+    const updatePayload = displayNameChanged
+      ? { ...updated, displayName: nextDisplayName, artistName: nextDisplayName, syncArtistNameWithDisplayName: true }
+      : updated;
+
     try {
       const res = await fetch(`/api/users/${updated.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(updated),
+        body: JSON.stringify(updatePayload),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success || !data.user) {
@@ -1745,8 +1766,24 @@ export default function App() {
         return;
       }
       const persisted = { ...userProfile, ...data.user } as UserProfile;
+      const canonicalArtistName = persisted.artistName || persisted.displayName;
+      const syncOwnedTrack = (track: Track): Track => track.userId === persisted.id
+        ? { ...track, artist: canonicalArtistName }
+        : track;
+
       setUserProfile(persisted);
-      if (persisted.isArtist) upsertArtist(normalizePublicArtist(persisted));
+      setTracks((previous) => previous.map(syncOwnedTrack));
+      setCurrentTrack((previous) => previous ? syncOwnedTrack(previous) : null);
+      setQueue((previous) => previous.map(syncOwnedTrack));
+      setRecentlyPlayed((previous) => previous.map(syncOwnedTrack));
+      setSelectedAlbumTrack((previous) => previous ? syncOwnedTrack(previous) : null);
+      setEditingTrack((previous) => previous ? syncOwnedTrack(previous) : null);
+
+      if (persisted.isArtist || tracks.some((track) => track.userId === persisted.id)) {
+        const syncedArtist = normalizePublicArtist(persisted);
+        upsertArtist(syncedArtist);
+        setSelectedArtist((previous) => previous?.id === persisted.id ? syncedArtist : previous);
+      }
     } catch (error) {
       console.error('Failed to update user profile on server:', error);
       showToast('Profile update failed.');

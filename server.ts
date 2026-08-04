@@ -1069,9 +1069,11 @@ async function startServer() {
       if (typeof updates.bio === "string" && updates.bio.length > 500) return res.status(400).json({ error: "Bio cannot exceed 500 characters." });
       if (typeof updates.artistBio === "string" && updates.artistBio.length > 2_000) return res.status(400).json({ error: "Artist bio cannot exceed 2000 characters." });
       const isArtist = typeof updates.isArtist === "boolean" ? updates.isArtist : current.isArtist || false;
-      const artistName = typeof updates.artistName === "string" && updates.artistName.trim()
-        ? updates.artistName.trim()
-        : current.artistName || displayName;
+      const artistName = updates.syncArtistNameWithDisplayName === true
+        ? displayName
+        : typeof updates.artistName === "string" && updates.artistName.trim()
+          ? updates.artistName.trim()
+          : current.artistName || displayName;
       if (artistName.length > 80) return res.status(400).json({ error: "Artist name cannot exceed 80 characters." });
 
       let favoriteGenres = current.favoriteGenres;
