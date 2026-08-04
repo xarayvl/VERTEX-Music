@@ -224,9 +224,15 @@ class AudioEngine {
         } catch {
           // ignore if metadata not ready yet
         }
-      } else if (seekTimeSeconds > 0 && !isNaN(seekTimeSeconds) && Math.abs((this.audio.currentTime || 0) - seekTimeSeconds) > 1) {
+      } else if (
+        !isNaN(seekTimeSeconds)
+        && isFinite(seekTimeSeconds)
+        && (this.audio.ended || Math.abs((this.audio.currentTime || 0) - seekTimeSeconds) > 1)
+      ) {
         try {
-          this.audio.currentTime = seekTimeSeconds;
+          // Setting zero is essential for repeat-one. The previous > 0 guard
+          // left an ended media element parked at its duration.
+          this.audio.currentTime = Math.max(0, seekTimeSeconds);
         } catch {
           // ignore
         }

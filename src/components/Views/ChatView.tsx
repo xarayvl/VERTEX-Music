@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bot, Send, Sparkles, User, Play, Trash2, Music, Globe, Search, ChevronDown, BrainCircuit } from 'lucide-react';
+import { Bot, Send, Sparkles, Play, Trash2, Music, Globe, Search, ChevronDown, BrainCircuit } from 'lucide-react';
 import { Track, ChatMessage } from '../../types';
+import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 
 interface ChatViewProps {
   messages: ChatMessage[];
   onUpdateMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onPlayTrack: (track: Track) => void;
   userId?: string;
+  userAvatarUrl?: string;
+  userDisplayName?: string;
 }
 
 // Generic pending-state labels. They deliberately avoid claiming that a
@@ -69,6 +72,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onUpdateMessages,
   onPlayTrack,
   userId,
+  userAvatarUrl,
+  userDisplayName,
 }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -332,13 +337,27 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 className={`flex items-start gap-2 sm:gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
               >
                 <div
-                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border shadow-md sm:h-9 sm:w-9 sm:rounded-2xl ${
+                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border shadow-md sm:h-9 sm:w-9 sm:rounded-2xl ${
                     msg.sender === 'user'
-                      ? 'border-white/20 bg-white text-black'
+                      ? 'border-white/20 bg-[#242424]'
                       : 'border-[#D946EF]/30 bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white'
                   }`}
                 >
-                  {msg.sender === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                  {msg.sender === 'user' ? (
+                    <img
+                      key={userAvatarUrl || DEFAULT_AVATAR_URL}
+                      src={userAvatarUrl || DEFAULT_AVATAR_URL}
+                      alt={userDisplayName ? `${userDisplayName}'s profile` : 'Your profile'}
+                      referrerPolicy="no-referrer"
+                      className="h-full w-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.onerror = null;
+                        event.currentTarget.src = DEFAULT_AVATAR_URL;
+                      }}
+                    />
+                  ) : (
+                    <Bot className="h-4 w-4" />
+                  )}
                 </div>
 
                 <div

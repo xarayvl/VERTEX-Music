@@ -750,6 +750,7 @@ export default function App() {
     isShuffle,
     currentTimeSeconds,
     handleNextTrack: () => {},
+    handleTrackEnded: () => {},
     handlePrevTrack: () => {},
     handleTogglePlay: () => {},
     handleToggleLike: (_trackId: string) => {},
@@ -803,7 +804,7 @@ export default function App() {
     });
 
     audioEngine.setOnEnded(() => {
-      playbackRef.current.handleNextTrack();
+      playbackRef.current.handleTrackEnded();
     });
 
     audioEngine.setOnPlaybackStateChange((playing) => {
@@ -821,9 +822,9 @@ export default function App() {
       if (!currentTrack.audioUrl) {
         timer = window.setInterval(() => {
           setCurrentTimeSeconds((prev) => {
-            if (currentTrack && prev >= currentTrack.duration) {
-              playbackRef.current.handleNextTrack();
-              return 0;
+            if (currentTrack && prev + 1 >= currentTrack.duration) {
+              window.setTimeout(() => playbackRef.current.handleTrackEnded(), 0);
+              return currentTrack.duration;
             }
             return prev + 1;
           });
@@ -964,7 +965,13 @@ export default function App() {
     setIsPlaying(!isPlaying);
   };
 
-  const handlePlayTrack = (track: Track) => {
+  const handlePlayTrack = (track: Track, playbackContext?: Track[]) => {
+    if (playbackContext && playbackContext.length > 0) {
+      // Preserve the exact order of the album/playlist view that initiated
+      // playback. Without this, automatic advance falls back to a stale queue
+      // or the global catalogue and can appear to move backwards in an album.
+      setQueue(playbackContext);
+    }
     if (currentTrack?.id === track.id) {
       setIsPlaying(!isPlaying);
     } else {
@@ -986,25 +993,21 @@ export default function App() {
   const handleNextTrack = () => {
     const activeList = queue.length > 0 ? queue : tracks;
     if (activeList.length === 0) return;
-    if (repeatMode === 'one') {
-      if (currentTrack) {
-        // Explicitly restart playback from the beginning — the audio element
-        // is already paused/ended at this point (onended already fired), so
-        // just resetting React state doesn't make it play again on its own.
-        audioEngine.playTrack(currentTrack, 0);
-        recordTrackPlay(currentTrack);
-      }
-      setCurrentTimeSeconds(0);
-      setIsPlaying(true);
-      return;
-    }
 
     let nextIdx = currentTrack ? activeList.findIndex((t) => t.id === currentTrack.id) + 1 : 0;
     if (isShuffle) {
       nextIdx = Math.floor(Math.random() * activeList.length);
     }
     if (nextIdx >= activeList.length || nextIdx < 0) {
-      nextIdx = 0;
+      if (repeatMode === 'all') {
+        nextIdx = 0;
+      } else {
+        // With repeat disabled the queue has genuinely finished. Repeat-one
+        // only affects natural completion; pressing Next still advances.
+        setCurrentTimeSeconds(currentTrack?.duration || 0);
+        setIsPlaying(false);
+        return;
+      }
     }
     if (activeList[nextIdx]) {
       setCurrentTrack(activeList[nextIdx]);
@@ -1012,6 +1015,20 @@ export default function App() {
       setIsPlaying(true);
       recordTrackPlay(activeList[nextIdx]);
     }
+  };
+
+  const handleTrackEnded = () => {
+    if (repeatMode === 'one' && currentTrack) {
+      // Natural completion in repeat-one mode restarts the same media from
+      // zero. Manual Next intentionally remains free to advance.
+      audioEngine.playTrack(currentTrack, 0);
+      setCurrentTimeSeconds(0);
+      setIsPlaying(true);
+      recordTrackPlay(currentTrack);
+      return;
+    }
+
+    handleNextTrack();
   };
 
   const handlePrevTrack = () => {
@@ -1037,6 +1054,7 @@ export default function App() {
       isShuffle,
       currentTimeSeconds,
       handleNextTrack,
+      handleTrackEnded,
       handlePrevTrack,
       handleTogglePlay,
       handleToggleLike,
@@ -2107,6 +2125,8 @@ export default function App() {
                 onUpdateMessages={setChatMessages}
                 onPlayTrack={handlePlayTrack}
                 userId={userProfile?.id}
+                userAvatarUrl={userProfile?.avatarUrl}
+                userDisplayName={userProfile?.displayName || userProfile?.username}
               />
             )}
 
@@ -2160,7 +2180,6 @@ export default function App() {
                 currentTrackId={currentTrack?.id}
                 isPlaying={isPlaying}
                 onPlayTrack={handlePlayTrack}
-                onTogglePlay={handleTogglePlay}
                 onToggleLike={handleToggleLike}
                 onSetReleaseLiked={handleSetReleaseLiked}
                 onEditTrack={(track) => setEditingTrack(track)}
@@ -2279,8 +2298,8 @@ export default function App() {
         onToggleLike={handleToggleLike}
         onToggleShuffle={() => setIsShuffle(!isShuffle)}
         onToggleRepeat={() =>
-          setRepeatMode(
-            repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off'
+          setRepeatMode((currentMode) =>
+            currentMode === 'off' ? 'all' : currentMode === 'all' ? 'one' : 'off'
           )
         }
         onOpenEQ={() => openWorkspacePanel('eq')}

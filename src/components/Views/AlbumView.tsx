@@ -8,8 +8,7 @@ interface AlbumViewProps {
   allTracks: Track[];
   currentTrackId?: string;
   isPlaying: boolean;
-  onPlayTrack: (track: Track) => void;
-  onTogglePlay?: () => void;
+  onPlayTrack: (track: Track, playbackContext?: Track[]) => void;
   onToggleLike: (trackId: string) => void;
   onSetReleaseLiked: (trackIds: string[], shouldLike: boolean) => Promise<boolean>;
   onEditTrack?: (track: Track) => void;
@@ -32,7 +31,6 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   currentTrackId,
   isPlaying,
   onPlayTrack,
-  onTogglePlay,
   onToggleLike,
   onSetReleaseLiked,
   onEditTrack,
@@ -91,6 +89,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   );
 
   const isCurrentAlbumActive = albumTracks.some((t) => t.id === currentTrackId);
+  const activeAlbumTrack = albumTracks.find((track) => track.id === currentTrackId);
   const isCurrentAlbumPlaying = isCurrentAlbumActive && isPlaying;
 
   // Track the freshest liked state for the whole release. Albums are saved as
@@ -272,7 +271,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
       {/* Action Row */}
       <div className="flex items-center space-x-6 px-2">
         <button
-          onClick={() => isCurrentAlbumActive && onTogglePlay ? onTogglePlay() : onPlayTrack(albumTracks[0])}
+          onClick={() => onPlayTrack(activeAlbumTrack || albumTracks[0], albumTracks)}
           className="w-14 h-14 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all"
         >
           {isCurrentAlbumPlaying ? (
@@ -333,8 +332,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
 
                 <button
                   onClick={() => {
-                    if (isCurrentAlbumActive && onTogglePlay) onTogglePlay();
-                    else onPlayTrack(primaryTrack);
+                    onPlayTrack(activeAlbumTrack || primaryTrack, albumTracks);
                     closeMenu();
                   }}
                   className="flex w-full items-center space-x-2.5 rounded-xl px-3 py-2.5 text-left font-semibold text-white transition-colors hover:bg-gradient-to-r hover:from-[#A855F7]/30 hover:to-[#D946EF]/20"
@@ -465,7 +463,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                 key={track.id}
                 data-track-id={track.id}
                 data-context-type="track"
-                onClick={() => onPlayTrack(track)}
+                onClick={() => onPlayTrack(track, albumTracks)}
                 className={`grid grid-cols-12 gap-4 px-4 py-3 items-center text-sm cursor-pointer transition-colors group ${
                   isSelected ? 'bg-white/10 text-[#D946EF]' : 'hover:bg-white/10 text-zinc-300'
                 }`}
@@ -491,8 +489,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (isSelected && onTogglePlay) onTogglePlay();
-                      else onPlayTrack(track);
+                      onPlayTrack(track, albumTracks);
                     }}
                     className="w-6 text-center hidden group-hover:block text-white"
                   >

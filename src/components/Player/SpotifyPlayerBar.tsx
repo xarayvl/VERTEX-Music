@@ -214,7 +214,20 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
             className={`p-1.5 rounded-full transition-colors relative group ${
               repeatMode !== 'off' ? 'text-[#D946EF]' : 'text-zinc-400 hover:text-white'
             }`}
-            title="Repeat"
+            title={
+              repeatMode === 'off'
+                ? 'Enable album or queue repeat'
+                : repeatMode === 'all'
+                  ? 'Album or queue repeat is on · Click for song repeat'
+                  : 'Song repeat is on · Click to turn repeat off'
+            }
+            aria-label={
+              repeatMode === 'off'
+                ? 'Repeat off. Enable album or queue repeat'
+                : repeatMode === 'all'
+                  ? 'Album or queue repeat on. Enable song repeat'
+                  : 'Song repeat on. Turn repeat off'
+            }
           >
             {repeatMode === 'one' ? (
               <Repeat1 className="w-4 h-4" />
