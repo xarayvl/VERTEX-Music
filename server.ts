@@ -1982,6 +1982,8 @@ type ProviderErrorInfo = {
   retryAfterSeconds: number;
 };
 
+const AI_HIGH_DEMAND_MESSAGE = "AI is in high demand right now. Please try again later.";
+
 let geminiChatCooldownUntil = 0;
 let geminiChatCooldownWasQuotaExhausted = false;
 
@@ -1990,7 +1992,7 @@ let geminiChatCooldownWasQuotaExhausted = false;
 function parseCleanErrorMessage(err: any): ProviderErrorInfo {
   if (!err) {
     return {
-      message: "An unexpected AI provider error occurred.",
+      message: AI_HIGH_DEMAND_MESSAGE,
       providerMessage: "Unknown provider error",
       rateLimited: false,
       quotaExhausted: false,
@@ -2034,11 +2036,7 @@ function parseCleanErrorMessage(err: any): ProviderErrorInfo {
     : 0;
 
   return {
-    message: quotaExhausted
-      ? "This project's Gemini API quota is exhausted. Check the Google AI Studio rate limits and billing for the project connected to GEMINI_API_KEY, then try again."
-      : rateLimited
-        ? `This Gemini request hit a temporary project/model limit. Please try again in about ${retryAfterSeconds} seconds.`
-        : providerMessage,
+    message: AI_HIGH_DEMAND_MESSAGE,
     providerMessage,
     rateLimited,
     quotaExhausted,
@@ -2173,9 +2171,7 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
       if (cooldownSeconds > 0) {
         res.setHeader("Retry-After", String(cooldownSeconds));
         return res.status(429).json({
-          error: geminiChatCooldownWasQuotaExhausted
-            ? `Gemini requests are paused after a quota error. Please try again in about ${cooldownSeconds} seconds. If the error returns, check this project's Google AI Studio rate limits and billing.`
-            : `Gemini is temporarily rate-limiting requests. Please try again in about ${cooldownSeconds} seconds.`,
+          error: AI_HIGH_DEMAND_MESSAGE,
           rateLimited: true,
           quotaExhausted: geminiChatCooldownWasQuotaExhausted,
           retryAfterSeconds: cooldownSeconds,

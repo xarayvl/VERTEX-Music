@@ -17,9 +17,11 @@ interface ChatViewProps {
 // specific backend operation is currently happening because this endpoint
 // does not stream internal execution stages to the client.
 const THINKING_PHASES = [
-  { text: 'İstek işleniyor...', Icon: BrainCircuit },
-  { text: 'Model yanıt hazırlıyor...', Icon: Sparkles },
+  { text: 'Processing your request...', Icon: BrainCircuit },
+  { text: 'Preparing a response...', Icon: Sparkles },
 ];
+
+const AI_HIGH_DEMAND_MESSAGE = 'AI is in high demand right now. Please try again later.';
 
 const createMessageId = (prefix: 'user' | 'ai' | 'err'): string => {
   const randomId = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -162,19 +164,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
       onUpdateMessages((prev) => [...prev, aiMsg]);
       setQuotaNotice('');
     } catch (err: any) {
-      console.error('Chat error:', err);
+      console.error('AI chat request failed.');
       const isRateLimited = !!err?.rateLimited;
       const retryAfterSeconds = Math.max(0, Math.min(300, Math.ceil(Number(err?.retryAfterSeconds || 0))));
       if (isRateLimited) {
         setRateLimitSeconds(retryAfterSeconds || 15);
-        if (err?.quotaExhausted) setQuotaNotice(err.message);
+        if (err?.quotaExhausted) setQuotaNotice(AI_HIGH_DEMAND_MESSAGE);
       }
       const errorMsg: ChatMessage = {
         id: createMessageId('err'),
         sender: 'ai',
-        text: isRateLimited
-          ? `⏳ ${err.message}`
-          : `⚠️ Sorry, I encountered an issue: ${err.message || 'Unable to reach VERTEX Music AI server'}. Please try asking again!`,
+        text: AI_HIGH_DEMAND_MESSAGE,
         timestamp: new Date().toISOString(),
       };
       onUpdateMessages((prev) => [...prev, errorMsg]);
@@ -249,12 +249,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
       };
       onUpdateMessages((prev) => [...prev, aiMsg]);
       setShowAiGenPanel(false);
-    } catch (err: any) {
-      console.error('AI Music Gen Error:', err);
+    } catch {
+      console.error('AI music generation request failed.');
       const errorMsg: ChatMessage = {
         id: createMessageId('err'),
         sender: 'ai',
-        text: `⚠️ Lyria AI Music Generation Error: ${err.message || 'Could not compose track.'}`,
+        text: AI_HIGH_DEMAND_MESSAGE,
         timestamp: new Date().toISOString(),
       };
       onUpdateMessages((prev) => [...prev, errorMsg]);
