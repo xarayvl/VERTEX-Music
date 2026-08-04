@@ -39,7 +39,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   const [releaseYear, setReleaseYear] = useState<number>(new Date().getFullYear());
   const [genre, setGenre] = useState('');
   const [duration, setDuration] = useState(0);
-  const [audioSourceType, setAudioSourceType] = useState<'upload' | 'url' | 'ai-gen'>('upload');
+  const [audioSourceType, setAudioSourceType] = useState<'upload' | 'url'>('upload');
   const [audioUrl, setAudioUrl] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
 
@@ -51,10 +51,6 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiModel, setAiModel] = useState<'lyria-3-clip-preview' | 'lyria-3-pro-preview'>('lyria-3-clip-preview');
-  const [isGeneratingAiMusic, setIsGeneratingAiMusic] = useState(false);
 
   const [loadedFileName, setLoadedFileName] = useState('');
   const [loadedFileSize, setLoadedFileSize] = useState('');
@@ -93,7 +89,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     };
   }, [audioUrl, audioSourceType]);
 
-  const selectAudioSource = (nextType: 'upload' | 'url' | 'ai-gen') => {
+  const selectAudioSource = (nextType: 'upload' | 'url') => {
     if (nextType === audioSourceType) return;
     setAudioSourceType(nextType);
     setAudioUrl('');
@@ -104,48 +100,6 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   };
 
   if (!isOpen) return null;
-
-  const handleGenerateAiMusic = async () => {
-    if (!aiPrompt.trim()) {
-      setError('Please enter a music description prompt.');
-      return;
-    }
-    setError(null);
-    setIsGeneratingAiMusic(true);
-    try {
-      const token = localStorage.getItem('vertex_session_token');
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-
-      const res = await fetch('/api/generate-music', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          prompt: aiPrompt.trim(),
-          model: aiModel,
-          title: title.trim() || undefined,
-          genre,
-          userId,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to generate AI music');
-      }
-
-      if (!data.audioUrl) throw new Error('The provider returned no playable audio.');
-      setAudioUrl(data.audioUrl);
-      if (!title.trim() && data.suggestedTitle) setTitle(data.suggestedTitle);
-      setDuration(Number(data.duration) || 0);
-      setLoadedFileName(`AI Lyria Track (${aiModel === 'lyria-3-pro-preview' ? 'Full Track' : '30s Clip'})`);
-      setLoadedFileSize('AI Audio WAV');
-    } catch (err: any) {
-      setError(err.message || 'Error generating AI music with Lyria model.');
-    } finally {
-      setIsGeneratingAiMusic(false);
-    }
-  };
 
   const readAudioDuration = (file: File): Promise<number> =>
     new Promise((resolve, reject) => {
@@ -397,11 +351,6 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
     if (audioSourceType === 'url' && !/^https?:\/\//i.test(audioUrl.trim())) {
       setError('Enter a valid http(s) audio URL.');
-      return;
-    }
-
-    if (audioSourceType === 'ai-gen' && !audioUrl) {
-      setError('Generate a real AI audio file before publishing the track.');
       return;
     }
 
@@ -671,11 +620,10 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
                 {!isMultiTrackRelease && (
                   <div>
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                       {([
                         { key: 'upload', label: 'Upload audio', icon: Upload },
                         { key: 'url', label: 'Audio URL', icon: Link },
-                        { key: 'ai-gen', label: 'Lyria AI', icon: Sparkles },
                       ] as const).map(({ key, label, icon: Icon }, index) => {
                         const active = audioSourceType === key;
                         return (
@@ -776,71 +724,6 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                         </div>
                       )}
 
-                      {audioSourceType === 'ai-gen' && (
-                        <div className="rounded-3xl border border-[#A855F7]/25 bg-[#17121d] p-5 sm:p-6">
-                          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#A855F7]/15 text-[#F0ABFC]">
-                                <Sparkles className="h-5 w-5" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-black">Lyria music generator</p>
-                                <p className="mt-0.5 text-[11px] text-zinc-500">Only real provider audio can be published.</p>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/[0.08] bg-black/20 p-1.5">
-                              <button
-                                type="button"
-                                onClick={() => setAiModel('lyria-3-clip-preview')}
-                                className={`control-press rounded-xl px-3 py-2 text-[10px] font-black ${aiModel === 'lyria-3-clip-preview' ? 'bg-[#D946EF] text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`}
-                              >
-                                30s preview
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setAiModel('lyria-3-pro-preview')}
-                                className={`control-press rounded-xl px-3 py-2 text-[10px] font-black ${aiModel === 'lyria-3-pro-preview' ? 'bg-[#D946EF] text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`}
-                              >
-                                Full track
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="mt-5">
-                            <label className={labelClass}>Describe the sound or mood</label>
-                            <textarea
-                              rows={4}
-                              value={aiPrompt}
-                              onChange={(event) => setAiPrompt(event.target.value)}
-                              placeholder="Ambient lofi beat with soft piano, rain textures and subtle synth chords..."
-                              className={`${fieldClass} resize-none`}
-                            />
-                          </div>
-
-                          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div className={`flex items-center gap-2 text-xs font-bold ${audioUrl ? 'text-emerald-300' : 'text-zinc-500'}`}>
-                              {audioUrl ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                              {audioUrl ? `Generated audio ready · ${formatDuration(duration)}` : 'No generated audio yet'}
-                            </div>
-                            <button
-                              type="button"
-                              disabled={isGeneratingAiMusic}
-                              onClick={handleGenerateAiMusic}
-                              className="control-press flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3 text-xs font-black shadow-[0_12px_30px_rgba(168,85,247,0.2)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {isGeneratingAiMusic ? (
-                                <>
-                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Composing...
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles className="h-4 w-4" /> {audioUrl ? 'Regenerate audio' : 'Generate audio'}
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}

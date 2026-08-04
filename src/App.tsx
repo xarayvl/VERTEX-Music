@@ -2103,12 +2103,9 @@ export default function App() {
 
             {activeTab === 'chat' && (
               <ChatView
-                playlists={playlists}
                 messages={chatMessages}
                 onUpdateMessages={setChatMessages}
                 onPlayTrack={handlePlayTrack}
-                onSelectPlaylist={handleSelectPlaylist}
-                onTrackAdded={(newTrack) => setTracks((prev) => [newTrack, ...prev.filter((t) => t.id !== newTrack.id)])}
                 userId={userProfile?.id}
               />
             )}

@@ -250,37 +250,6 @@ function collectReferencedMediaUrls(db: { users: UserRecord[]; tracks: TrackReco
 }
 
 
-function getWavDurationSeconds(base64Data: string): number {
-  try {
-    const buffer = Buffer.from(base64Data.replace(/[\r\n\s]/g, ""), "base64");
-    if (buffer.length < 44 || buffer.toString("ascii", 0, 4) !== "RIFF" || buffer.toString("ascii", 8, 12) !== "WAVE") {
-      return 0;
-    }
-
-    let offset = 12;
-    let byteRate = 0;
-    let dataSize = 0;
-    while (offset + 8 <= buffer.length) {
-      const chunkId = buffer.toString("ascii", offset, offset + 4);
-      const chunkSize = buffer.readUInt32LE(offset + 4);
-      const chunkDataOffset = offset + 8;
-      if (chunkDataOffset + chunkSize > buffer.length) break;
-      if (chunkId === "fmt " && chunkSize >= 12) {
-        byteRate = buffer.readUInt32LE(chunkDataOffset + 8);
-      } else if (chunkId === "data") {
-        dataSize = chunkSize;
-      }
-      if (byteRate > 0 && dataSize > 0) break;
-      offset = chunkDataOffset + chunkSize + (chunkSize % 2);
-    }
-
-    const duration = byteRate > 0 && dataSize > 0 ? dataSize / byteRate : 0;
-    return Number.isFinite(duration) && duration > 0 ? Math.max(1, Math.round(duration)) : 0;
-  } catch {
-    return 0;
-  }
-}
-
 async function saveUploadedFile(base64Data: string, mimeType: string, folderUserId: string, filePrefix: string): Promise<string> {
   const safeUserId = sanitizeUserId(folderUserId);
   const fileId = crypto.randomUUID();
@@ -2076,77 +2045,6 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
   return selected.map((item) => ({ role: item.role, parts: [{ text: item.text }] }));
 }
 
-  // AI Music Generation Endpoint using only real audio returned by Google Lyria.
-  app.post("/api/generate-music", async (req, res) => {
-    try {
-      const { prompt, model = "lyria-3-clip-preview", title, genre, userId } = req.body;
-      if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
-        return res.status(400).json({ error: "Music prompt is required." });
-      }
-      if (prompt.trim().length > 4_000) return res.status(400).json({ error: "Music prompt cannot exceed 4000 characters." });
-      if (typeof userId !== "string" || !userId.trim()) {
-        return res.status(400).json({ error: "A valid artist account ID is required." });
-      }
-      const sessionUserId = getUserIdFromToken(req);
-      if (!sessionUserId) {
-        return res.status(401).json({ error: "A valid signed-in artist session is required to generate and save music." });
-      }
-      if (sessionUserId !== userId) {
-        return res.status(403).json({ error: "Forbidden: Music can only be generated for the active account." });
-      }
-
-      const db = await readDBAsync();
-      const uploader = db.users.find((user) => user.id === userId);
-      if (!uploader) return res.status(404).json({ error: "The signed-in artist profile could not be found." });
-
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY is missing. Please configure your API key in Secrets." });
-
-      const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
-      const selectedModel = model === "lyria-3-pro-preview" ? "lyria-3-pro-preview" : "lyria-3-clip-preview";
-      const responseStream = await ai.models.generateContentStream({ model: selectedModel, contents: prompt.trim() });
-
-      let audioBase64 = "";
-      let mimeType = "audio/wav";
-      let lyrics = "";
-      for await (const chunk of responseStream) {
-        const parts = chunk.candidates?.[0]?.content?.parts || [];
-        for (const part of parts) {
-          if (part.inlineData?.data) {
-            if (!audioBase64 && part.inlineData.mimeType) mimeType = part.inlineData.mimeType;
-            audioBase64 += part.inlineData.data;
-          }
-          if (part.text) lyrics += part.text;
-        }
-      }
-      if (!audioBase64) {
-        return res.status(404).json({ error: "The music provider returned no playable audio. No track was created." });
-      }
-
-      const generatedDuration = getWavDurationSeconds(audioBase64);
-      if (generatedDuration <= 0) {
-        return res.status(404).json({ error: "The music provider returned audio without valid duration metadata. No track was created." });
-      }
-      const audioUrl = await saveUploadedFile(audioBase64, mimeType, uploader.id, "ai_audio");
-      const cleanPrompt = prompt.trim();
-      const trackTitle = typeof title === "string" && title.trim()
-        ? title.trim()
-        : cleanPrompt.length > 60 ? `${cleanPrompt.slice(0, 57).trim()}...` : cleanPrompt;
-      return res.json({
-        success: true,
-        audioUrl,
-        duration: generatedDuration,
-        suggestedTitle: trackTitle,
-        lyrics: lyrics.trim(),
-      });
-    } catch (error: any) {
-      console.error("Lyria AI Music Generation Error:", error);
-      const { message, rateLimited, quotaExhausted, retryAfterSeconds } = parseCleanErrorMessage(error);
-      if (rateLimited) res.setHeader("Retry-After", String(retryAfterSeconds));
-      return res.status(rateLimited ? 429 : 502).json({ error: message, rateLimited, quotaExhausted, retryAfterSeconds });
-    }
-  });
-
   // Gemini AI Chat Endpoint
   app.post("/api/chat", async (req, res) => {
     const requestDiagnostics = {
@@ -2195,10 +2093,6 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
         },
       });
 
-      const isGenRequest = /(generate|create|make|compose|produce)\s+(a\s+)?(music|song|track|beat|melody|lofi|synthwave|ambient)/i.test(cleanMessage);
-      let generatedTrack: TrackRecord | undefined;
-      let requestOwner: UserRecord | undefined;
-
       if (userId) {
         if (typeof userId !== "string") {
           return res.status(400).json({ error: "userId must be a string." });
@@ -2211,62 +2105,7 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
           return res.status(403).json({ error: "Forbidden: You can only use your own account context." });
         }
         const ownerDB = await readDBAsync();
-        requestOwner = ownerDB.users.find((user) => user.id === userId);
-        if (!requestOwner) return res.status(404).json({ error: "User not found." });
-      }
-
-      if (isGenRequest) {
-        if (!requestOwner) {
-          return res.status(401).json({ error: "A valid signed-in artist session is required to generate and save music." });
-        }
-
-        const responseStream = await ai.models.generateContentStream({ model: "lyria-3-clip-preview", contents: cleanMessage });
-        let audioBase64 = "";
-        let mimeType = "audio/wav";
-        for await (const chunk of responseStream) {
-          const parts = chunk.candidates?.[0]?.content?.parts || [];
-          for (const part of parts) {
-            if (part.inlineData?.data) {
-              if (!audioBase64 && part.inlineData.mimeType) mimeType = part.inlineData.mimeType;
-              audioBase64 += part.inlineData.data;
-            }
-          }
-        }
-        if (!audioBase64) {
-          return res.status(404).json({ error: "The music provider returned no playable audio. No track was created." });
-        }
-
-        const db = await readDBAsync();
-        const currentOwner = db.users.find((user) => user.id === requestOwner!.id);
-        if (!currentOwner) return res.status(404).json({ error: "The signed-in artist profile could not be found." });
-        const generatedDuration = getWavDurationSeconds(audioBase64);
-        if (generatedDuration <= 0) {
-          return res.status(404).json({ error: "The music provider returned audio without valid duration metadata. No track was created." });
-        }
-        const audioUrl = await saveUploadedFile(audioBase64, mimeType, currentOwner.id, "ai_audio");
-        const title = cleanMessage.length > 60 ? `${cleanMessage.slice(0, 57).trim()}...` : cleanMessage;
-        generatedTrack = {
-          id: createEntityId("trk"),
-          userId: currentOwner.id,
-          title,
-          artist: (currentOwner.artistName || currentOwner.displayName || currentOwner.username).trim(),
-          album: title,
-          releaseType: "SINGLE",
-          releaseTitle: title,
-          releaseId: createEntityId("rel"),
-          copyright: normalizeCopyright(undefined, `${new Date().getFullYear()} ${(currentOwner.artistName || currentOwner.displayName || currentOwner.username).trim()}`),
-          releaseYear: new Date().getFullYear(),
-          genre: "",
-          duration: generatedDuration,
-          audioUrl,
-          coverUrl: currentOwner.avatarUrl || DEFAULT_AVATAR_URL,
-          plays: "0",
-          createdAt: new Date().toISOString(),
-        };
-        db.tracks.unshift(generatedTrack);
-        const ownerIndex = db.users.findIndex((user) => user.id === currentOwner.id);
-        db.users[ownerIndex] = { ...db.users[ownerIndex], isArtist: true };
-        await writeDBAsync(db);
+        if (!ownerDB.users.some((user) => user.id === userId)) return res.status(404).json({ error: "User not found." });
       }
 
       const formattedHistory = formatGeminiHistory(history);
@@ -2282,7 +2121,7 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
         systemInstruction:
           "You are VERTEX Music AI, an expert, energetic VERTEX Music AI DJ, Producer, and Music Assistant. " +
           "You give music recommendations, curate playlist ideas, explain musical genres and instruments, " +
-          "and assist with generating AI music using Lyria models (`lyria-3-clip-preview` or `lyria-3-pro-preview`). " +
+          "and provide text-based music guidance. Never claim to create or attach playable audio files. " +
           "Keep responses friendly, engaging, and cleanly formatted with markdown bullet points or bold text. " +
           "When mentioning song titles or artists, bold them clearly. " +
           "When a live Google Search tool is available, use it for current events, recent releases, chart rankings, " +
@@ -2325,10 +2164,6 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
 
       const webSearchUsed = webSearchQueries.length > 0 || sources.length > 0;
 
-      if (generatedTrack) {
-        replyText += `\n\n✨ **I've composed a custom AI track for you:** **${generatedTrack.title}**! You can play it directly below or save it to your library.`;
-      }
-
       if (userId) {
         try {
           const db = await readDBAsync();
@@ -2346,7 +2181,6 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
             sender: "ai" as const,
             text: replyText,
             timestamp: new Date().toISOString(),
-            matchedTracks: generatedTrack ? [generatedTrack] : undefined,
             webSearchUsed,
             searchQueries: webSearchQueries,
             sources,
@@ -2359,7 +2193,7 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
         }
       }
 
-      return res.json({ reply: replyText, generatedTrack, webSearchUsed, searchQueries: webSearchQueries, sources });
+      return res.json({ reply: replyText, webSearchUsed, searchQueries: webSearchQueries, sources });
     } catch (error: any) {
       const { message: cleanMsg, providerMessage, rateLimited, quotaExhausted, retryAfterSeconds } = parseCleanErrorMessage(error);
       console.error("Gemini API Chat Error:", {
