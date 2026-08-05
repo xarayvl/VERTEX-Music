@@ -14,6 +14,39 @@ export interface ReleaseGroup {
 }
 
 /**
+ * Returns a stable track order for playback and release screens. Numbered
+ * tracks always follow their explicit trackNumber; legacy tracks fall back to
+ * creation time without being mixed ahead of numbered songs.
+ */
+export function sortTracksInPlaybackOrder(tracks: Track[]): Track[] {
+  return [...tracks].sort((a, b) => {
+    const aNumber = Number.isFinite(a.trackNumber) ? Number(a.trackNumber) : Infinity;
+    const bNumber = Number.isFinite(b.trackNumber) ? Number(b.trackNumber) : Infinity;
+    if (aNumber !== bNumber) return aNumber - bNumber;
+
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return aTime - bTime;
+  });
+}
+
+/** Resolve every song belonging to one release without mixing identically
+ * named albums owned by different artists. */
+export function getReleaseTracksInPlaybackOrder(seedTrack: Track, allTracks: Track[]): Track[] {
+  const releaseTracks = allTracks.filter((candidate) => {
+    if (seedTrack.releaseId) return candidate.releaseId === seedTrack.releaseId;
+    if (!seedTrack.album || seedTrack.album === 'Single') return candidate.id === seedTrack.id;
+
+    const sameOwner = seedTrack.userId
+      ? candidate.userId === seedTrack.userId
+      : candidate.artist === seedTrack.artist;
+    return sameOwner && candidate.album === seedTrack.album;
+  });
+
+  return sortTracksInPlaybackOrder(releaseTracks);
+}
+
+/**
  * The API persists release types as SINGLE/EP/ALBUM, while some older client
  * records used Single/Ep/Album. Keep that storage detail out of the views by
  * normalizing every variant in one place.
@@ -58,9 +91,7 @@ export function groupTracksByRelease(tracks: Track[]): ReleaseGroup[] {
   }
 
   return order.map((key) => {
-    const groupTracks = [...groups.get(key)!].sort(
-      (a, b) => (a.trackNumber || 0) - (b.trackNumber || 0)
-    );
+    const groupTracks = sortTracksInPlaybackOrder(groups.get(key)!);
     const representative = groupTracks[0];
     const isMultiTrack = groupTracks.length > 1;
     const releaseType = normalizeReleaseType(representative, isMultiTrack);

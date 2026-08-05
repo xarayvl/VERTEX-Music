@@ -26,9 +26,8 @@ interface PlaylistViewProps {
   currentTrackId?: string;
   isPlaying: boolean;
   isShuffle: boolean;
-  onPlayTrack: (track: Track) => void;
+  onPlayTrack: (track: Track, playbackContext?: Track[]) => void;
   onPlayPlaylist: (playlist: Playlist) => void;
-  onTogglePlay: () => void;
   onShufflePlaylist: (tracks: Track[]) => void;
   onToggleLike: (trackId: string) => void;
   onOpenEditModal: () => void;
@@ -70,7 +69,6 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
   isShuffle,
   onPlayTrack,
   onPlayPlaylist,
-  onTogglePlay,
   onShufflePlaylist,
   onToggleLike,
   onOpenEditModal,
@@ -129,10 +127,11 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
   const isCurrentPlaylistActive = playlistTracks.some((track) => track.id === currentTrackId);
   const isCurrentPlaylistPlaying = isCurrentPlaylistActive && isPlaying;
   const isCurrentPlaylistShuffled = isShuffle && isCurrentPlaylistActive;
+  const activePlaylistTrack = playlistTracks.find((track) => track.id === currentTrackId);
   const formatDuration = (seconds: number) => `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 
   const handlePlayButton = () => {
-    if (isCurrentPlaylistActive) onTogglePlay();
+    if (activePlaylistTrack) onPlayTrack(activePlaylistTrack, playlistTracks);
     else onPlayPlaylist(playlist);
   };
 
@@ -223,8 +222,8 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
               const isSelected = track.id === currentTrackId;
               const pending = pendingTrackIds.has(track.id);
               return (
-                <div key={track.id} data-track-id={track.id} data-context-type="track" onClick={() => onPlayTrack(track)} className={`group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 transition-colors sm:px-5 ${isSelected ? 'bg-[#D946EF]/10' : 'hover:bg-white/[0.055]'}`}>
-                  <button type="button" onClick={(event) => { event.stopPropagation(); if (isSelected) onTogglePlay(); else onPlayTrack(track); }} className={`control-press flex h-9 w-9 items-center justify-center rounded-xl text-xs font-black ${isSelected ? 'bg-[#D946EF]/15 text-[#F0ABFC]' : 'bg-black/20 text-zinc-500 group-hover:text-white'}`} aria-label={isSelected && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}>
+                <div key={track.id} data-track-id={track.id} data-context-type="track" onClick={() => onPlayTrack(track, playlistTracks)} className={`group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 transition-colors sm:px-5 ${isSelected ? 'bg-[#D946EF]/10' : 'hover:bg-white/[0.055]'}`}>
+                  <button type="button" onClick={(event) => { event.stopPropagation(); onPlayTrack(track, playlistTracks); }} className={`control-press flex h-9 w-9 items-center justify-center rounded-xl text-xs font-black ${isSelected ? 'bg-[#D946EF]/15 text-[#F0ABFC]' : 'bg-black/20 text-zinc-500 group-hover:text-white'}`} aria-label={isSelected && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}>
                     {isSelected && isPlaying ? <Pause className="h-3.5 w-3.5 fill-current" /> : <span className="group-hover:hidden">{index + 1}</span>}
                     {!(isSelected && isPlaying) && <Play className="hidden h-3.5 w-3.5 fill-current group-hover:block" />}
                   </button>

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Play, Pause, Heart, Clock, MoreHorizontal, ListPlus, FolderPlus, Copy, ChevronRight, Plus, Music2, User, Edit3 } from 'lucide-react';
 import { Track, Artist, UserProfile, Playlist } from '../../types';
+import { getReleaseTracksInPlaybackOrder } from '../../utils/artistUtils';
 
 interface AlbumViewProps {
   albumTrack: Track;
@@ -46,24 +47,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   showToast,
 }) => {
   // Find all tracks from the same release or album
-  const albumTracks = allTracks
-    .filter((t) => {
-      if (albumTrack.releaseId) return t.releaseId === albumTrack.releaseId;
-      if (albumTrack.album === 'Single') return t.id === albumTrack.id;
-      return t.album === albumTrack.album;
-    })
-    // Respect the tracklist order chosen at upload time (trackNumber).
-    // Tracks without a trackNumber (legacy uploads) fall back to
-    // chronological order and are placed after numbered tracks.
-    .slice()
-    .sort((a, b) => {
-      const aNum = a.trackNumber ?? Infinity;
-      const bNum = b.trackNumber ?? Infinity;
-      if (aNum !== bNum) return aNum - bNum;
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return aTime - bTime;
-    });
+  const albumTracks = getReleaseTracksInPlaybackOrder(albumTrack, allTracks);
 
   // “More by” is a release shelf, not a track list. Collapse every album or
   // single to one representative track so a multi-track album is shown once.

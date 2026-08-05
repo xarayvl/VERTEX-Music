@@ -31,6 +31,7 @@ import { ContextMenu, ContextMenuTarget } from './components/ContextMenu';
 import { Toast } from './components/Toast';
 import { NowPlayingSidebar } from './components/Player/NowPlayingSidebar';
 import { DEFAULT_AVATAR_URL } from './utils/profilePlaceholders';
+import { getReleaseTracksInPlaybackOrder } from './utils/artistUtils';
 
 const normalizePublicArtist = (raw: any): Artist => ({
   id: String(raw?.id || ''),
@@ -971,6 +972,10 @@ export default function App() {
       // playback. Without this, automatic advance falls back to a stale queue
       // or the global catalogue and can appear to move backwards in an album.
       setQueue(playbackContext);
+    } else if (queue.length > 0 && !queue.some((queuedTrack) => queuedTrack.id === track.id)) {
+      // A track opened from another screen must not inherit an unrelated,
+      // stale queue left behind by an earlier album or playlist.
+      setQueue([]);
     }
     if (currentTrack?.id === track.id) {
       setIsPlaying(!isPlaying);
@@ -990,11 +995,26 @@ export default function App() {
     setIsShuffle((enabled) => !enabled);
   };
 
+  const resolveActivePlaybackContext = () => {
+    if (!currentTrack) {
+      const activeList = queue.length > 0 ? queue : tracks;
+      return { activeList, currentIndex: -1 };
+    }
+
+    const queueIndex = queue.findIndex((track) => track.id === currentTrack.id);
+    if (queueIndex >= 0) return { activeList: queue, currentIndex: queueIndex };
+
+    return {
+      activeList: tracks,
+      currentIndex: tracks.findIndex((track) => track.id === currentTrack.id),
+    };
+  };
+
   const handleNextTrack = () => {
-    const activeList = queue.length > 0 ? queue : tracks;
+    const { activeList, currentIndex } = resolveActivePlaybackContext();
     if (activeList.length === 0) return;
 
-    let nextIdx = currentTrack ? activeList.findIndex((t) => t.id === currentTrack.id) + 1 : 0;
+    let nextIdx = currentIndex >= 0 ? currentIndex + 1 : 0;
     if (isShuffle) {
       nextIdx = Math.floor(Math.random() * activeList.length);
     }
@@ -1032,10 +1052,21 @@ export default function App() {
   };
 
   const handlePrevTrack = () => {
-    const activeList = queue.length > 0 ? queue : tracks;
+    const { activeList, currentIndex } = resolveActivePlaybackContext();
     if (activeList.length === 0) return;
-    let prevIdx = currentTrack ? activeList.findIndex((t) => t.id === currentTrack.id) - 1 : 0;
-    if (prevIdx < 0) prevIdx = activeList.length - 1;
+    let prevIdx = currentIndex >= 0 ? currentIndex - 1 : 0;
+    if (prevIdx < 0) {
+      if (repeatMode === 'all') {
+        prevIdx = activeList.length - 1;
+      } else {
+        // At the beginning of a non-looping context, Previous restarts/stays
+        // on the first song instead of wrapping forward to the final song.
+        if (currentTrack) audioEngine.playTrack(currentTrack, 0);
+        setCurrentTimeSeconds(0);
+        setIsPlaying(Boolean(currentTrack));
+        return;
+      }
+    }
     if (activeList[prevIdx]) {
       setCurrentTrack(activeList[prevIdx]);
       setCurrentTimeSeconds(0);
@@ -1260,8 +1291,7 @@ export default function App() {
       .map((trackId) => tracks.find((track) => track.id === trackId))
       .filter((track): track is Track => Boolean(track));
     if (playlistTracks.length > 0) {
-      setQueue(playlistTracks);
-      handlePlayTrack(playlistTracks[0]);
+      handlePlayTrack(playlistTracks[0], playlistTracks);
     }
   };
 
@@ -1277,9 +1307,8 @@ export default function App() {
       const swapIndex = Math.floor(Math.random() * (index + 1));
       [shuffledTracks[index], shuffledTracks[swapIndex]] = [shuffledTracks[swapIndex], shuffledTracks[index]];
     }
-    setQueue(shuffledTracks);
     setIsShuffle(true);
-    handlePlayTrack(shuffledTracks[0]);
+    handlePlayTrack(shuffledTracks[0], shuffledTracks);
   };
 
   const handleSelectPlaylist = (playlist: Playlist) => {
@@ -1569,6 +1598,12 @@ export default function App() {
 
   const handleSelectAlbum = (track: Track) => {
     setSelectedAlbumTrack(track);
+    const releaseTracks = getReleaseTracksInPlaybackOrder(track, tracks);
+    if (currentTrack && releaseTracks.some((releaseTrack) => releaseTrack.id === currentTrack.id)) {
+      // Opening the release for the song that is already playing should make
+      // both players immediately follow that visible album order.
+      setQueue(releaseTracks);
+    }
     handleSelectTab('album');
   };
 
@@ -2106,7 +2141,6 @@ export default function App() {
                 isShuffle={isShuffle}
                 onPlayTrack={handlePlayTrack}
                 onPlayPlaylist={handlePlayPlaylist}
-                onTogglePlay={handleTogglePlay}
                 onShufflePlaylist={handleShufflePlaylist}
                 onToggleLike={handleToggleLike}
                 onOpenEditModal={() => setIsEditPlaylistOpen(true)}
