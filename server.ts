@@ -8,6 +8,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } fro
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
+import { getPublicOrigin, injectTrackSocialMeta } from "./server/socialMeta.js";
 
 dotenv.config();
 
@@ -2269,16 +2270,45 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
     }
   });
 
-  // Serve Vite in dev or static files in prod
+  const sendTrackPage = (loadIndexHtml: (requestUrl: string) => Promise<string>) =>
+    async (req: express.Request, res: express.Response) => {
+      try {
+        const db = await readDBAsync();
+        const track = db.tracks.find((item) => item.id === req.params.trackId);
+        if (!track) {
+          return res.status(404).type("html").send("<!doctype html><title>Track not found | VERTEX Music</title><h1>404 — Track not found</h1>");
+        }
+
+        const indexHtml = await loadIndexHtml(req.originalUrl);
+        const socialHtml = injectTrackSocialMeta(indexHtml, track, getPublicOrigin(req));
+        res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+        return res.status(200).type("html").send(socialHtml);
+      } catch (error) {
+        console.error("Track Share Page Error:", error);
+        return res.status(500).type("html").send("<!doctype html><title>VERTEX Music</title><h1>Could not load this track.</h1>");
+      }
+    };
+
+  // A shared /track/:id URL needs server-rendered Open Graph metadata because
+  // Instagram, Discord and similar crawlers do not execute the React app.
+  // Browsers receive the same Vite document plus those tags, so the existing
+  // client-side deep-link behavior remains unchanged.
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
+    app.get("/track/:trackId", sendTrackPage(async (requestUrl) => {
+      const template = await fs.promises.readFile(path.join(process.cwd(), "index.html"), "utf8");
+      return vite.transformIndexHtml(requestUrl, template);
+    }));
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
+    app.get("/track/:trackId", sendTrackPage(async () =>
+      fs.promises.readFile(path.join(distPath, "index.html"), "utf8")
+    ));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
