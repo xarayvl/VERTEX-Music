@@ -410,6 +410,14 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
 
 let cachedDB: DBData | null = null;
 let writeChain: Promise<void> = Promise.resolve();
+let cachedDBFetchedAt = 0;
+let lastPersistedJson = '';
+let lastCanonicalBackupAt = 0;
+
+function getRemoteCacheTtlMs(): number {
+  const configured = Number(process.env.UPSTASH_DB_CACHE_TTL_MS);
+  return Number.isFinite(configured) && configured >= 1_000 ? configured : 5_000;
+}
 
 let redisClient: Redis | null = null;
 
@@ -444,74 +452,83 @@ export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<vo
       .filter((u) => u.isArtist || data.tracks.some((track) => track.userId === u.id))
       .map((u) => u.id);
 
-    // Keep the immediately previous canonical dataset before replacing it.
-    // This makes an accidental sanitizer/migration regression recoverable
-    // instead of permanently stranding still-valid R2 audio objects without
-    // their track metadata.
+    // Compare against the previous canonical snapshot so routine mutations do
+    // not rewrite every entity and every index. This is especially important
+    // for listening-time updates, which only change one user record.
     const previousCanonical = await redis.get<DBData>(UPSTASH_DB_KEY);
+    const previous = previousCanonical && typeof previousCanonical === 'object'
+      ? sanitizeDBData(previousCanonical)
+      : null;
+    const nextCanonicalJson = JSON.stringify(data);
+    if (previous && JSON.stringify(previous) === nextCanonicalJson) return;
+
+    const previousUserIds = (previous?.users || []).map((item) => item.id);
+    const previousTrackIds = (previous?.tracks || []).map((item) => item.id);
+    const previousPlaylistIds = (previous?.playlists || []).map((item) => item.id);
+    const previousArtistIds = (previous?.users || [])
+      .filter((user) => user.isArtist || previous?.tracks.some((track) => track.userId === user.id))
+      .map((user) => user.id);
+    const indexPromises: Promise<any>[] = [redis.set(UPSTASH_DB_KEY, data)];
+    const changed = (before: string[], after: string[]) => JSON.stringify(before) !== JSON.stringify(after);
+    const structureChanged = !previous
+      || changed(previousUserIds, userIds)
+      || changed(previousTrackIds, trackIds)
+      || changed(previousPlaylistIds, playlistIds);
+    // Keep recovery snapshots, but do not rewrite a full duplicate database
+    // for every play counter, chat message, or listening-time tick.
     if (
       previousCanonical &&
       typeof previousCanonical === 'object' &&
-      JSON.stringify(previousCanonical) !== JSON.stringify(data)
+      (structureChanged || Date.now() - lastCanonicalBackupAt >= 15 * 60_000)
     ) {
       await redis.set(UPSTASH_DB_BACKUP_KEY, previousCanonical);
+      lastCanonicalBackupAt = Date.now();
     }
+    if (!previous || changed(previousUserIds, userIds)) indexPromises.push(redis.set('app:users:ids', userIds));
+    if (!previous || changed(previousTrackIds, trackIds)) {
+      indexPromises.push(redis.set('app:songs:ids', trackIds), redis.set('app:tracks:ids', trackIds));
+    }
+    if (!previous || changed(previousPlaylistIds, playlistIds)) indexPromises.push(redis.set('app:playlists:ids', playlistIds));
+    if (!previous || changed(previousArtistIds, allArtistIds)) indexPromises.push(redis.set('app:artists:ids', allArtistIds));
+    await Promise.all(indexPromises);
 
-    // Store sets & ID lists in Upstash Redis
-    await Promise.all([
-      redis.set(UPSTASH_DB_KEY, data),
-      redis.set('app:users:ids', userIds),
-      redis.set('app:songs:ids', trackIds),
-      redis.set('app:tracks:ids', trackIds),
-      redis.set('app:playlists:ids', playlistIds),
-      redis.set('app:artists:ids', allArtistIds),
-    ]);
-
-    // Store individual entity keys in Upstash Redis
+    // Store only new or changed entity keys in Upstash Redis.
     const entityPromises: Promise<any>[] = [];
+    const previousUsers = new Map((previous?.users || []).map((item) => [item.id, JSON.stringify(item)]));
+    const previousTracks = new Map((previous?.tracks || []).map((item) => [item.id, JSON.stringify(item)]));
+    const previousPlaylists = new Map((previous?.playlists || []).map((item) => [item.id, JSON.stringify(item)]));
 
     for (const u of data.users || []) {
-      if (u.id) {
+      if (u.id && previousUsers.get(u.id) !== JSON.stringify(u)) {
         entityPromises.push(redis.set(`app:user:${u.id}`, u));
       }
     }
 
     for (const t of data.tracks || []) {
-      if (t.id) {
+      if (t.id && previousTracks.get(t.id) !== JSON.stringify(t)) {
         entityPromises.push(redis.set(`app:song:${t.id}`, t));
         entityPromises.push(redis.set(`app:track:${t.id}`, t));
       }
     }
 
     for (const p of data.playlists || []) {
-      if (p.id) {
+      if (p.id && previousPlaylists.get(p.id) !== JSON.stringify(p)) {
         entityPromises.push(redis.set(`app:playlist:${p.id}`, p));
       }
     }
 
     await Promise.all(entityPromises);
 
-    // Remove entity keys that are no longer present in the canonical database.
-    // Without this cleanup, deleted or rejected legacy records could remain
-    // addressable through stale Redis keys even though the main DB no longer
-    // contains them.
-    const expectedEntityKeys = new Set<string>();
-    for (const userId of userIds) expectedEntityKeys.add(`app:user:${userId}`);
-    for (const trackId of trackIds) {
-      expectedEntityKeys.add(`app:song:${trackId}`);
-      expectedEntityKeys.add(`app:track:${trackId}`);
-    }
-    for (const playlistId of playlistIds) expectedEntityKeys.add(`app:playlist:${playlistId}`);
-
-    const existingEntityKeys = (
-      await Promise.all([
-        redis.keys('app:user:*'),
-        redis.keys('app:song:*'),
-        redis.keys('app:track:*'),
-        redis.keys('app:playlist:*'),
-      ])
-    ).flat();
-    const staleEntityKeys = existingEntityKeys.filter((key) => !expectedEntityKeys.has(key));
+    // Derive stale keys from the previous canonical snapshot. Four wildcard
+    // KEYS scans on every write were both costly and unnecessary.
+    const nextUserIdSet = new Set(userIds);
+    const nextTrackIdSet = new Set(trackIds);
+    const nextPlaylistIdSet = new Set(playlistIds);
+    const staleEntityKeys = [
+      ...previousUserIds.filter((id) => !nextUserIdSet.has(id)).map((id) => `app:user:${id}`),
+      ...previousTrackIds.filter((id) => !nextTrackIdSet.has(id)).flatMap((id) => [`app:song:${id}`, `app:track:${id}`]),
+      ...previousPlaylistIds.filter((id) => !nextPlaylistIdSet.has(id)).map((id) => `app:playlist:${id}`),
+    ];
     if (staleEntityKeys.length > 0) {
       await redis.del(...staleEntityKeys);
     }
@@ -532,6 +549,8 @@ export async function initUpstashDB(): Promise<DBData> {
       if (remoteData && typeof remoteData === 'object') {
         const validated = sanitizeDBData(remoteData);
         cachedDB = validated;
+        cachedDBFetchedAt = Date.now();
+        lastPersistedJson = JSON.stringify(validated);
         // Also mirror to local disk as secondary fallback
         saveToLocalDisk(validated);
         await syncUpstashIndices(redis, validated);
@@ -541,6 +560,8 @@ export async function initUpstashDB(): Promise<DBData> {
         console.log('ℹ️ Upstash Redis key empty. Initializing from the canonical local database...');
         const localData = readFromLocalDisk();
         cachedDB = localData;
+        cachedDBFetchedAt = Date.now();
+        lastPersistedJson = JSON.stringify(localData);
         await syncUpstashIndices(redis, localData);
         return localData;
       }
@@ -551,6 +572,8 @@ export async function initUpstashDB(): Promise<DBData> {
 
   const diskData = readFromLocalDisk();
   cachedDB = diskData;
+  cachedDBFetchedAt = Date.now();
+  lastPersistedJson = JSON.stringify(diskData);
   return diskData;
 }
 
@@ -614,15 +637,17 @@ export function readDB(): DBData {
   return data;
 }
 
-export async function readDBAsync(): Promise<DBData> {
+export async function readDBAsync(forceRemote = false): Promise<DBData> {
   await writeChain.catch(() => undefined);
   const redis = getUpstashClient();
-  if (redis) {
+  if (redis && (forceRemote || !cachedDB || Date.now() - cachedDBFetchedAt >= getRemoteCacheTtlMs())) {
     try {
       const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
       if (remoteData && typeof remoteData === 'object') {
         const validated = sanitizeDBData(remoteData);
         cachedDB = validated;
+        cachedDBFetchedAt = Date.now();
+        lastPersistedJson = JSON.stringify(validated);
         saveToLocalDisk(validated);
         return validated;
       }
@@ -635,13 +660,17 @@ export async function readDBAsync(): Promise<DBData> {
 
 function enqueueDatabaseWrite(input: DBData): Promise<void> {
   const data = sanitizeDBData(input);
+  const serialized = JSON.stringify(data);
+  if (serialized === lastPersistedJson) return writeChain;
   cachedDB = data;
+  cachedDBFetchedAt = Date.now();
   writeChain = writeChain
     .catch(() => undefined)
     .then(async () => {
       saveToLocalDisk(data);
       const redis = getUpstashClient();
       if (redis) await syncUpstashIndices(redis, data);
+      lastPersistedJson = serialized;
     })
     .catch((error) => {
       console.error('Failed to persist database write:', error);

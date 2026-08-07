@@ -85,6 +85,10 @@ export default function App() {
   // that was created or edited while that request was still in flight.
   const playlistMutationVersionRef = useRef(0);
   const activePlaylistMutationsRef = useRef(0);
+  const backgroundDataRequestInFlightRef = useRef(false);
+  const lastBackgroundRefreshAtRef = useRef(0);
+  const chatHydratedUserIdRef = useRef<string | null>(null);
+  const lastSavedChatHistoryRef = useRef('');
 
   // Followed Artists State (User-Scoped)
   const [followedArtistIds, setFollowedArtistIds] = useState<string[]>([]);
@@ -531,16 +535,25 @@ export default function App() {
   // background polls only need to keep the shared tracks/playlists lists (i.e. other users'
   // uploads) up to date.
   const fetchServerData = React.useCallback(async (includeChatAndUser: boolean = true) => {
+    if (!includeChatAndUser && backgroundDataRequestInFlightRef.current) return;
+    if (!includeChatAndUser) backgroundDataRequestInFlightRef.current = true;
     const playlistVersionAtRequestStart = playlistMutationVersionRef.current;
     try {
       const token = localStorage.getItem('vertex_session_token');
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`/api/data`, { headers });
+      const res = await fetch(includeChatAndUser ? '/api/data' : '/api/data?scope=shared', { headers });
       if (res.ok) {
         const data = await res.json();
         const serverTracks: Track[] = Array.isArray(data.tracks) ? data.tracks : [];
-        const likedIds: string[] = Array.isArray(data.likedTrackIds) ? data.likedTrackIds : [];
-        setTracks(serverTracks.map((track) => ({ ...track, isLiked: likedIds.includes(track.id) })));
+        if (includeChatAndUser) {
+          const likedIds: string[] = Array.isArray(data.likedTrackIds) ? data.likedTrackIds : [];
+          setTracks(serverTracks.map((track) => ({ ...track, isLiked: likedIds.includes(track.id) })));
+        } else {
+          setTracks((previous) => {
+            const likedById = new Map(previous.map((track) => [track.id, track.isLiked]));
+            return serverTracks.map((track) => ({ ...track, isLiked: likedById.get(track.id) || false }));
+          });
+        }
         if (
           activePlaylistMutationsRef.current === 0 &&
           playlistMutationVersionRef.current === playlistVersionAtRequestStart
@@ -548,13 +561,16 @@ export default function App() {
           setPlaylists(Array.isArray(data.playlists) ? data.playlists : []);
         }
         setArtists(Array.isArray(data.artists) ? data.artists.map(normalizePublicArtist).filter((artist: Artist) => artist.id && artist.name) : []);
-        setFollowedArtistIds(Array.isArray(data.followedArtistIds) ? data.followedArtistIds : []);
-        const recentIds: string[] = Array.isArray(data.recentTrackIds) ? data.recentTrackIds : [];
-        const trackById = new Map(serverTracks.map((track) => [track.id, track]));
-        setRecentlyPlayed(recentIds.map((id) => trackById.get(id)).filter((track): track is Track => Boolean(track)));
-
         if (includeChatAndUser) {
-          setChatMessages(Array.isArray(data.chatHistory) ? data.chatHistory : []);
+          const recentIds: string[] = Array.isArray(data.recentTrackIds) ? data.recentTrackIds : [];
+          const trackById = new Map(serverTracks.map((track) => [track.id, track]));
+          setFollowedArtistIds(Array.isArray(data.followedArtistIds) ? data.followedArtistIds : []);
+          setRecentlyPlayed(recentIds.map((id) => trackById.get(id)).filter((track): track is Track => Boolean(track)));
+          const serverChatHistory = Array.isArray(data.chatHistory) ? data.chatHistory : [];
+          const hydratedUserId = data.user?.id || null;
+          chatHydratedUserIdRef.current = hydratedUserId;
+          lastSavedChatHistoryRef.current = JSON.stringify(serverChatHistory);
+          setChatMessages(serverChatHistory);
           if (data.user) {
             setUserProfile((previous) => (previous ? { ...previous, ...data.user } : data.user));
           } else if (token) {
@@ -567,11 +583,16 @@ export default function App() {
     } catch (err) {
       console.error('Error syncing server data:', err);
     } finally {
+      if (!includeChatAndUser) {
+        backgroundDataRequestInFlightRef.current = false;
+      }
+      lastBackgroundRefreshAtRef.current = Date.now();
       setServerDataLoaded(true);
     }
-  }, [userProfile?.id]);
+  }, []);
 
   useEffect(() => {
+    if (userProfile?.id && chatHydratedUserIdRef.current === userProfile.id) return;
     fetchServerData(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile?.id]);
@@ -580,21 +601,24 @@ export default function App() {
   // the tab regains focus, so songs another user uploads show up here without needing
   // a full page reload or re-login.
   useEffect(() => {
-    const POLL_INTERVAL_MS = 20000;
+    const POLL_INTERVAL_MS = 60000;
+    const FOCUS_REFRESH_COOLDOWN_MS = 15000;
+    const refreshSharedData = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastBackgroundRefreshAtRef.current < FOCUS_REFRESH_COOLDOWN_MS) return;
+      void fetchServerData(false);
+    };
     const intervalId = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchServerData(false);
-      }
+      refreshSharedData();
     }, POLL_INTERVAL_MS);
 
-    const handleFocus = () => fetchServerData(false);
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', refreshSharedData);
+    document.addEventListener('visibilitychange', refreshSharedData);
 
     return () => {
       window.clearInterval(intervalId);
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', refreshSharedData);
+      document.removeEventListener('visibilitychange', refreshSharedData);
     };
   }, [fetchServerData]);
 
@@ -606,6 +630,8 @@ export default function App() {
     audioEngine.pause();
     setIsPlaying(false);
     setCurrentTrack(null);
+    chatHydratedUserIdRef.current = null;
+    lastSavedChatHistoryRef.current = '';
     setUserProfile(null);
     setFollowedArtistIds([]);
     setRecentlyPlayed([]);
@@ -702,6 +728,8 @@ export default function App() {
 
   const handleLoginSuccess = (user: UserProfile, token?: string) => {
     sessionExpiryHandledRef.current = false;
+    chatHydratedUserIdRef.current = null;
+    lastSavedChatHistoryRef.current = '';
     setUserProfile(user);
     if (token) {
       localStorage.setItem('vertex_session_token', token);
@@ -725,16 +753,23 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
-    if (!userProfile?.id) return;
-    try {
+    if (!userProfile?.id || chatHydratedUserIdRef.current !== userProfile.id) return;
+    const serializedHistory = JSON.stringify(chatMessages);
+    if (serializedHistory === lastSavedChatHistoryRef.current) return;
+
+    const saveTimer = window.setTimeout(() => {
       fetch(`/api/chat-history/${userProfile.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ chatHistory: chatMessages }),
-      }).catch((e) => console.error('Error syncing chat history with server:', e));
-    } catch (e) {
-      console.error('Error saving chat history:', e);
-    }
+      })
+        .then((response) => {
+          if (response.ok) lastSavedChatHistoryRef.current = serializedHistory;
+        })
+        .catch((e) => console.error('Error syncing chat history with server:', e));
+    }, 1200);
+
+    return () => window.clearTimeout(saveTimer);
   }, [chatMessages, userProfile?.id]);
 
   // Sync Equalizer with audioEngine
@@ -948,7 +983,7 @@ export default function App() {
             hoursListened: stats.hoursListened || 0,
           }),
         }).catch((err) => console.error('Failed to persist listening stats:', err));
-      }, 15000);
+      }, 60000);
     }
     return () => {
       if (syncTimer) clearInterval(syncTimer);

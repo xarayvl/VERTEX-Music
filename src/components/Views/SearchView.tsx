@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, X, Play, Pause, Heart, ShieldCheck, User as UserIcon, Disc, ArrowRight } from 'lucide-react';
 import { Track, Playlist, Artist, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
@@ -49,14 +49,6 @@ export const SearchView: React.FC<SearchViewProps> = ({
 }) => {
   const [internalQuery, setInternalQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'songs' | 'artists' | 'playlists'>('all');
-  const [apiResults, setApiResults] = useState<{
-    tracks?: Track[];
-    artists?: SearchArtistItem[];
-    playlists?: Playlist[];
-    topResult?: { type: 'track' | 'artist' | 'playlist'; item: any } | null;
-  } | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-
   const query = externalQuery !== undefined ? externalQuery : internalQuery;
 
   const handleQueryChange = (val: string) => {
@@ -72,32 +64,9 @@ export const SearchView: React.FC<SearchViewProps> = ({
     ].map((value) => value?.trim()).filter((value): value is string => Boolean(value)))
   ).slice(0, 8);
 
-  // Live query to Backend Search API (/api/search)
-  useEffect(() => {
-    if (!query.trim()) {
-      setApiResults(null);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`);
-        if (res.ok) {
-          const data = await res.json();
-          setApiResults(data);
-        }
-      } catch (err) {
-        console.error('Error fetching search results from API:', err);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 200);
-
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  // Merge the current server snapshot with the live search response.
+  // The complete searchable catalogue is already part of the periodically
+  // refreshed application snapshot. Filtering it locally avoids one backend
+  // request per keystroke and keeps search responsive during API throttling.
   const qLower = query.trim().toLowerCase();
 
   const localMatchedTracks = initialTracks.filter(
@@ -108,9 +77,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
       t.genre.toLowerCase().includes(qLower)
   );
 
-  const matchedTracks: Track[] = apiResults?.tracks
-    ? Array.from(new Map([...localMatchedTracks, ...apiResults.tracks].map((t) => [t.id, t])).values())
-    : localMatchedTracks;
+  const matchedTracks: Track[] = localMatchedTracks;
 
   // Local user profile check for Artists/Users search
   const localMatchedUsers: SearchArtistItem[] = [];
@@ -149,21 +116,13 @@ export const SearchView: React.FC<SearchViewProps> = ({
     )
     .map((a) => ({ ...a, isUser: a.isUser ?? false }));
 
-  const matchedArtists: SearchArtistItem[] = apiResults?.artists
-    ? Array.from(
-        new Map(
-          [...localMatchedUsers, ...localMatchedArtists, ...apiResults.artists]
-            .filter((a) => Boolean(a.id))
-            .map((a) => [a.id, a])
-        ).values()
-      )
-    : Array.from(
-        new Map(
-          [...localMatchedUsers, ...localMatchedArtists]
-            .filter((a) => Boolean(a.id))
-            .map((a) => [a.id, a])
-        ).values()
-      );
+  const matchedArtists: SearchArtistItem[] = Array.from(
+    new Map(
+      [...localMatchedUsers, ...localMatchedArtists]
+        .filter((a) => Boolean(a.id))
+        .map((a) => [a.id, a])
+    ).values()
+  );
 
   const localMatchedPlaylists = initialPlaylists.filter(
     (p) =>
@@ -171,20 +130,17 @@ export const SearchView: React.FC<SearchViewProps> = ({
       (p.description && p.description.toLowerCase().includes(qLower))
   );
 
-  const matchedPlaylists: Playlist[] = apiResults?.playlists
-    ? Array.from(new Map([...localMatchedPlaylists, ...apiResults.playlists].map((p) => [p.id, p])).values())
-    : localMatchedPlaylists;
+  const matchedPlaylists: Playlist[] = localMatchedPlaylists;
 
   // Top Result determination
   const topResult =
-    apiResults?.topResult ||
-    (matchedTracks.length > 0
+    matchedTracks.length > 0
       ? { type: 'track' as const, item: matchedTracks[0] }
       : matchedArtists.length > 0
       ? { type: 'artist' as const, item: matchedArtists[0] }
       : matchedPlaylists.length > 0
       ? { type: 'playlist' as const, item: matchedPlaylists[0] }
-      : null);
+      : null;
   const isTopResultPlaying = Boolean(
     topResult?.type === 'track' && topResult.item?.id === currentTrackId && isPlaying
   );
@@ -214,12 +170,6 @@ export const SearchView: React.FC<SearchViewProps> = ({
       <div>
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Search</h1>
-          {isSearching && (
-            <div className="flex items-center space-x-2 text-xs text-[#D946EF] font-semibold animate-pulse">
-              <div className="w-2 h-2 rounded-full bg-[#D946EF] animate-ping" />
-              <span>Searching database...</span>
-            </div>
-          )}
         </div>
 
         <div className="relative w-full max-w-xl">

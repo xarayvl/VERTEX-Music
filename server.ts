@@ -250,6 +250,53 @@ function collectReferencedMediaUrls(db: { users: UserRecord[]; tracks: TrackReco
   return refs;
 }
 
+type RateLimitOptions = {
+  windowMs: number;
+  max: number;
+  name: string;
+};
+
+function createRateLimiter({ windowMs, max, name }: RateLimitOptions): express.RequestHandler {
+  const buckets = new Map<string, { count: number; resetAt: number }>();
+
+  return (req, res, next) => {
+    const now = Date.now();
+    // Use the network identity rather than a raw Authorization header. An
+    // attacker can mint arbitrary invalid bearer values and would otherwise
+    // get a fresh bucket for every request.
+    const identity = req.ip || req.socket.remoteAddress || 'unknown';
+    const key = `${name}:${identity}`;
+    let bucket = buckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      bucket = { count: 0, resetAt: now + windowMs };
+      buckets.set(key, bucket);
+    }
+
+    bucket.count += 1;
+    const remaining = Math.max(0, max - bucket.count);
+    const retryAfterSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1_000));
+    res.setHeader('RateLimit-Limit', String(max));
+    res.setHeader('RateLimit-Remaining', String(remaining));
+    res.setHeader('RateLimit-Reset', String(Math.ceil(bucket.resetAt / 1_000)));
+
+    if (buckets.size > 10_000) {
+      for (const [bucketKey, value] of buckets) {
+        if (value.resetAt <= now) buckets.delete(bucketKey);
+      }
+    }
+
+    if (bucket.count > max) {
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      return res.status(429).json({
+        error: 'Too many requests. Please wait and try again.',
+        rateLimited: true,
+        retryAfterSeconds,
+      });
+    }
+    next();
+  };
+}
+
 
 async function saveUploadedFile(base64Data: string, mimeType: string, folderUserId: string, filePrefix: string): Promise<string> {
   const safeUserId = sanitizeUserId(folderUserId);
@@ -322,6 +369,7 @@ async function saveUploadedFile(base64Data: string, mimeType: string, folderUser
 async function startServer() {
   const app = express();
   const PORT = 3000;
+  app.set('trust proxy', 1);
 
   // Initialize Upstash Redis database sync (if UPSTASH_REDIS_REST_URL is present)
   await initUpstashDB();
@@ -456,7 +504,25 @@ async function startServer() {
     }
   });
 
-  // Increase payload limit for custom track audio uploads or images
+  // In-memory limits stop accidental request loops and basic abuse before a
+  // request body is parsed or reaches Upstash, R2, bcrypt, or Gemini.
+  // Immutable media streaming is intentionally excluded because the R2 route
+  // is registered above.
+  const generalApiLimiter = createRateLimiter({ windowMs: 5 * 60_000, max: 600, name: 'api' });
+  const mutationLimiter = createRateLimiter({ windowMs: 60_000, max: 120, name: 'mutation' });
+  const authLimiter = createRateLimiter({ windowMs: 15 * 60_000, max: 20, name: 'auth' });
+  const chatLimiter = createRateLimiter({ windowMs: 60_000, max: 12, name: 'chat' });
+  app.use('/api', generalApiLimiter);
+  app.use('/api', (req, res, next) => {
+    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') {
+      return mutationLimiter(req, res, next);
+    }
+    next();
+  });
+
+  // Increase payload limit for custom track audio uploads or images. Rate
+  // limiting runs first so rejected clients cannot repeatedly force parsing
+  // of a 100 MB JSON body.
   app.use(express.json({ limit: "100mb" }));
   app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
@@ -464,7 +530,7 @@ async function startServer() {
   app.get("/api/system-status", async (req, res) => {
     const sessionUserId = getUserIdFromToken(req);
     if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
-    const db = await readDBAsync();
+    const db = await readDBAsync(req.method !== "GET");
     const requestingUser = db.users.find((user) => user.id === sessionUserId);
     if (!requestingUser?.isAdmin) return res.status(403).json({ error: "Forbidden: Admin access required." });
 
@@ -522,7 +588,7 @@ async function startServer() {
   }
 
   // User Registration
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", authLimiter, async (req, res) => {
     try {
       const { username, email, password, displayName } = req.body;
 
@@ -545,7 +611,7 @@ async function startServer() {
         return res.status(400).json({ error: "Display name cannot exceed 80 characters." });
       }
 
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
 
       const existingUser = db.users.find(
         (u) =>
@@ -595,7 +661,7 @@ async function startServer() {
   });
 
   // User Login
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", authLimiter, async (req, res) => {
     try {
       const { usernameOrEmail, password } = req.body || {};
 
@@ -607,7 +673,7 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid login input." });
       }
 
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
 
       const user = db.users.find(
         (u) =>
@@ -654,8 +720,9 @@ async function startServer() {
   // Fetch Application Data (Tracks, Playlists, User State, Chat History)
   app.get("/api/data", async (req, res) => {
     try {
-      const db = await readDBAsync();
-      const authUserId = getUserIdFromToken(req);
+      const db = await readDBAsync(req.method !== "GET");
+      const sharedOnly = req.query.scope === 'shared';
+      const authUserId = sharedOnly ? null : getUserIdFromToken(req);
 
       let currentUser = null;
       let likedTrackIds: string[] = [];
@@ -678,13 +745,19 @@ async function startServer() {
         }
       }
 
-      return res.json({
-        user: currentUser,
+      const trackOwnerIds = new Set(db.tracks.map((track) => track.userId));
+      const sharedData = {
         tracks: db.tracks,
         artists: db.users
-          .filter((user) => user.isArtist || db.tracks.some((track) => track.userId === user.id))
+          .filter((user) => user.isArtist || trackOwnerIds.has(user.id))
           .map((user) => toPublicArtistCard(user, db.tracks)),
         playlists: db.playlists,
+      };
+      if (sharedOnly) return res.json(sharedData);
+
+      return res.json({
+        ...sharedData,
+        user: currentUser,
         likedTrackIds,
         followedArtistIds,
         recentTrackIds,
@@ -707,7 +780,7 @@ async function startServer() {
       if (sessionUserId !== userId) {
         return res.status(403).json({ error: "Forbidden: You can only access your own account data." });
       }
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       if (!db.users.some((user) => user.id === userId)) {
         return res.status(404).json({ error: "User not found." });
       }
@@ -731,12 +804,16 @@ async function startServer() {
         return res.status(403).json({ error: "Forbidden: You can only access your own account data." });
       }
       const { chatHistory } = req.body;
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       if (!db.users.some((user) => user.id === userId)) {
         return res.status(404).json({ error: "User not found." });
       }
 
-      db.chatHistories[userId] = sanitizeChatHistory(chatHistory, db.tracks);
+      const sanitizedHistory = sanitizeChatHistory(chatHistory, db.tracks);
+      if (JSON.stringify(db.chatHistories[userId] || []) === JSON.stringify(sanitizedHistory)) {
+        return res.json({ success: true, chatHistory: sanitizedHistory, unchanged: true });
+      }
+      db.chatHistories[userId] = sanitizedHistory;
       await writeDBAsync(db);
 
       return res.json({ success: true, chatHistory: db.chatHistories[userId] });
@@ -750,7 +827,7 @@ async function startServer() {
   app.get("/api/search", async (req, res) => {
     try {
       const query = (req.query.q as string || "").trim().toLowerCase();
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
 
       if (!query) {
         return res.json({
@@ -853,7 +930,7 @@ async function startServer() {
       if (sessionUserId !== userId) {
         return res.status(403).json({ error: "Forbidden: You can only access your own account data." });
       }
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       if (!db.users.some((user) => user.id === userId)) {
         return res.status(404).json({ error: "User not found." });
       }
@@ -877,7 +954,7 @@ async function startServer() {
   app.get("/api/users/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const found = db.users.find((user) => user.id === userId);
       const isRealArtist = Boolean(found && (found.isArtist || db.tracks.some((track) => track.userId === found.id)));
       if (!found || !isRealArtist) {
@@ -910,7 +987,7 @@ async function startServer() {
         return res.status(400).json({ error: "You cannot follow your own profile." });
       }
 
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const requesterIndex = db.users.findIndex((user) => user.id === sessionUserId);
       const targetIndex = db.users.findIndex((user) => user.id === targetUserId);
       if (requesterIndex === -1) {
@@ -975,7 +1052,7 @@ async function startServer() {
       }
 
       const updates = req.body || {};
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const index = db.users.findIndex((user) => user.id === userId);
       if (index === -1) {
         return res.status(404).json({ error: "User not found." });
@@ -1154,7 +1231,7 @@ async function startServer() {
         return res.status(400).json({ error: "New password must be different from your current password." });
       }
 
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const index = db.users.findIndex((user) => user.id === userId);
       if (index === -1) return res.status(404).json({ error: "User not found." });
 
@@ -1176,7 +1253,7 @@ async function startServer() {
   });
 
   // Persist cumulative listening-time stats (seconds/hours listened).
-  // The client pings this every ~15s while a track is playing so the
+  // The client pings this periodically while a track is playing so the
   // "hours listened" stat on the profile is real and survives redeploys
   // instead of only living in local React state / localStorage.
   app.post("/api/users/:userId/listening-stats", async (req, res) => {
@@ -1192,7 +1269,7 @@ async function startServer() {
 
       const { secondsListened } = req.body as { secondsListened?: number };
 
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const index = db.users.findIndex((u) => u.id === userId);
       if (index === -1) {
         return res.status(404).json({ error: "User not found." });
@@ -1203,6 +1280,9 @@ async function startServer() {
       const requestedSeconds = Number(secondsListened);
       if (!Number.isFinite(requestedSeconds) || requestedSeconds < previousSeconds) {
         return res.status(400).json({ error: "secondsListened must be a monotonic numeric value." });
+      }
+      if (requestedSeconds === previousSeconds) {
+        return res.json({ success: true, stats: db.users[index].stats, unchanged: true });
       }
       // The client reports roughly every 15 seconds. Cap one request to two minutes
       // of progress so a forged payload cannot manufacture listening history.
@@ -1229,7 +1309,7 @@ async function startServer() {
   // removed by the DB sanitizer and therefore correctly return 404 here.
   app.get("/api/tracks/:id", async (req, res) => {
     try {
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const track = db.tracks.find((item) => item.id === req.params.id);
       if (!track) return res.status(404).json({ error: "Track not found." });
       return res.json({ success: true, track });
@@ -1266,7 +1346,7 @@ async function startServer() {
         return res.status(400).json({ success: false, error: "A valid audio duration is required." });
       }
 
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const uploaderIndex = db.users.findIndex((user) => user.id === sessionUserId);
       if (uploaderIndex === -1) {
         return res.status(404).json({ success: false, error: "Uploader profile was not found." });
@@ -1370,7 +1450,7 @@ async function startServer() {
       const sessionUserId = getUserIdFromToken(req);
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
 
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const seedTrack = db.tracks.find((item) => item.id === req.params.trackId);
       if (!seedTrack) return res.status(404).json({ error: "Release not found." });
       if (seedTrack.userId !== sessionUserId) return res.status(403).json({ error: "Forbidden: You can only edit releases you uploaded." });
@@ -1470,7 +1550,7 @@ async function startServer() {
       const sessionUserId = getUserIdFromToken(req);
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
 
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const trackIndex = db.tracks.findIndex((track) => track.id === id);
       if (trackIndex === -1) return res.status(404).json({ error: "Track not found." });
       const existingTrack = db.tracks[trackIndex];
@@ -1570,7 +1650,7 @@ async function startServer() {
   app.post("/api/tracks/:id/play", async (req, res) => {
     try {
       const { id } = req.params;
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const trackIndex = db.tracks.findIndex((track) => track.id === id);
       if (trackIndex === -1) return res.status(404).json({ error: "Track not found." });
 
@@ -1637,7 +1717,7 @@ async function startServer() {
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
 
       const { id } = req.params;
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const track = db.tracks.find((item) => item.id === id);
       if (!track) return res.status(404).json({ error: "Track not found." });
       if (track.userId !== sessionUserId) {
@@ -1673,7 +1753,7 @@ async function startServer() {
       const sessionUserId = getUserIdFromToken(req);
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
 
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const ownedTracks = db.tracks.filter((track) => track.userId === sessionUserId);
       const ownedIds = new Set(ownedTracks.map((track) => track.id));
       if (ownedIds.size === 0) return res.status(404).json({ error: "No uploaded tracks found for this account." });
@@ -1716,7 +1796,7 @@ async function startServer() {
       if (!sessionUserId) {
         return res.status(401).json({ success: false, error: "Unauthorized: Active session required." });
       }
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const requestingUser = db.users.find((u) => u.id === sessionUserId);
       if (!requestingUser?.isAdmin) {
         return res.status(403).json({ success: false, error: "Forbidden: Admin access required." });
@@ -1758,7 +1838,7 @@ async function startServer() {
 
   app.get("/api/playlists/:id", async (req, res) => {
     try {
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const playlist = db.playlists.find((item) => item.id === req.params.id);
       if (!playlist) return res.status(404).json({ error: "Playlist not found." });
       return res.json({ success: true, playlist });
@@ -1783,7 +1863,7 @@ async function startServer() {
       const description = typeof req.body.description === "string" ? req.body.description.trim() : "";
       if (description.length > 1_000) return res.status(400).json({ error: "Playlist description cannot exceed 1000 characters." });
 
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const owner = db.users.find((user) => user.id === sessionUserId);
       if (!owner) return res.status(404).json({ error: "Playlist owner not found." });
 
@@ -1833,7 +1913,7 @@ async function startServer() {
     try {
       const sessionUserId = getUserIdFromToken(req);
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const index = db.playlists.findIndex((playlist) => playlist.id === req.params.id);
       if (index === -1) return res.status(404).json({ error: "Playlist not found." });
       const existing = db.playlists[index];
@@ -1887,7 +1967,7 @@ async function startServer() {
     try {
       const sessionUserId = getUserIdFromToken(req);
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       const target = db.playlists.find((playlist) => playlist.id === req.params.id);
       if (!target) return res.status(404).json({ error: "Playlist not found." });
       if (target.userId !== sessionUserId) {
@@ -1919,7 +1999,7 @@ async function startServer() {
         return res.status(403).json({ error: "Forbidden: You can only access your own account data." });
       }
       const { likedTrackIds } = req.body;
-      const db = await readDBAsync();
+      const db = await readDBAsync(req.method !== "GET");
       if (!db.users.some((user) => user.id === userId)) {
         return res.status(404).json({ error: "User not found." });
       }
@@ -2076,7 +2156,7 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
 }
 
   // Gemini AI Chat Endpoint
-  app.post("/api/chat", async (req, res) => {
+  app.post("/api/chat", chatLimiter, async (req, res) => {
     const requestDiagnostics = {
       model: process.env.GEMINI_CHAT_MODEL?.trim() || "gemini-3.5-flash-lite",
       keyFingerprint: "not-loaded",
@@ -2087,6 +2167,17 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
 
     try {
       const { message, history, userId, forceWebSearch } = req.body;
+
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      }
+      if (userId !== undefined && typeof userId !== "string") {
+        return res.status(400).json({ error: "userId must be a string." });
+      }
+      if (userId && sessionUserId !== userId) {
+        return res.status(403).json({ error: "Forbidden: You can only use your own account context." });
+      }
 
       if (!message || typeof message !== "string") {
         return res.status(400).json({ error: "Message string is required" });
@@ -2123,20 +2214,8 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
         },
       });
 
-      if (userId) {
-        if (typeof userId !== "string") {
-          return res.status(400).json({ error: "userId must be a string." });
-        }
-        const sessionUserId = getUserIdFromToken(req);
-        if (!sessionUserId) {
-          return res.status(401).json({ error: "Unauthorized: Active session required." });
-        }
-        if (sessionUserId !== userId) {
-          return res.status(403).json({ error: "Forbidden: You can only use your own account context." });
-        }
-        const ownerDB = await readDBAsync();
-        if (!ownerDB.users.some((user) => user.id === userId)) return res.status(404).json({ error: "User not found." });
-      }
+      const ownerDB = await readDBAsync(req.method !== "GET");
+      if (!ownerDB.users.some((user) => user.id === sessionUserId)) return res.status(404).json({ error: "User not found." });
 
       const formattedHistory = formatGeminiHistory(history);
       const webSearchRequested = forceWebSearch === true || shouldUseGeminiWebSearch(cleanMessage);
@@ -2212,35 +2291,6 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
 
       const webSearchUsed = webSearchQueries.length > 0 || sources.length > 0;
 
-      if (userId) {
-        try {
-          const db = await readDBAsync();
-          if (!db.chatHistories[userId]) {
-            db.chatHistories[userId] = [];
-          }
-          const userMsg = {
-            id: createEntityId("msg"),
-            sender: "user" as const,
-            text: cleanMessage,
-            timestamp: new Date().toISOString(),
-          };
-          const aiMsg = {
-            id: createEntityId("msg"),
-            sender: "ai" as const,
-            text: replyText,
-            timestamp: new Date().toISOString(),
-            webSearchUsed,
-            searchQueries: webSearchQueries,
-            sources,
-          };
-          db.chatHistories[userId].push(userMsg, aiMsg);
-          db.chatHistories[userId] = sanitizeChatHistory(db.chatHistories[userId], db.tracks);
-          await writeDBAsync(db);
-        } catch (dbErr) {
-          console.error("Error persisting user chat to DB:", dbErr);
-        }
-      }
-
       return res.json({ reply: replyText, webSearchUsed, searchQueries: webSearchQueries, sources });
     } catch (error: any) {
       const { message: cleanMsg, providerMessage, rateLimited, quotaExhausted, retryAfterSeconds } = parseCleanErrorMessage(error);
@@ -2273,7 +2323,7 @@ function formatGeminiHistory(value: unknown): Array<{ role: "user" | "model"; pa
   const sendTrackPage = (loadIndexHtml: (requestUrl: string) => Promise<string>) =>
     async (req: express.Request, res: express.Response) => {
       try {
-        const db = await readDBAsync();
+        const db = await readDBAsync(req.method !== "GET");
         const track = db.tracks.find((item) => item.id === req.params.trackId);
         if (!track) {
           return res.status(404).type("html").send("<!doctype html><title>Track not found | VERTEX Music</title><h1>404 — Track not found</h1>");
