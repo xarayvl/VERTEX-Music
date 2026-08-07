@@ -7,10 +7,18 @@ import dotenv from "dotenv";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import { OAuth2Client } from "google-auth-library";
 import { readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
 import { getPublicOrigin, injectTrackSocialMeta } from "./server/socialMeta.js";
 
 dotenv.config();
+
+// Google Sign-In (OAuth) client id. Used both to verify ID tokens sent by the
+// frontend and as the audience the tokens must have been issued for.
+const GOOGLE_CLIENT_ID =
+  process.env.GOOGLE_CLIENT_ID ||
+  "266806941595-ecv3f1f5pah0nrni31e9a4huevruv8i6.apps.googleusercontent.com";
+const googleOAuthClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 const DEFAULT_AVATAR_URL =
   "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22512%22%20height%3D%22512%22%20viewBox%3D%220%200%20512%20512%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23312e81%22%2F%3E%3Cstop%20offset%3D%220.55%22%20stop-color%3D%22%237e22ce%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23db2777%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%22512%22%20height%3D%22512%22%20rx%3D%2296%22%20fill%3D%22url(%23g)%22%2F%3E%3Ccircle%20cx%3D%22256%22%20cy%3D%22204%22%20r%3D%2278%22%20fill%3D%22%23fff%22%20fill-opacity%3D%220.9%22%2F%3E%3Cpath%20d%3D%22M118%20430c17-88%2069-132%20138-132s121%2044%20138%20132%22%20fill%3D%22%23fff%22%20fill-opacity%3D%220.9%22%2F%3E%3C%2Fsvg%3E";
@@ -706,6 +714,102 @@ async function startServer() {
     } catch (error: any) {
       console.error("Login Error:", error);
       return res.status(500).json({ error: "Failed to log in." });
+    }
+  });
+
+  // Sign in (or register) with Google. The frontend sends the ID token
+  // ("credential") produced by Google Identity Services; we verify it
+  // server-side before trusting any of its claims.
+  app.post("/api/auth/google", authLimiter, async (req, res) => {
+    try {
+      const { credential } = req.body || {};
+      if (typeof credential !== "string" || !credential.trim()) {
+        return res.status(400).json({ error: "Missing Google credential." });
+      }
+
+      let payload;
+      try {
+        const ticket = await googleOAuthClient.verifyIdToken({
+          idToken: credential,
+          audience: GOOGLE_CLIENT_ID,
+        });
+        payload = ticket.getPayload();
+      } catch (verifyError) {
+        console.error("Google token verification failed:", verifyError);
+        return res.status(401).json({ error: "Invalid Google credential." });
+      }
+
+      if (!payload || !payload.sub || !payload.email) {
+        return res.status(401).json({ error: "Invalid Google credential." });
+      }
+      if (payload.email_verified === false) {
+        return res.status(401).json({ error: "Google account email is not verified." });
+      }
+
+      const googleId = payload.sub;
+      const email = payload.email.trim().toLowerCase();
+      const name = typeof payload.name === "string" ? payload.name.trim() : "";
+      const picture = typeof payload.picture === "string" ? payload.picture.trim() : "";
+
+      const db = await readDBAsync(req.method !== "GET");
+
+      let user = db.users.find((u) => u.googleId === googleId);
+      let isNewUser = false;
+
+      if (!user) {
+        // Fall back to matching by email so an existing password account can
+        // be linked to Google instead of creating a duplicate account.
+        user = db.users.find((u) => u.email.toLowerCase() === email);
+      }
+
+      if (user) {
+        if (!user.googleId) {
+          user.googleId = googleId;
+          await writeDBAsync(db);
+        }
+      } else {
+        isNewUser = true;
+
+        const baseUsername = (email.split("@")[0] || "user").replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 24) || "user";
+        let candidateUsername = baseUsername;
+        let suffix = 0;
+        const usedUsernames = new Set(db.users.map((u) => u.username.toLowerCase()));
+        while (usedUsernames.has(candidateUsername.toLowerCase()) || candidateUsername.length < 3) {
+          suffix += 1;
+          candidateUsername = `${baseUsername}${suffix}`;
+        }
+
+        // Google-authenticated accounts don't use a password; store an
+        // unusable random hash so the field is never blank and can never be
+        // guessed or logged in with via the password flow.
+        const unusablePassword = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
+
+        const newUser: UserRecord = {
+          id: createEntityId("usr"),
+          username: candidateUsername,
+          email,
+          password: unusablePassword,
+          googleId,
+          displayName: name || candidateUsername,
+          avatarUrl: picture && isHttpUrl(picture) ? picture : DEFAULT_AVATAR_URL,
+          bio: "",
+          favoriteGenres: [],
+          createdAt: new Date().toISOString(),
+          stats: emptyStats(),
+        };
+
+        db.users.push(newUser);
+        db.userStates[newUser.id] = { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
+        await writeDBAsync(db);
+        user = newUser;
+      }
+
+      const token = issueSessionToken(user.id);
+      const { password: _pw, ...userWithoutPassword } = user;
+      return res.json({ success: true, user: userWithoutPassword, token, isNewUser });
+    } catch (error: any) {
+      console.error("Google Auth Error:", error);
+      return res.status(500).json({ error: "Failed to sign in with Google." });
     }
   });
 

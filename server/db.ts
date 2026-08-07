@@ -12,6 +12,7 @@ export interface UserRecord {
   username: string;
   email: string;
   password: string; // Hashed password
+  googleId?: string; // Google account subject id, set for accounts linked/created via "Sign in with Google"
   displayName: string;
   avatarUrl: string;
   bio: string;
@@ -166,6 +167,9 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
     usedUserIds.add(id);
     usedUsernames.add(usernameKey);
     usedEmails.add(email);
+    const googleId = typeof rawUser.googleId === 'string' && rawUser.googleId.trim()
+      ? rawUser.googleId.trim().slice(0, 255)
+      : undefined;
     const displayName = typeof rawUser.displayName === 'string' && rawUser.displayName.trim()
       ? rawUser.displayName.trim().slice(0, 80)
       : username;
@@ -183,6 +187,7 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
       username,
       email,
       password,
+      googleId,
       displayName,
       avatarUrl,
       bio: typeof rawUser.bio === 'string' ? rawUser.bio.trim().slice(0, 500) : '',

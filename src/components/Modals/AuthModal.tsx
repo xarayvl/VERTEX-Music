@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowRight,
@@ -21,6 +21,31 @@ import { UserProfile } from '../../types';
 const AUTH_TERMINAL_GRID = [2, 1];
 const FaultyTerminal = React.lazy(() => import('../Backgrounds/FaultyTerminal'));
 
+// Public OAuth client id — safe to expose in frontend code, Google's Sign-In
+// flow relies on the ID token being verified server-side, not on this value
+// being secret.
+const GOOGLE_CLIENT_ID = '266806941595-ecv3f1f5pah0nrni31e9a4huevruv8i6.apps.googleusercontent.com';
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential: string }) => void;
+            auto_select?: boolean;
+            cancel_on_tap_outside?: boolean;
+          }) => void;
+          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
+          prompt?: () => void;
+          cancel?: () => void;
+        };
+      };
+    };
+  }
+}
+
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -42,8 +67,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  if (!isOpen) return null;
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
 
   const switchMode = (nextMode: 'login' | 'register') => {
     if (loading) return;
@@ -51,6 +75,71 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setShowPassword(false);
     setError(null);
   };
+
+  const handleGoogleCredential = async (credential: string) => {
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setError(data.error || 'Google sign-in failed. Please try again.');
+        return;
+      }
+      onLoginSuccess(data.user, data.token);
+      onClose();
+    } catch {
+      setError('Server connection error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+    let attempts = 0;
+
+    const tryRender = () => {
+      if (cancelled) return;
+      const google = window.google;
+      if (!google || !googleButtonRef.current) {
+        attempts += 1;
+        if (attempts < 50) window.setTimeout(tryRender, 100);
+        return;
+      }
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: (response) => {
+          if (response?.credential) void handleGoogleCredential(response.credential);
+        },
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      });
+      googleButtonRef.current.innerHTML = '';
+      google.accounts.id.renderButton(googleButtonRef.current, {
+        type: 'standard',
+        theme: 'filled_black',
+        size: 'large',
+        shape: 'pill',
+        text: mode === 'register' ? 'signup_with' : 'signin_with',
+        width: 340,
+        logo_alignment: 'center',
+      });
+    };
+
+    tryRender();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, mode]);
+
+  if (!isOpen) return null;
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -193,6 +282,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
                 </div>
               )}
+
+              <div className="mt-6 flex flex-col items-center gap-3">
+                <div ref={googleButtonRef} className={`flex w-full justify-center ${loading ? 'pointer-events-none opacity-50' : ''}`} />
+                <div className="flex w-full items-center gap-3 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600">
+                  <span className="h-px flex-1 bg-white/10" /> Or <span className="h-px flex-1 bg-white/10" />
+                </div>
+              </div>
 
               {mode === 'login' ? (
                 <form onSubmit={handleLogin} className="mt-6 space-y-4">
