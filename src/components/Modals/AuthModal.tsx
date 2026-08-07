@@ -19,6 +19,9 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 
+const AUTH_TERMINAL_GRID = [2, 1];
+const FaultyTerminal = React.lazy(() => import('../Backgrounds/FaultyTerminal'));
+
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -111,16 +114,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const labelClass = 'mb-2 block text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400';
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/90 p-2 text-white animate-in fade-in duration-200 sm:p-5">
-      <div className="mx-auto flex min-h-full max-w-5xl items-center justify-center">
-        <section className="relative grid w-full overflow-hidden rounded-[2rem] border border-white/10 bg-[#121212] shadow-[0_30px_100px_rgba(0,0,0,0.65)] animate-in zoom-in-95 duration-300 md:grid-cols-[0.92fr_1.08fr]">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black p-2 text-white animate-in fade-in duration-200 sm:p-5">
+      <div className="pointer-events-none fixed inset-0" aria-hidden="true">
+        <React.Suspense fallback={<div className="h-full w-full bg-[#050307]" />}>
+          <FaultyTerminal
+            scale={1.35}
+            gridMul={AUTH_TERMINAL_GRID}
+            digitSize={1.25}
+            timeScale={0.45}
+            pause={false}
+            scanlineIntensity={0.55}
+            glitchAmount={0.75}
+            flickerAmount={0.65}
+            noiseAmp={0.45}
+            chromaticAberration={0.55}
+            dither={0.25}
+            curvature={0.12}
+            tint="#c084fc"
+            mouseReact={true}
+            mouseStrength={0.3}
+            pageLoadAnimation={true}
+            brightness={0.55}
+          />
+        </React.Suspense>
+      </div>
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.08),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.35),rgba(0,0,0,0.78))]" aria-hidden="true" />
+
+      <div className="relative z-10 mx-auto flex min-h-full max-w-5xl items-center justify-center">
+        <section className="relative grid w-full overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#111012]/[0.91] shadow-[0_30px_100px_rgba(0,0,0,0.75),0_0_80px_rgba(168,85,247,0.08)] backdrop-blur-xl animate-in zoom-in-95 duration-300 md:grid-cols-[0.92fr_1.08fr]">
           {canClose && (
             <button type="button" onClick={onClose} disabled={loading} className="control-press absolute right-4 top-4 z-30 rounded-full border border-white/10 bg-black/30 p-2.5 text-zinc-300 hover:bg-black/60 hover:text-white disabled:opacity-40" aria-label="Close authentication">
               <X className="h-4 w-4" />
             </button>
           )}
 
-          <aside className="relative hidden min-h-[640px] overflow-hidden border-r border-white/10 bg-gradient-to-br from-[#2b1738] via-[#17111d] to-[#0d0d0f] p-9 md:flex md:flex-col md:justify-between">
+          <aside className="relative hidden min-h-[640px] overflow-hidden border-r border-white/10 bg-gradient-to-br from-[#2b1738]/90 via-[#17111d]/90 to-[#0d0d0f]/90 p-9 md:flex md:flex-col md:justify-between">
             <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-[#A855F7]/25 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-[#D946EF]/15 blur-3xl" />
             <div className="absolute inset-0 opacity-[0.035]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
