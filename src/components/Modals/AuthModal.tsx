@@ -15,7 +15,6 @@ import {
   Sparkles,
   User,
   UserPlus,
-  X,
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 
@@ -26,14 +25,12 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLoginSuccess: (user: UserProfile, token?: string) => void;
-  canClose?: boolean;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   onLoginSuccess,
-  canClose = true,
 }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -134,7 +131,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             mouseReact={true}
             mouseStrength={0.3}
             pageLoadAnimation={true}
-            brightness={0.55}
+            brightness={1}
           />
         </React.Suspense>
       </div>
@@ -142,12 +139,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       <div className="relative z-10 mx-auto flex min-h-full max-w-5xl items-center justify-center">
         <section className="relative grid w-full overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#111012]/[0.91] shadow-[0_30px_100px_rgba(0,0,0,0.75),0_0_80px_rgba(168,85,247,0.08)] backdrop-blur-xl animate-in zoom-in-95 duration-300 md:grid-cols-[0.92fr_1.08fr]">
-          {canClose && (
-            <button type="button" onClick={onClose} disabled={loading} className="control-press absolute right-4 top-4 z-30 rounded-full border border-white/10 bg-black/30 p-2.5 text-zinc-300 hover:bg-black/60 hover:text-white disabled:opacity-40" aria-label="Close authentication">
-              <X className="h-4 w-4" />
-            </button>
-          )}
-
           <aside className="relative hidden min-h-[640px] overflow-hidden border-r border-white/10 bg-gradient-to-br from-[#2b1738]/90 via-[#17111d]/90 to-[#0d0d0f]/90 p-9 md:flex md:flex-col md:justify-between">
             <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-[#A855F7]/25 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-[#D946EF]/15 blur-3xl" />
