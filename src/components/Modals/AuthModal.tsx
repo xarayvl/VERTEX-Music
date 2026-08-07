@@ -17,6 +17,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { UserProfile } from '../../types';
+import DecryptedText from '../DecryptedText';
 
 const AUTH_TERMINAL_GRID = [2, 1];
 const FaultyTerminal = React.lazy(() => import('../Backgrounds/FaultyTerminal'));
@@ -180,6 +181,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-white/[0.08] bg-black/25 p-1.5">
                 <button type="button" onClick={() => switchMode('login')} className={`control-press flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition-all ${mode === 'login' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`}><LogIn className="h-4 w-4" /> Sign in</button>
                 <button type="button" onClick={() => switchMode('register')} className={`control-press flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition-all ${mode === 'register' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`}><UserPlus className="h-4 w-4" /> Sign up</button>
+              </div>
+
+              <div className="mt-4 text-center font-sans text-sm font-extrabold tracking-[-0.02em] text-[#E9D5FF]">
+                <DecryptedText
+                  text="Welcome to VERTEX Music"
+                  speed={38}
+                  sequential
+                  revealDirection="start"
+                  animateOn="view"
+                  className="text-white"
+                  encryptedClassName="text-[#C084FC]"
+                />
               </div>
 
               <div key={mode} className="mt-7 animate-in fade-in slide-in-from-right-2 duration-300">
