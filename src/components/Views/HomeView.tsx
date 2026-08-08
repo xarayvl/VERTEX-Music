@@ -337,9 +337,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
   }
 
   return (
-    <div className="vertex-home space-y-8 pb-12 select-none">
+    <div className="space-y-8 pb-12 select-none">
       {/* Top Gradient Banner Header */}
-      <div className="vertex-home-hero relative overflow-hidden rounded-2xl border border-white/[0.05] bg-gradient-to-b from-[#A855F7]/30 via-[#181818]/70 to-[#121212] p-6 sm:p-8">
+      <div className="relative overflow-hidden rounded-2xl border border-white/[0.05] bg-gradient-to-b from-[#A855F7]/30 via-[#181818]/70 to-[#121212] p-6 sm:p-8">
         <div
           className="pointer-events-none absolute inset-0 will-change-opacity transition-opacity duration-700 ease-out"
           style={{
@@ -351,7 +351,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div>
             <span className="text-xs font-mono uppercase tracking-widest text-[#D946EF] font-bold flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#D946EF] animate-ping" />
-              Your listening room
+              VERTEX Music Audio Engine
             </span>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mt-1">
               {getGreeting()}

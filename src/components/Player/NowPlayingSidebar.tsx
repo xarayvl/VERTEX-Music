@@ -40,7 +40,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
 
   if (!currentTrack) {
     return (
-      <aside data-context-type="now-playing" className="w-full h-full flex-shrink-0 flex flex-col select-none text-zinc-300 relative z-20">
+      <aside className="w-full h-full flex-shrink-0 flex flex-col select-none text-zinc-300 relative z-20">
         <div className="bg-[#121212] rounded-xl flex-1 flex flex-col overflow-hidden border border-white/[0.04]">
           <div className="flex items-center justify-between p-4 border-b border-white/5">
             <span className="font-bold text-sm text-white">Now Playing</span>
@@ -103,7 +103,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
     (currentTrack.album && currentTrack.album !== 'Single' ? currentTrack.album : currentTrack.title);
 
   return (
-    <aside data-context-type="now-playing" className="w-full h-full flex-shrink-0 flex flex-col select-none text-zinc-300 relative z-20">
+    <aside className="w-full h-full flex-shrink-0 flex flex-col select-none text-zinc-300 relative z-20">
       <div className="bg-[#121212] rounded-xl flex-1 flex flex-col overflow-hidden border border-white/[0.04]">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-white/5">
