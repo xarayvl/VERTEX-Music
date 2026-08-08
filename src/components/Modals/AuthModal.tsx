@@ -10,13 +10,13 @@ import {
   Lock,
   LogIn,
   Mail,
-  Music2,
   ShieldCheck,
   Sparkles,
   User,
   UserPlus,
 } from 'lucide-react';
 import { UserProfile } from '../../types';
+import VertexLogo from '../Brand/VertexLogo';
 import LogoLoop from '../LogoLoop/LogoLoop';
 
 const AUTH_TERMINAL_GRID = [2, 1];
@@ -24,7 +24,7 @@ const FaultyTerminal = React.lazy(() => import('../Backgrounds/FaultyTerminal'))
 
 const AUTH_LOOP_ITEMS = [
   {
-    node: <span className="flex items-center gap-2 font-black tracking-tight"><Music2 className="h-[1em] w-[1em] text-[#D8B4FE]" /> VERTEX Music</span>,
+    node: <span className="flex items-center gap-2 font-black tracking-tight"><VertexLogo alt="" className="h-[1.25em] w-[1.25em] shrink-0" /> VERTEX Music</span>,
     title: 'VERTEX Music',
   },
   {
@@ -409,7 +409,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             <div className="relative">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_14px_38px_rgba(168,85,247,0.35)]"><Music2 className="h-6 w-6" /></div>
+                <VertexLogo alt="" className="h-12 w-12 shrink-0" />
                 <div><p className="text-[9px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">Your sound. Your space.</p><h1 className="text-xl font-black tracking-tight">VERTEX Music</h1></div>
               </div>
 
@@ -436,7 +436,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <main className="relative flex min-h-[560px] flex-col justify-center p-5 sm:p-8 md:min-h-[640px] md:p-10">
             <div className="mx-auto w-full max-w-md">
               <div className="mb-7 flex items-center gap-3 md:hidden">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF]"><Music2 className="h-5 w-5" /></div>
+                <VertexLogo alt="" className="h-11 w-11 shrink-0" />
                 <div><p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">Welcome to</p><p className="text-lg font-black">VERTEX Music</p></div>
               </div>
 

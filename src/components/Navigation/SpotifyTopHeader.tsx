@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Search, Crown, User, ExternalLink, LogOut, Check, ChevronDown, Sparkles, Music, Upload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Crown, User, ExternalLink, LogOut, Check, ChevronDown, Sparkles, Upload } from 'lucide-react';
 import { TabType, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
+import VertexLogo from '../Brand/VertexLogo';
 
 interface SpotifyTopHeaderProps {
   activeTab: TabType;
@@ -66,9 +67,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
       <div className="flex min-w-0 items-center space-x-2.5">
         {/* Compact brand mark — mobile only, replaces desktop back/forward + search */}
         <div className="flex sm:hidden items-center space-x-2 min-w-0">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[13px] bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-[0_0_16px_rgba(217,70,239,0.32)]">
-            <Music className="w-4 h-4 fill-white text-white stroke-[2.5]" />
-          </div>
+          <VertexLogo className="h-9 w-9 flex-shrink-0" />
           <button
             onClick={() => onSelectTab('search')}
             title="Search"

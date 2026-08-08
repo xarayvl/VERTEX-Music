@@ -5,7 +5,6 @@ import {
   Library,
   Plus,
   Heart,
-  Music,
   User,
   ListMusic,
   ArrowRight,
@@ -15,6 +14,7 @@ import {
   Bot,
 } from 'lucide-react';
 import { TabType, Track, Playlist, Artist } from '../../types';
+import VertexLogo from '../Brand/VertexLogo';
 
 interface SpotifySidebarProps {
   activeTab: TabType;
@@ -83,9 +83,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
       <div className={`bg-[#121212] rounded-xl flex flex-col border border-white/[0.04] transition-[padding,gap] ${isCompact ? 'p-2 gap-2' : 'p-4 gap-4'}`}>
         {/* VERTEX Music Branding */}
         <div className={`flex items-center py-1 ${isCompact ? 'justify-center px-0' : 'space-x-3 px-2'}`} title="VERTEX Music">
-          <div className="w-8 h-8 flex-shrink-0 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-[0_0_15px_rgba(217,70,239,0.4)]">
-            <Music className="w-5 h-5 fill-white text-white stroke-[2.5]" />
-          </div>
+          <VertexLogo alt={isCompact ? 'VERTEX Music' : ''} className="h-8 w-8 flex-shrink-0" />
           <div className={isCompact ? 'hidden' : 'flex flex-col min-w-0'}>
             <span className="text-white font-extrabold text-lg tracking-tight">
               VERTEX Music
