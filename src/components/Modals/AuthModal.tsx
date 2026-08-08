@@ -429,7 +429,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="mx-auto w-full max-w-md">
               <div className="mb-7 flex items-center gap-3 md:hidden">
                 <VertexLogo alt="" className="h-11 w-11 shrink-0" />
-                <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D8B4FE]">Welcome to</p><p className="mt-0.5 text-lg font-black">VERTEX Music</p></div>
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D946EF]">Welcome to</p><p className="mt-0.5 text-lg font-black">VERTEX Music</p></div>
               </div>
 
               <div className="flex items-center gap-6 border-b border-white/[0.08]" role="tablist" aria-label="Authentication mode">
@@ -531,7 +531,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           value={regUsername}
                           onChange={(event) => setRegUsername(event.target.value)}
                           placeholder="username"
-                          aria-describedby="username-availability"
+                          aria-describedby={usernameMessage ? 'username-availability' : undefined}
                           className={`${inputClass} pr-10`}
                         />
                         {usernameStatus === 'checking' && (
@@ -544,21 +544,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           <AlertCircle className={`pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 ${usernameStatus === 'error' ? 'text-amber-400' : 'text-red-400'}`} />
                         )}
                       </div>
-                      <p
-                        id="username-availability"
-                        aria-live="polite"
-                        className={`mt-1.5 min-h-4 px-1 text-[11px] font-semibold leading-4 ${
-                          usernameStatus === 'available'
-                            ? 'text-emerald-400'
-                            : usernameStatus === 'error'
-                              ? 'text-amber-300'
-                              : usernameStatus === 'taken' || usernameStatus === 'invalid'
-                                ? 'text-red-300'
-                                : 'text-zinc-500'
-                        }`}
-                      >
-                        {usernameMessage}
-                      </p>
+                      {usernameMessage && (
+                        <p
+                          id="username-availability"
+                          aria-live="polite"
+                          className={`mt-1.5 px-1 text-[11px] font-semibold leading-4 ${
+                            usernameStatus === 'available'
+                              ? 'text-emerald-400'
+                              : usernameStatus === 'error'
+                                ? 'text-amber-300'
+                                : usernameStatus === 'taken' || usernameStatus === 'invalid'
+                                  ? 'text-red-300'
+                                  : 'text-zinc-500'
+                          }`}
+                        >
+                          {usernameMessage}
+                        </p>
+                      )}
                     </div>
                     <div><label className={labelClass}>Display name</label><div className="relative"><Sparkles className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="name" maxLength={80} value={regDisplayName} onChange={(event) => setRegDisplayName(event.target.value)} placeholder="Public name" className={inputClass} /></div></div>
                   </div>
