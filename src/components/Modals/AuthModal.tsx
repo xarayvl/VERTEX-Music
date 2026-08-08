@@ -383,26 +383,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <section className="relative grid w-full overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#111012]/[0.91] shadow-[0_30px_100px_rgba(0,0,0,0.75),0_0_80px_rgba(168,85,247,0.08)] backdrop-blur-xl animate-in zoom-in-95 duration-300 md:grid-cols-[0.92fr_1.08fr]">
           {authSuccess && (
             <div
-              className="absolute inset-0 z-30 flex items-center justify-center bg-[#0d0b0f]/95 p-6 text-center backdrop-blur-xl animate-in fade-in duration-300"
+              className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6 text-center animate-in fade-in duration-300"
               role="status"
               aria-live="assertive"
             >
-              <div className="animate-in zoom-in-95 duration-500">
-                <div className="relative mx-auto flex h-24 w-24 items-center justify-center">
-                  <span className="absolute inset-2 animate-ping rounded-full bg-emerald-400/20" />
-                  <span className="relative flex h-20 w-20 items-center justify-center rounded-full border border-emerald-300/35 bg-emerald-400/15 shadow-[0_0_55px_rgba(52,211,153,0.28)]">
-                    <CheckCircle2 className="h-10 w-10 text-emerald-300" />
-                  </span>
-                </div>
-                <p className="mt-6 text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300">Authentication successful</p>
-                <h2 className="mt-2 text-3xl font-black tracking-tight">
+              <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#151316] px-7 py-8 shadow-2xl animate-in zoom-in-95 duration-300">
+                <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-400" />
+                <p className="mt-5 text-[10px] font-black uppercase tracking-[0.22em] text-emerald-400">Authentication successful</p>
+                <h2 className="mt-2 text-2xl font-black tracking-tight">
                   {authSuccess === 'register'
                     ? 'Your account is ready!'
                     : authSuccess === 'google'
                       ? 'Google sign-in complete!'
                       : 'Welcome back!'}
                 </h2>
-                <p className="mt-3 text-sm text-zinc-400">Taking you to your music space...</p>
+                <p className="mt-2 text-xs text-zinc-400">Taking you to your music space...</p>
               </div>
             </div>
           )}
