@@ -28,16 +28,12 @@ const AUTH_LOOP_ITEMS = [
     title: 'VERTEX Music',
   },
   {
-    node: <span className="flex items-center gap-2 font-bold"><Headphones className="h-[1em] w-[1em] text-[#F0ABFC]" /> Immersive listening</span>,
-    title: 'Immersive listening',
+    node: <span className="flex items-center gap-2 font-bold"><img src="/selim-chat-logo.png" alt="" className="h-[1.7em] w-[1.7em] shrink-0 rounded-full object-cover" draggable={false} /> Selim Chat</span>,
+    title: 'Selim Chat',
   },
   {
-    node: <span className="flex items-center gap-2 font-bold"><Sparkles className="h-[1em] w-[1em] text-[#C084FC]" /> Artist powered</span>,
-    title: 'Artist powered',
-  },
-  {
-    node: <span className="flex items-center gap-2 font-bold"><Library className="h-[1em] w-[1em] text-[#E879F9]" /> Your music library</span>,
-    title: 'Your music library',
+    node: <span className="flex items-center gap-2 font-bold"><svg viewBox="0 0 24 24" className="h-[1.15em] w-[1.15em] shrink-0 text-white" aria-hidden="true"><path fill="currentColor" d="M12 0c0 6.627-5.373 12-12 12 6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12C17.373 12 12 6.627 12 0Z" /></svg> Google Gemini</span>,
+    title: 'Google Gemini',
   },
 ];
 
@@ -350,7 +346,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const inputClass = 'w-full rounded-2xl border border-white/10 bg-white/[0.045] py-3.5 pl-11 pr-4 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10';
-  const labelClass = 'mb-2 block text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400';
+  const labelClass = 'mb-2 block text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400';
 
   return (
     <div className="fixed inset-0 z-50 flex min-h-0 flex-col overflow-y-auto bg-black p-2 text-white animate-in fade-in duration-200 sm:p-5">
@@ -377,10 +373,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           />
         </React.Suspense>
       </div>
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.08),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.35),rgba(0,0,0,0.78))]" aria-hidden="true" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.06),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.18),rgba(0,0,0,0.5))]" aria-hidden="true" />
 
       <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 items-center justify-center">
-        <section className="relative grid w-full overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#111012]/[0.91] shadow-[0_30px_100px_rgba(0,0,0,0.75),0_0_80px_rgba(168,85,247,0.08)] backdrop-blur-xl animate-in zoom-in-95 duration-300 md:grid-cols-[0.92fr_1.08fr]">
+        <section className="relative grid w-full overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#111012]/60 shadow-[0_30px_90px_rgba(0,0,0,0.48)] backdrop-blur-[4px] animate-in zoom-in-95 duration-300 md:grid-cols-[0.92fr_1.08fr]">
           {authSuccess && (
             <div
               className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6 text-center animate-in fade-in duration-300"
@@ -389,7 +385,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             >
               <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#151316] px-7 py-8 shadow-2xl animate-in zoom-in-95 duration-300">
                 <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-400" />
-                <p className="mt-5 text-[10px] font-black uppercase tracking-[0.22em] text-emerald-400">Authentication successful</p>
+                <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-400">Authentication successful</p>
                 <h2 className="mt-2 text-2xl font-black tracking-tight">
                   {authSuccess === 'register'
                     ? 'Your account is ready!'
@@ -397,12 +393,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       ? 'Google sign-in complete!'
                       : 'Welcome back!'}
                 </h2>
-                <p className="mt-2 text-xs text-zinc-400">Taking you to your music space...</p>
+                <p className="mt-2 text-sm text-zinc-400">Taking you to your music space...</p>
               </div>
             </div>
           )}
 
-          <aside className="relative hidden min-h-[640px] overflow-hidden border-r border-white/10 bg-gradient-to-br from-[#2b1738]/90 via-[#17111d]/90 to-[#0d0d0f]/90 p-9 md:flex md:flex-col md:justify-between">
+          <aside className="relative hidden min-h-[640px] overflow-hidden border-r border-white/10 bg-gradient-to-br from-[#2b1738]/[0.10] via-[#17111d]/10 to-[#0d0d0f]/[0.10] p-9 backdrop-blur-md md:flex md:flex-col md:justify-between">
             <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-[#A855F7]/25 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-[#D946EF]/15 blur-3xl" />
             <div className="absolute inset-0 opacity-[0.035]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
@@ -410,13 +406,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="relative">
               <div className="flex items-center gap-3">
                 <VertexLogo alt="" className="h-12 w-12 shrink-0" />
-                <div><p className="text-[9px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">Your sound. Your space.</p><h1 className="text-xl font-black tracking-tight">VERTEX Music</h1></div>
+                <div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#D8B4FE]">Your sound. Your space.</p><h1 className="mt-0.5 text-xl font-black tracking-tight">VERTEX Music</h1></div>
               </div>
 
-              <div className="mt-16">
-                <span className="inline-flex items-center gap-2 rounded-full border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-[#F0ABFC]"><Sparkles className="h-3.5 w-3.5" /> Artist-powered listening</span>
-                <h2 className="mt-5 max-w-sm text-4xl font-black leading-[1.05] tracking-[-0.04em]">Everything you listen to, create and share in one place.</h2>
-                <p className="mt-5 max-w-sm text-sm leading-6 text-zinc-400">Return to your library or create an account to publish music, build playlists and keep listening history synced.</p>
+              <div className="mt-14">
+                <h2 className="max-w-sm text-[2rem] font-black leading-[1.12] tracking-[-0.03em]">Everything you listen to, create and share in one place.</h2>
+                <p className="mt-4 max-w-sm text-sm leading-6 text-zinc-300">Return to your library or create an account to publish music, build playlists and keep listening history synced.</p>
               </div>
             </div>
 
@@ -426,33 +421,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 { icon: Library, text: 'Keep releases and playlists together' },
                 { icon: ShieldCheck, text: 'Secure account-backed ownership' },
               ].map(({ icon: Icon, text }, index) => (
-                <div key={text} style={{ '--stagger-index': index } as React.CSSProperties} className="stagger-item flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 text-xs font-bold text-zinc-300">
+                <div key={text} style={{ '--stagger-index': index } as React.CSSProperties} className="stagger-item flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3 text-[13px] font-semibold text-zinc-200">
                   <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#A855F7]/12 text-[#E9D5FF]"><Icon className="h-4 w-4" /></span>{text}
                 </div>
               ))}
             </div>
           </aside>
 
-          <main className="relative flex min-h-[560px] flex-col justify-center p-5 sm:p-8 md:min-h-[640px] md:p-10">
+          <main className="relative flex min-h-[560px] flex-col justify-center bg-[#09070b]/55 p-5 backdrop-blur-md sm:p-8 md:min-h-[640px] md:p-10">
             <div className="mx-auto w-full max-w-md">
               <div className="mb-7 flex items-center gap-3 md:hidden">
                 <VertexLogo alt="" className="h-11 w-11 shrink-0" />
-                <div><p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">Welcome to</p><p className="text-lg font-black">VERTEX Music</p></div>
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D8B4FE]">Welcome to</p><p className="mt-0.5 text-lg font-black">VERTEX Music</p></div>
               </div>
 
               <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-white/[0.08] bg-black/25 p-1.5">
-                <button type="button" onClick={() => switchMode('login')} className={`control-press flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition-all ${mode === 'login' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`}><LogIn className="h-4 w-4" /> Sign in</button>
-                <button type="button" onClick={() => switchMode('register')} className={`control-press flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition-all ${mode === 'register' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`}><UserPlus className="h-4 w-4" /> Sign up</button>
+                <button type="button" onClick={() => switchMode('login')} className={`control-press flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-bold transition-all ${mode === 'login' ? 'bg-white text-black shadow-lg' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}`}><LogIn className="h-4 w-4" /> Sign in</button>
+                <button type="button" onClick={() => switchMode('register')} className={`control-press flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-bold transition-all ${mode === 'register' ? 'bg-white text-black shadow-lg' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}`}><UserPlus className="h-4 w-4" /> Sign up</button>
               </div>
 
               <div key={mode} className="mt-7 animate-in fade-in slide-in-from-right-2 duration-300">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">{mode === 'login' ? 'Welcome back' : 'New listener'}</p>
-                <h2 className="mt-1 text-3xl font-black tracking-tight">{mode === 'login' ? 'Sign in to continue' : 'Create your account'}</h2>
-                <p className="mt-2 text-xs leading-5 text-zinc-500">{mode === 'login' ? 'Your library, playlists and artist tools are waiting.' : 'Set up your profile and start building your music space.'}</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#D8B4FE]">{mode === 'login' ? 'Welcome back' : 'New listener'}</p>
+                <h2 className="mt-1.5 text-[1.75rem] font-black leading-tight tracking-[-0.025em]">{mode === 'login' ? 'Sign in to continue' : 'Create your account'}</h2>
+                <p className="mt-2 text-sm leading-5 text-zinc-400">{mode === 'login' ? 'Your library, playlists and artist tools are waiting.' : 'Set up your profile and start building your music space.'}</p>
               </div>
 
               {error && (
-                <div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3.5 text-xs font-semibold text-red-200 animate-in fade-in slide-in-from-top-1">
+                <div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3.5 text-[13px] font-semibold text-red-200 animate-in fade-in slide-in-from-top-1">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
                 </div>
               )}
@@ -507,12 +502,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   />
                 </div>
                 {googleError && (
-                  <div className="flex w-full items-start gap-2 rounded-xl border border-red-400/20 bg-red-500/[0.08] px-3 py-2.5 text-[11px] font-semibold leading-4 text-red-200 animate-in fade-in slide-in-from-top-1" role="alert">
+                  <div className="flex w-full items-start gap-2 rounded-xl border border-red-400/20 bg-red-500/[0.08] px-3 py-2.5 text-xs font-semibold leading-4 text-red-200 animate-in fade-in slide-in-from-top-1" role="alert">
                     <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>{googleError}</span>
                   </div>
                 )}
-                <div className="flex w-full items-center gap-3 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600">
+                <div className="flex w-full items-center gap-3 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">
                   <span className="h-px flex-1 bg-white/10" /> Or <span className="h-px flex-1 bg-white/10" />
                 </div>
               </div>
@@ -555,7 +550,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <p
                         id="username-availability"
                         aria-live="polite"
-                        className={`mt-1.5 min-h-4 px-1 text-[10px] font-semibold leading-4 ${
+                        className={`mt-1.5 min-h-4 px-1 text-[11px] font-semibold leading-4 ${
                           usernameStatus === 'available'
                             ? 'text-emerald-400'
                             : usernameStatus === 'error'
@@ -572,12 +567,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
                   <div><label className={labelClass}>Email address</label><div className="relative"><Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="email" autoComplete="email" required value={regEmail} onChange={(event) => setRegEmail(event.target.value)} placeholder="yourname@example.com" className={inputClass} /></div></div>
                   <div><label className={labelClass}>Password</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={8} maxLength={128} value={regPassword} onChange={(event) => setRegPassword(event.target.value)} placeholder="At least 8 characters" className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
-                  <div className="flex items-center gap-2 px-1 text-[10px] font-semibold text-zinc-500"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Your library remains tied to this account.</div>
+                  <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-zinc-400"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Your library remains tied to this account.</div>
                   <button type="submit" disabled={loading || usernameStatus === 'checking' || usernameStatus === 'taken' || usernameStatus === 'invalid'} className="control-press flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3.5 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Creating account...</> : <>Create account <ArrowRight className="h-4 w-4" /></>}</button>
                 </form>
               )}
 
-              <p className="mt-6 text-center text-[10px] leading-4 text-zinc-600">By continuing, you confirm that this account belongs to you and that uploaded music follows the platform rules.</p>
+              <p className="mx-auto mt-6 max-w-sm text-center text-[11px] leading-5 text-zinc-500">By continuing, you confirm that this account belongs to you and that uploaded music follows the platform rules.</p>
             </div>
           </main>
         </section>
