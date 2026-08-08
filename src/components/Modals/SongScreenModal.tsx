@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ChevronDown,
-  Disc3,
   Heart,
   Pause,
   Play,
@@ -10,7 +9,6 @@ import {
   SkipForward,
   SlidersHorizontal,
   Sparkles,
-  UserRound,
   Waves,
 } from 'lucide-react';
 import { Track } from '../../types';
@@ -113,65 +111,18 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
 
         <div className="mt-2.5 grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] gap-3 md:grid-rows-none md:grid-cols-[0.92fr_1.08fr] md:gap-4">
           <article
-            className="workspace-card relative flex min-h-0 flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/10 p-3 shadow-2xl md:self-start md:justify-start md:rounded-3xl md:p-4"
-            style={{
-              background: `linear-gradient(145deg, ${palette.ambient}, #181818 62%, #111111)`,
-            }}
+            data-track-id={currentTrack.id}
+            data-context-type="track"
+            onClick={() => onSelectAlbum?.(currentTrack)}
+            className="workspace-card relative mx-auto aspect-square w-[min(100%,58dvh)] max-h-full min-h-0 cursor-pointer self-center overflow-hidden rounded-[1.35rem] shadow-[0_28px_70px_rgba(0,0,0,0.55)] md:w-full md:self-start md:rounded-[1.75rem]"
           >
-            <div
-              className="pointer-events-none absolute inset-x-0 top-0 h-40 opacity-35"
-              style={{ background: `radial-gradient(circle at 50% 0%, ${palette.accent}, transparent 68%)` }}
+            <img
+              key={currentTrack.coverUrl}
+              src={currentTrack.coverUrl}
+              alt={currentTrack.title}
+              referrerPolicy="no-referrer"
+              className="media-fade h-full w-full object-cover"
             />
-
-            <div data-track-id={currentTrack.id} data-context-type="track" className="relative mx-auto aspect-square w-[min(78vw,42dvh)] max-h-full max-w-full flex-shrink overflow-hidden rounded-[1.35rem] border border-white/15 bg-[#0f0f0f] shadow-[0_28px_70px_rgba(0,0,0,0.55)] md:w-[min(100%,calc(100dvh-390px))] md:rounded-[1.75rem] xl:w-[min(100%,calc(100dvh-360px))]">
-              <img
-                key={currentTrack.coverUrl}
-                src={currentTrack.coverUrl}
-                alt={currentTrack.title}
-                referrerPolicy="no-referrer"
-                className="media-fade h-full w-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 hidden items-end justify-between gap-3 p-5 md:flex">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-300">{releaseType}</p>
-                  <p className="mt-1 truncate text-lg font-black text-white">{releaseName}</p>
-                </div>
-                <span className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-white/15 bg-black/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white">
-                  <span className={`h-1.5 w-1.5 rounded-full bg-[#E879F9] ${isPlaying ? 'animate-live-pulse' : ''}`} />
-                  {isPlaying ? 'Playing' : 'Paused'}
-                </span>
-              </div>
-            </div>
-
-            <div className="relative mt-3 hidden w-full flex-shrink-0 grid-cols-2 gap-3 md:grid">
-              <button
-                data-artist-id={currentTrack.userId}
-                data-context-type="artist"
-                onClick={() => onSelectArtist?.(currentTrack.userId)}
-                disabled={!onSelectArtist}
-                className="control-press flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-2.5 text-left hover:bg-white/[0.07] disabled:cursor-default"
-              >
-                <UserRound className="h-4 w-4 flex-shrink-0 text-[#E879F9]" />
-                <span className="min-w-0">
-                  <span className="block text-[9px] font-black uppercase tracking-wider text-zinc-500">Artist</span>
-                  <span className="block truncate text-xs font-bold text-white">{currentTrack.artist}</span>
-                </span>
-              </button>
-              <button
-                data-track-id={currentTrack.id}
-                data-context-type="track"
-                onClick={() => onSelectAlbum?.(currentTrack)}
-                disabled={!onSelectAlbum}
-                className="control-press flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-2.5 text-left hover:bg-white/[0.07] disabled:cursor-default"
-              >
-                <Disc3 className="h-4 w-4 flex-shrink-0 text-[#C084FC]" />
-                <span className="min-w-0">
-                  <span className="block text-[9px] font-black uppercase tracking-wider text-zinc-500">Release</span>
-                  <span className="block truncate text-xs font-bold text-white">{releaseName}</span>
-                </span>
-              </button>
-            </div>
           </article>
 
           <article className="workspace-card flex min-h-0 flex-shrink-0 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-[#211827] to-[#181818] p-3 shadow-2xl md:self-start md:rounded-3xl md:p-5">

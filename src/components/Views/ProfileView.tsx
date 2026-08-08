@@ -360,7 +360,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
           {/* User Details */}
           <div className="space-y-2 text-center md:text-left flex-1 min-w-0">
-            <div className="flex items-center justify-center md:justify-start gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
               <span className="text-xs font-black uppercase tracking-widest text-zinc-300">
                 PROFILE
               </span>
@@ -421,26 +421,27 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       {/* Profile workspace navigation */}
-      <div className="custom-scrollbar mb-7 flex max-w-full items-center gap-2 overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#181818] p-2 shadow-xl">
+      <div className="mb-7 grid max-w-full grid-cols-3 gap-1.5 rounded-2xl border border-white/[0.08] bg-[#181818] p-2 shadow-xl sm:gap-2">
         {([
-          { key: 'overview', label: 'Overview & Listening', icon: Headphones },
-          { key: 'information', label: 'Account Information', icon: BadgeInfo },
-          { key: 'settings', label: 'Account Settings', icon: Settings },
-        ] as const).map(({ key, label, icon: Icon }) => {
+          { key: 'overview', label: 'Overview & Listening', mobileLabel: 'Overview', icon: Headphones },
+          { key: 'information', label: 'Account Information', mobileLabel: 'Info', icon: BadgeInfo },
+          { key: 'settings', label: 'Account Settings', mobileLabel: 'Settings', icon: Settings },
+        ] as const).map(({ key, label, mobileLabel, icon: Icon }) => {
           const active = activeSubTab === key;
           return (
             <button
               key={key}
               onClick={() => setActiveSubTab(key)}
-              className={`control-press flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-black transition-all ${
+              className={`control-press flex min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-[10px] font-black transition-all sm:gap-2 sm:px-4 sm:text-xs ${
                 active
                   ? 'border-[#C084FC]/50 bg-gradient-to-r from-[#A855F7]/30 to-[#D946EF]/20 text-white shadow-[0_10px_28px_rgba(168,85,247,0.14)]'
                   : 'border-transparent text-zinc-400 hover:border-white/[0.08] hover:bg-white/[0.055] hover:text-white'
               }`}
               aria-current={active ? 'page' : undefined}
             >
-              <Icon className={`h-4 w-4 ${active ? 'text-[#F0ABFC]' : 'text-zinc-500'}`} />
-              <span>{label}</span>
+              <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-[#F0ABFC]' : 'text-zinc-500'}`} />
+              <span className="min-w-0 truncate sm:hidden">{mobileLabel}</span>
+              <span className="hidden min-w-0 truncate sm:inline">{label}</span>
             </button>
           );
         })}
@@ -450,51 +451,51 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       {activeSubTab === 'overview' && (
         <div className="space-y-8 animate-in fade-in">
           {/* Listening Stats Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="p-4 rounded-xl bg-[#181818] border border-white/5 space-y-1">
-              <div className="flex items-center justify-between text-zinc-400">
-                <span className="text-[11px] font-bold uppercase">Hours Listened</span>
-                <Clock className="w-4 h-4 text-[#D946EF]" />
+          <div className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-4">
+            <div className="min-w-0 space-y-1 overflow-hidden rounded-xl border border-white/5 bg-[#181818] p-3 sm:p-4">
+              <div className="flex min-w-0 items-start justify-between gap-2 text-zinc-400">
+                <span className="min-w-0 text-[9px] font-bold uppercase leading-4 sm:text-[11px]">Hours Listened</span>
+                <Clock className="h-4 w-4 shrink-0 text-[#D946EF]" />
               </div>
-              <p className="text-2xl font-black text-white">{computedHours} hrs</p>
-              <p className="text-[10px] text-zinc-500">{secondsListened > 0 ? 'Active streaming time' : 'No activity logged'}</p>
+              <p className="break-words text-xl font-black text-white sm:text-2xl">{computedHours} hrs</p>
+              <p className="break-words text-[9px] leading-4 text-zinc-500 sm:text-[10px]">{secondsListened > 0 ? 'Active streaming time' : 'No activity logged'}</p>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#181818] border border-white/5 space-y-1">
-              <div className="flex items-center justify-between text-zinc-400">
-                <span className="text-[11px] font-bold uppercase">Tracks Streamed</span>
-                <Music className="w-4 h-4 text-[#D946EF]" />
+            <div className="min-w-0 space-y-1 overflow-hidden rounded-xl border border-white/5 bg-[#181818] p-3 sm:p-4">
+              <div className="flex min-w-0 items-start justify-between gap-2 text-zinc-400">
+                <span className="min-w-0 text-[9px] font-bold uppercase leading-4 sm:text-[11px]">Tracks Streamed</span>
+                <Music className="h-4 w-4 shrink-0 text-[#D946EF]" />
               </div>
-              <p className="text-2xl font-black text-white">{tracksPlayedCount.toLocaleString()}</p>
-              <p className="text-[10px] text-zinc-500">{tracksPlayedCount > 0 ? 'Based on saved play history' : 'No tracks played yet'}</p>
+              <p className="break-words text-xl font-black text-white sm:text-2xl">{tracksPlayedCount.toLocaleString()}</p>
+              <p className="break-words text-[9px] leading-4 text-zinc-500 sm:text-[10px]">{tracksPlayedCount > 0 ? 'Based on saved play history' : 'No tracks played yet'}</p>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#181818] border border-white/5 space-y-1">
-              <div className="flex items-center justify-between text-zinc-400">
-                <span className="text-[11px] font-bold uppercase">Top Genre</span>
-                <Zap className="w-4 h-4 text-amber-400" />
+            <div className="min-w-0 space-y-1 overflow-hidden rounded-xl border border-white/5 bg-[#181818] p-3 sm:p-4">
+              <div className="flex min-w-0 items-start justify-between gap-2 text-zinc-400">
+                <span className="min-w-0 text-[9px] font-bold uppercase leading-4 sm:text-[11px]">Top Genre</span>
+                <Zap className="h-4 w-4 shrink-0 text-amber-400" />
               </div>
               <p className="text-lg font-black text-white truncate">{calculatedTopGenre}</p>
-              <p className="text-[10px] text-zinc-500">{topGenrePercentage > 0 ? `${topGenrePercentage}% of listening time` : '0% of listening time'}</p>
+              <p className="break-words text-[9px] leading-4 text-zinc-500 sm:text-[10px]">{topGenrePercentage > 0 ? `${topGenrePercentage}% of listening time` : '0% of listening time'}</p>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#181818] border border-white/5 space-y-1">
-              <div className="flex items-center justify-between text-zinc-400">
-                <span className="text-[11px] font-bold uppercase">Playlists</span>
-                <BarChart3 className="w-4 h-4 text-cyan-400" />
+            <div className="min-w-0 space-y-1 overflow-hidden rounded-xl border border-white/5 bg-[#181818] p-3 sm:p-4">
+              <div className="flex min-w-0 items-start justify-between gap-2 text-zinc-400">
+                <span className="min-w-0 text-[9px] font-bold uppercase leading-4 sm:text-[11px]">Playlists</span>
+                <BarChart3 className="h-4 w-4 shrink-0 text-cyan-400" />
               </div>
-              <p className="text-2xl font-black text-white">{realPlaylistsCount}</p>
-              <p className="text-[10px] text-zinc-500">Created by you</p>
+              <p className="break-words text-xl font-black text-white sm:text-2xl">{realPlaylistsCount}</p>
+              <p className="break-words text-[9px] leading-4 text-zinc-500 sm:text-[10px]">Created by you</p>
             </div>
           </div>
 
           {/* MY UPLOADED SONGS & ARTIST RELEASES SECTION */}
-          <div className="space-y-3 bg-[#181818]/80 p-5 rounded-2xl border border-white/10 shadow-xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h2 className="text-xl font-black text-white tracking-tight">My Uploaded Songs & Releases</h2>
-                  <span className="px-2.5 py-0.5 rounded-full bg-[#D946EF]/20 text-[#D946EF] text-[10px] font-mono font-bold border border-[#D946EF]/30">
+          <div className="min-w-0 space-y-3 overflow-hidden rounded-2xl border border-white/10 bg-[#181818]/80 p-4 shadow-xl sm:p-5">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h2 className="min-w-0 text-lg font-black tracking-tight text-white sm:text-xl">My Uploaded Songs & Releases</h2>
+                  <span className="rounded-full border border-[#D946EF]/30 bg-[#D946EF]/20 px-2.5 py-0.5 font-mono text-[9px] font-bold text-[#D946EF] sm:text-[10px]">
                     Disk Folder Storage
                   </span>
                 </div>
@@ -504,7 +505,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               {onOpenAddTrackModal && (
                 <button
                   onClick={onOpenAddTrackModal}
-                  className="px-4 py-2 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white text-xs font-black shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5"
+                  className="flex w-full shrink-0 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-4 py-2 text-xs font-black text-white shadow-lg transition-all hover:scale-105 hover:opacity-90 active:scale-95 sm:w-auto"
                 >
                   <Plus className="w-4 h-4 stroke-[3]" />
                   <span>Upload Track</span>

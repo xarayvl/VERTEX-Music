@@ -532,32 +532,32 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   };
 
   return (
-    <section className="workspace-screen min-h-full w-full bg-[#121212] text-white select-none">
-      <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
-        <header className="workspace-header flex items-start justify-between gap-5 border-b border-white/10 pb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
+    <section className="workspace-screen min-h-full w-full min-w-0 max-w-full overflow-x-hidden bg-[#121212] text-white select-none">
+      <div className="mx-auto w-full min-w-0 max-w-6xl px-3 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
+        <header className="workspace-header flex min-w-0 items-start justify-between gap-3 border-b border-white/10 pb-5 sm:gap-5 sm:pb-6">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-12 sm:w-12">
               <Music className="h-6 w-6" />
             </div>
-            <div>
-              <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] sm:text-[10px] sm:tracking-[0.24em]">
                 <Sparkles className="h-3.5 w-3.5" /> Artist workspace
               </div>
-              <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Upload music</h1>
-              <p className="mt-1 text-xs text-zinc-400 sm:text-sm">Build a release, verify its audio and publish it from the main panel.</p>
+              <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">Upload music</h1>
+              <p className="mt-1 text-[11px] leading-4 text-zinc-400 sm:text-sm">Build a release, verify its audio and publish it from the main panel.</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="control-press rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white"
+            className="control-press shrink-0 rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white"
             aria-label="Close music uploader"
           >
             <X className="h-5 w-5" />
           </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="mt-7 space-y-6">
+        <form onSubmit={handleSubmit} className="mt-6 min-w-0 space-y-6 sm:mt-7">
           {error && (
             <div className="section-reveal flex items-start gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3.5 text-sm text-red-200">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />
@@ -565,13 +565,13 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
             </div>
           )}
 
-          <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
+          <section className="workspace-card section-reveal min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-6">
             <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Release format</p>
                 <h2 className="mt-1 text-xl font-black tracking-tight">What are you publishing?</h2>
               </div>
-              <span className="w-fit rounded-full border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#F0ABFC]">
+              <span className="max-w-full break-words rounded-full border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#F0ABFC]">
                 Publishing as {userProfileName?.trim() || 'your artist account'}
               </span>
             </div>
@@ -605,15 +605,15 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
             </div>
           </section>
 
-          <div className="grid items-start gap-6 lg:grid-cols-[1.12fr_0.88fr]">
-            <div className="space-y-6">
-              <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-5 sm:p-7">
-                <div className="mb-6 flex items-start justify-between gap-4">
-                  <div>
+          <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)]">
+            <div className="min-w-0 space-y-6">
+              <section className="workspace-card section-reveal min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-4 sm:p-7">
+                <div className="mb-6 flex min-w-0 flex-wrap items-start justify-between gap-3 sm:gap-4">
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Audio files</p>
                     <h2 className="mt-1 text-xl font-black tracking-tight">{isMultiTrackRelease ? 'Build the tracklist' : 'Choose an audio source'}</h2>
                   </div>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-400">
+                  <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-400">
                     {isMultiTrackRelease ? `${albumTracks.length} track${albumTracks.length === 1 ? '' : 's'}` : formatDuration(duration)}
                   </span>
                 </div>
@@ -653,7 +653,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                           }}
                           onDragLeave={() => setIsDragOver(false)}
                           onDrop={handleDrop}
-                          className={`relative overflow-hidden rounded-3xl border-2 border-dashed px-5 py-10 text-center transition-all ${
+                          className={`relative min-w-0 overflow-hidden rounded-3xl border-2 border-dashed px-3 py-8 text-center transition-all sm:px-5 sm:py-10 ${
                             isDragOver
                               ? 'border-[#D946EF] bg-[#D946EF]/10'
                               : audioUrl
@@ -697,7 +697,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                               </div>
                               <div>
                                 <p className="text-sm font-black text-white">Drop an audio file here</p>
-                                <p className="mt-1 text-xs text-zinc-500">or click to browse · MP3, WAV, OGG, M4A, AAC and FLAC</p>
+                                <p className="mt-1 break-words text-xs leading-5 text-zinc-500">or click to browse · MP3, WAV, OGG, M4A, AAC and FLAC</p>
                               </div>
                             </label>
                           )}
@@ -818,8 +818,8 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
               </section>
             </div>
 
-            <aside className="space-y-6 lg:sticky lg:top-6">
-              <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-5">
+            <aside className="min-w-0 space-y-6 lg:sticky lg:top-6">
+              <section className="workspace-card section-reveal min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
                 <div className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#101010] shadow-2xl">
                   {coverUrl.trim() ? (
                     <img
@@ -861,7 +861,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                 </div>
               </section>
 
-              <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
+              <section className="workspace-card section-reveal min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-6">
                 <div className="mb-5">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Release details</p>
                   <h2 className="mt-1 text-xl font-black tracking-tight">Metadata and artwork</h2>
