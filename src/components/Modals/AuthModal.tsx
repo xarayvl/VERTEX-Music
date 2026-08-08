@@ -339,7 +339,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </section>
       </div>
 
-      <div className="relative z-10 mx-auto mt-3 w-full max-w-5xl shrink-0 overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0d0b0f]/90 px-2 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <div className="relative z-10 -mx-2 -mb-2 mt-3 w-[calc(100%+1rem)] shrink-0 overflow-hidden border-t border-white/[0.1] bg-[#0d0b0f] px-2 pb-4 pt-3 shadow-[0_12px_40px_rgba(0,0,0,0.45)] sm:-mx-5 sm:-mb-5 sm:w-[calc(100%+2.5rem)] sm:px-5 sm:pb-6">
         <LogoLoop
           logos={AUTH_LOOP_ITEMS}
           speed={64}
