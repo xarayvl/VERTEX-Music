@@ -11,7 +11,7 @@ import { BottomTabBar } from './components/Navigation/BottomTabBar';
 import { HomeView } from './components/Views/HomeView';
 import { BrowseView } from './components/Views/BrowseView';
 import { SearchView } from './components/Views/SearchView';
-import { LibraryView } from './components/Views/LibraryView';
+import { LibraryView, type LibraryFilter } from './components/Views/LibraryView';
 import { ChatView } from './components/Views/ChatView';
 import { PlaylistView } from './components/Views/PlaylistView';
 import { ProfileView } from './components/Views/ProfileView';
@@ -68,6 +68,7 @@ export default function App() {
   const [navHistory, setNavHistory] = useState<TabType[]>(['home']);
   const [historyIndex, setHistoryIndex] = useState<number>(0);
   const activeTab = navHistory[historyIndex] || 'home';
+  const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>('playlists');
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -806,6 +807,11 @@ export default function App() {
     newHistory.push(tab);
     setNavHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
+  };
+
+  const handleOpenLibrary = (filter: LibraryFilter) => {
+    setLibraryFilter(filter);
+    handleSelectTab('library');
   };
 
   const handleGoBack = () => {
@@ -1941,6 +1947,7 @@ export default function App() {
             onSelectAlbum={handleSelectAlbum}
             onSelectArtist={handleSelectArtist}
             isCompact={sidebarWidth <= 220}
+            onOpenLikedSongs={() => handleOpenLibrary('liked')}
           />
         </div>
 
@@ -2110,7 +2117,7 @@ export default function App() {
                 onSelectAlbum={handleSelectAlbum}
                 onToggleLike={handleToggleLike}
                 selectedCategory={selectedCategory}
-                onSelectTab={handleSelectTab}
+                onOpenLikedSongs={() => handleOpenLibrary('liked')}
                 onOpenAddTrackModal={() => openWorkspacePanel('upload')}
                 onOpenNewPlaylistModal={() => openWorkspacePanel('playlist')}
                 recentlyPlayed={recentlyPlayed}
@@ -2163,6 +2170,8 @@ export default function App() {
                 onOpenNewPlaylistModal={() => openWorkspacePanel('playlist')}
                 onWipeAllTracks={handleWipeAllTracks}
                 onToggleLike={handleToggleLike}
+                activeFilter={libraryFilter}
+                onFilterChange={setLibraryFilter}
               />
             )}
 

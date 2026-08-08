@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Play, Pause, Heart, Clock, ArrowLeft, ListMusic, History } from 'lucide-react';
-import { Track, Playlist, Album, TabType } from '../../types';
+import { Track, Playlist, Album } from '../../types';
 import { groupTracksByRelease } from '../../utils/artistUtils';
 import { LIKED_SONGS_COVER_URL } from '../../utils/profilePlaceholders';
 
@@ -79,7 +79,7 @@ interface HomeViewProps {
   onSelectAlbum?: (track: Track) => void;
   onToggleLike: (trackId: string) => void;
   selectedCategory?: string;
-  onSelectTab?: (tab: TabType) => void;
+  onOpenLikedSongs?: () => void;
   onOpenAddTrackModal?: () => void;
   onOpenNewPlaylistModal?: () => void;
   recentlyPlayed?: Track[];
@@ -98,7 +98,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onSelectAlbum,
   onToggleLike,
   selectedCategory = 'All',
-  onSelectTab,
+  onOpenLikedSongs,
   onOpenAddTrackModal,
   onOpenNewPlaylistModal,
   recentlyPlayed = [],
@@ -210,7 +210,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       coverUrl: LIKED_SONGS_COVER_URL,
       type: 'library' as const,
       hoverColor: DEFAULT_GREETING_ACCENT,
-      action: () => onSelectTab?.('library'),
+      action: () => onOpenLikedSongs?.(),
     },
     ...recentQuickItems,
     ...playlistQuickItems,

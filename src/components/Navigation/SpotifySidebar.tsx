@@ -32,6 +32,7 @@ interface SpotifySidebarProps {
   onSelectAlbum?: (track: Track) => void;
   onSelectArtist?: (artist: Artist | string) => void;
   isCompact?: boolean;
+  onOpenLikedSongs: () => void;
 }
 
 export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
@@ -50,6 +51,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
   onSelectAlbum,
   onSelectArtist,
   isCompact = false,
+  onOpenLikedSongs,
 }) => {
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'liked' | 'playlists' | 'artists'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -246,7 +248,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
         <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar mt-1">
           {/* Liked Songs Tile */}
           {(libraryFilter === 'all' || libraryFilter === 'liked') && <div
-            onClick={() => onSelectTab('library')}
+            onClick={onOpenLikedSongs}
             title="Liked Songs"
             className={`flex items-center p-2 rounded-lg hover:bg-[#1f1f1f] cursor-pointer group transition-colors ${isCompact ? 'justify-center' : 'space-x-3'}`}
           >

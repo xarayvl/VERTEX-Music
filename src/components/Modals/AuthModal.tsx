@@ -8,12 +8,10 @@ import {
   Headphones,
   Library,
   Lock,
-  LogIn,
   Mail,
   ShieldCheck,
   Sparkles,
   User,
-  UserPlus,
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import VertexLogo from '../Brand/VertexLogo';
@@ -375,8 +373,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       </div>
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.06),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.18),rgba(0,0,0,0.5))]" aria-hidden="true" />
 
-      <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 items-center justify-center">
-        <section className="relative grid w-full overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#111012]/60 shadow-[0_30px_90px_rgba(0,0,0,0.48)] backdrop-blur-[4px] animate-in zoom-in-95 duration-300 md:grid-cols-[0.92fr_1.08fr]">
+      <div className="relative z-10 mx-auto mb-14 flex w-full max-w-5xl flex-1 items-center justify-center sm:mb-16">
+        <section className="relative grid w-full md:grid-cols-[0.92fr_1.08fr] md:items-center md:gap-4">
           {authSuccess && (
             <div
               className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6 text-center animate-in fade-in duration-300"
@@ -398,50 +396,49 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
-          <aside className="relative hidden min-h-[640px] overflow-hidden border-r border-white/10 bg-gradient-to-br from-[#2b1738]/[0.10] via-[#17111d]/10 to-[#0d0d0f]/[0.10] p-9 backdrop-blur-md md:flex md:flex-col md:justify-between">
-            <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-[#A855F7]/25 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-[#D946EF]/15 blur-3xl" />
-            <div className="absolute inset-0 opacity-[0.035]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-
-            <div className="relative">
+          <aside className="relative hidden h-[640px] self-center overflow-hidden rounded-[2rem] border border-white/[0.14] bg-gradient-to-br from-[#24152d]/55 via-[#161119]/55 to-[#0d0d0f]/55 p-9 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-md md:flex md:flex-col md:justify-center">
+            <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-[#A855F7]/15 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-[#D946EF]/10 blur-3xl" />
+            <div className="relative w-full">
               <div className="flex items-center gap-3">
                 <VertexLogo alt="" className="h-12 w-12 shrink-0" />
-                <div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#D8B4FE]">Your sound. Your space.</p><h1 className="mt-0.5 text-xl font-black tracking-tight">VERTEX Music</h1></div>
+                <div><p className="text-[13px] font-bold uppercase tracking-[0.14em] text-[#D946EF]">Your sound. Your space.</p><h1 className="mt-1 text-2xl font-black tracking-tight">VERTEX Music</h1></div>
               </div>
 
-              <div className="mt-14">
+              <div className="mt-12">
                 <h2 className="max-w-sm text-[2rem] font-black leading-[1.12] tracking-[-0.03em]">Everything you listen to, create and share in one place.</h2>
                 <p className="mt-4 max-w-sm text-sm leading-6 text-zinc-300">Return to your library or create an account to publish music, build playlists and keep listening history synced.</p>
               </div>
-            </div>
 
-            <div className="relative grid gap-2.5">
-              {[
-                { icon: Headphones, text: 'Continue your listening history' },
-                { icon: Library, text: 'Keep releases and playlists together' },
-                { icon: ShieldCheck, text: 'Secure account-backed ownership' },
-              ].map(({ icon: Icon, text }, index) => (
-                <div key={text} style={{ '--stagger-index': index } as React.CSSProperties} className="stagger-item flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3 text-[13px] font-semibold text-zinc-200">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#A855F7]/12 text-[#E9D5FF]"><Icon className="h-4 w-4" /></span>{text}
-                </div>
-              ))}
+              <div className="mt-10 grid gap-4 px-1">
+                {[
+                  { icon: Headphones, text: 'Synced listening history' },
+                  { icon: Library, text: 'Music and playlists together' },
+                  { icon: ShieldCheck, text: 'Secure account ownership' },
+                ].map(({ icon: Icon, text }) => (
+                  <div key={text} className="flex items-center gap-3 text-[15px] font-semibold text-zinc-300">
+                    <Icon className="h-[18px] w-[18px] shrink-0 text-[#D946EF]" />
+                    <span>{text}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </aside>
 
-          <main className="relative flex min-h-[560px] flex-col justify-center bg-[#09070b]/55 p-5 backdrop-blur-md sm:p-8 md:min-h-[640px] md:p-10">
+          <main className="relative flex min-h-[560px] flex-col justify-center overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#09070b]/55 p-5 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-md animate-in zoom-in-95 duration-300 sm:p-8 md:min-h-[640px] md:p-10">
             <div className="mx-auto w-full max-w-md">
               <div className="mb-7 flex items-center gap-3 md:hidden">
                 <VertexLogo alt="" className="h-11 w-11 shrink-0" />
                 <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D8B4FE]">Welcome to</p><p className="mt-0.5 text-lg font-black">VERTEX Music</p></div>
               </div>
 
-              <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-white/[0.08] bg-black/25 p-1.5">
-                <button type="button" onClick={() => switchMode('login')} className={`control-press flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-bold transition-all ${mode === 'login' ? 'bg-white text-black shadow-lg' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}`}><LogIn className="h-4 w-4" /> Sign in</button>
-                <button type="button" onClick={() => switchMode('register')} className={`control-press flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[13px] font-bold transition-all ${mode === 'register' ? 'bg-white text-black shadow-lg' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}`}><UserPlus className="h-4 w-4" /> Sign up</button>
+              <div className="flex items-center gap-6 border-b border-white/[0.08]" role="tablist" aria-label="Authentication mode">
+                <button type="button" role="tab" aria-selected={mode === 'login'} onClick={() => switchMode('login')} className={`-mb-px border-b px-0.5 pb-2.5 text-[13px] font-semibold transition-colors ${mode === 'login' ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>Sign in</button>
+                <button type="button" role="tab" aria-selected={mode === 'register'} onClick={() => switchMode('register')} className={`-mb-px border-b px-0.5 pb-2.5 text-[13px] font-semibold transition-colors ${mode === 'register' ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>Sign up</button>
               </div>
 
               <div key={mode} className="mt-7 animate-in fade-in slide-in-from-right-2 duration-300">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#D8B4FE]">{mode === 'login' ? 'Welcome back' : 'New listener'}</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#D946EF]">{mode === 'login' ? 'Welcome back' : 'New listener'}</p>
                 <h2 className="mt-1.5 text-[1.75rem] font-black leading-tight tracking-[-0.025em]">{mode === 'login' ? 'Sign in to continue' : 'Create your account'}</h2>
                 <p className="mt-2 text-sm leading-5 text-zinc-400">{mode === 'login' ? 'Your library, playlists and artist tools are waiting.' : 'Set up your profile and start building your music space.'}</p>
               </div>
@@ -453,7 +450,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               )}
 
               <div className="mt-6 flex flex-col items-center gap-3">
-                <div className={`relative w-full ${loading ? 'pointer-events-none opacity-50' : ''}`}>
+                <div className={`group relative w-full ${loading ? 'pointer-events-none opacity-50' : ''}`}>
                   <button
                     type="button"
                     onClick={() => {
@@ -465,7 +462,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     className={`control-press flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-black transition-all ${
                       googleStatus === 'error'
                         ? 'border border-red-400/25 bg-red-500/10 text-red-100 hover:bg-red-500/15'
-                        : 'bg-gradient-to-r from-[#A855F7] to-[#D946EF] shadow-[0_14px_36px_rgba(168,85,247,0.25)]'
+                        : 'border border-white/[0.12] bg-white/[0.05] text-zinc-100 group-hover:border-[#D946EF]/35 group-hover:bg-[#D946EF]/[0.10] group-hover:text-white'
                     } ${googleStatus === 'ready' ? 'pointer-events-none' : ''} disabled:cursor-wait`}
                   >
                     {loading ? (
@@ -516,7 +513,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <form onSubmit={handleLogin} className="mt-6 space-y-4">
                   <div><label className={labelClass}>Username or email</label><div className="relative"><User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="username" required value={loginIdentifier} onChange={(event) => setLoginIdentifier(event.target.value)} placeholder="Enter username or email" className={inputClass} /></div></div>
                   <div><label className={labelClass}>Password</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} placeholder="Enter your password" className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
-                  <button type="submit" disabled={loading} className="control-press mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3.5 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Signing in...</> : <>Sign in <ArrowRight className="h-4 w-4" /></>}</button>
+                  <button type="submit" disabled={loading} className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#D946EF] px-5 py-3.5 text-sm font-black transition-colors hover:bg-[#E05AF2] disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Signing in...</> : <>Sign in <ArrowRight className="h-4 w-4" /></>}</button>
                 </form>
               ) : (
                 <form onSubmit={handleRegister} className="mt-6 space-y-3.5">
@@ -568,7 +565,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div><label className={labelClass}>Email address</label><div className="relative"><Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="email" autoComplete="email" required value={regEmail} onChange={(event) => setRegEmail(event.target.value)} placeholder="yourname@example.com" className={inputClass} /></div></div>
                   <div><label className={labelClass}>Password</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={8} maxLength={128} value={regPassword} onChange={(event) => setRegPassword(event.target.value)} placeholder="At least 8 characters" className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
                   <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-zinc-400"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Your library remains tied to this account.</div>
-                  <button type="submit" disabled={loading || usernameStatus === 'checking' || usernameStatus === 'taken' || usernameStatus === 'invalid'} className="control-press flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3.5 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Creating account...</> : <>Create account <ArrowRight className="h-4 w-4" /></>}</button>
+                  <button type="submit" disabled={loading || usernameStatus === 'checking' || usernameStatus === 'taken' || usernameStatus === 'invalid'} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#D946EF] px-5 py-3.5 text-sm font-black transition-colors hover:bg-[#E05AF2] disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Creating account...</> : <>Create account <ArrowRight className="h-4 w-4" /></>}</button>
                 </form>
               )}
 
@@ -578,7 +575,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </section>
       </div>
 
-      <div className="relative z-10 -mx-2 -mb-2 mt-3 w-[calc(100%+1rem)] shrink-0 overflow-hidden px-2 pb-4 pt-3 sm:-mx-5 sm:-mb-5 sm:w-[calc(100%+2.5rem)] sm:px-5 sm:pb-6">
+      <div className="fixed inset-x-0 bottom-0 z-20 overflow-hidden px-2 pb-4 pt-3 sm:px-5 sm:pb-5">
         <LogoLoop
           logos={AUTH_LOOP_ITEMS}
           speed={64}

@@ -14,9 +14,11 @@ interface LibraryViewProps {
   onOpenNewPlaylistModal: () => void;
   onWipeAllTracks?: () => void;
   onToggleLike: (trackId: string) => void;
+  activeFilter: LibraryFilter;
+  onFilterChange: (filter: LibraryFilter) => void;
 }
 
-type LibraryFilter = 'liked' | 'playlists' | 'artists';
+export type LibraryFilter = 'liked' | 'playlists' | 'artists';
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
   tracks,
@@ -29,10 +31,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onSelectArtist,
   onOpenNewPlaylistModal,
   onToggleLike,
+  activeFilter: libraryFilter,
+  onFilterChange: setLibraryFilter,
 }) => {
-  // Playlists open first so anything the user just created is immediately
-  // visible when they return to Your Library.
-  const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>('playlists');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const likedTracks = tracks.filter((track) => track.isLiked);
 
