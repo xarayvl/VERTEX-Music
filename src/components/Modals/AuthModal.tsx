@@ -425,7 +425,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           </aside>
 
-          <main className="relative flex min-h-[560px] flex-col justify-center overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#09070b]/55 p-5 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-md animate-in zoom-in-95 duration-300 sm:p-8 md:min-h-[640px] md:p-10">
+          <main className={`relative flex min-h-[560px] flex-col justify-center overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#09070b]/55 p-5 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-md animate-in zoom-in-95 duration-300 sm:p-8 md:min-h-[640px] ${mode === 'register' ? 'md:p-8' : 'md:p-10'}`}>
             <div className="mx-auto w-full max-w-md">
               <div className="mb-7 flex items-center gap-3 md:hidden">
                 <VertexLogo alt="" className="h-11 w-11 shrink-0" />
@@ -437,7 +437,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button type="button" role="tab" aria-selected={mode === 'register'} onClick={() => switchMode('register')} className={`-mb-px border-b px-0.5 pb-2.5 text-[13px] font-semibold transition-colors ${mode === 'register' ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>Sign up</button>
               </div>
 
-              <div key={mode} className="mt-7 animate-in fade-in slide-in-from-right-2 duration-300">
+              <div key={mode} className={`mt-7 animate-in fade-in slide-in-from-right-2 duration-300 ${mode === 'register' ? 'md:mt-5' : ''}`}>
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#D946EF]">{mode === 'login' ? 'Welcome back' : 'New listener'}</p>
                 <h2 className="mt-1.5 text-[1.75rem] font-black leading-tight tracking-[-0.025em]">{mode === 'login' ? 'Sign in to continue' : 'Create your account'}</h2>
                 <p className="mt-2 text-sm leading-5 text-zinc-400">{mode === 'login' ? 'Your library, playlists and artist tools are waiting.' : 'Set up your profile and start building your music space.'}</p>
@@ -449,7 +449,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               )}
 
-              <div className="mt-6 flex flex-col items-center gap-3">
+              <div className={`mt-6 flex flex-col items-center gap-3 ${mode === 'register' ? 'md:mt-4' : ''}`}>
                 <div className={`group relative w-full ${loading ? 'pointer-events-none opacity-50' : ''}`}>
                   <button
                     type="button"
@@ -516,7 +516,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button type="submit" disabled={loading} className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#D946EF] px-5 py-3.5 text-sm font-black transition-colors hover:bg-[#E05AF2] disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Signing in...</> : <>Sign in <ArrowRight className="h-4 w-4" /></>}</button>
                 </form>
               ) : (
-                <form onSubmit={handleRegister} className="mt-6 space-y-3.5">
+                <form onSubmit={handleRegister} className="mt-6 space-y-3.5 md:mt-4 md:space-y-3">
                   <div className="grid gap-3.5 sm:grid-cols-2">
                     <div>
                       <label className={labelClass}>Username</label>
@@ -564,14 +564,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </div>
                     <div><label className={labelClass}>Display name</label><div className="relative"><Sparkles className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="name" maxLength={80} value={regDisplayName} onChange={(event) => setRegDisplayName(event.target.value)} placeholder="Public name" className={inputClass} /></div></div>
                   </div>
-                  <div><label className={labelClass}>Email address</label><div className="relative"><Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="email" autoComplete="email" required value={regEmail} onChange={(event) => setRegEmail(event.target.value)} placeholder="yourname@example.com" className={inputClass} /></div></div>
-                  <div><label className={labelClass}>Password</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={8} maxLength={128} value={regPassword} onChange={(event) => setRegPassword(event.target.value)} placeholder="At least 8 characters" className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+                  <div className="grid gap-3.5 md:grid-cols-2">
+                    <div><label className={labelClass}>Email address</label><div className="relative"><Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="email" autoComplete="email" required value={regEmail} onChange={(event) => setRegEmail(event.target.value)} placeholder="yourname@example.com" className={inputClass} /></div></div>
+                    <div><label className={labelClass}>Password</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={8} maxLength={128} value={regPassword} onChange={(event) => setRegPassword(event.target.value)} placeholder="At least 8 characters" className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+                  </div>
                   <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-zinc-400"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Your library remains tied to this account.</div>
                   <button type="submit" disabled={loading || usernameStatus === 'checking' || usernameStatus === 'taken' || usernameStatus === 'invalid'} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#D946EF] px-5 py-3.5 text-sm font-black transition-colors hover:bg-[#E05AF2] disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Creating account...</> : <>Create account <ArrowRight className="h-4 w-4" /></>}</button>
                 </form>
               )}
 
-              <p className="mx-auto mt-6 max-w-sm text-center text-[11px] leading-5 text-zinc-500">By continuing, you confirm that this account belongs to you and that uploaded music follows the platform rules.</p>
+              <p className={`mx-auto mt-6 max-w-sm text-center text-[11px] leading-5 text-zinc-500 ${mode === 'register' ? 'md:mt-4' : ''}`}>By continuing, you confirm that this account belongs to you and that uploaded music follows the platform rules.</p>
             </div>
           </main>
         </section>
