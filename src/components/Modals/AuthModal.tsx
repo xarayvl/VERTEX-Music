@@ -347,7 +347,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const labelClass = 'mb-2 block text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400';
 
   return (
-    <div className="fixed inset-0 z-50 flex min-h-0 flex-col overflow-y-auto bg-black p-2 text-white animate-in fade-in duration-200 sm:p-5">
+    <div className={`fixed inset-0 z-50 flex min-h-0 flex-col overflow-y-auto bg-black p-2 text-white animate-in fade-in duration-200 sm:p-5 ${mode === 'register' ? 'max-sm:overflow-hidden' : ''}`}>
       <div className="pointer-events-none fixed inset-0" aria-hidden="true">
         <React.Suspense fallback={<div className="h-full w-full bg-[#050307]" />}>
           <FaultyTerminal
@@ -373,7 +373,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       </div>
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.06),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.18),rgba(0,0,0,0.5))]" aria-hidden="true" />
 
-      <div className="relative z-10 mx-auto mb-14 flex w-full max-w-5xl flex-1 items-center justify-center sm:mb-16">
+      <div className={`relative z-10 mx-auto mb-14 flex w-full max-w-5xl flex-1 items-center justify-center sm:mb-16 ${mode === 'register' ? 'max-sm:min-h-0 max-sm:items-start max-sm:overflow-y-auto' : ''}`}>
         <section className="relative grid w-full md:grid-cols-[0.92fr_1.08fr] md:items-center md:gap-4">
           {authSuccess && (
             <div
