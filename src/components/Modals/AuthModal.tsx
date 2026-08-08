@@ -339,7 +339,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </section>
       </div>
 
-      <div className="relative z-10 -mx-2 -mb-2 mt-3 w-[calc(100%+1rem)] shrink-0 overflow-hidden border-t border-white/[0.1] bg-[#0d0b0f] px-2 pb-4 pt-3 shadow-[0_12px_40px_rgba(0,0,0,0.45)] sm:-mx-5 sm:-mb-5 sm:w-[calc(100%+2.5rem)] sm:px-5 sm:pb-6">
+      <div className="relative z-10 -mx-2 -mb-2 mt-3 w-[calc(100%+1rem)] shrink-0 overflow-hidden px-2 pb-4 pt-3 sm:-mx-5 sm:-mb-5 sm:w-[calc(100%+2.5rem)] sm:px-5 sm:pb-6">
         <LogoLoop
           logos={AUTH_LOOP_ITEMS}
           speed={64}
@@ -348,8 +348,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           gap={42}
           hoverSpeed={0}
           scaleOnHover
-          fadeOut
-          fadeOutColor="#0d0b0f"
           ariaLabel="VERTEX Music highlights"
           className="text-zinc-400"
         />
