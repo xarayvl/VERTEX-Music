@@ -519,6 +519,7 @@ async function startServer() {
   const generalApiLimiter = createRateLimiter({ windowMs: 5 * 60_000, max: 600, name: 'api' });
   const mutationLimiter = createRateLimiter({ windowMs: 60_000, max: 120, name: 'mutation' });
   const authLimiter = createRateLimiter({ windowMs: 15 * 60_000, max: 20, name: 'auth' });
+  const usernameAvailabilityLimiter = createRateLimiter({ windowMs: 60_000, max: 60, name: 'username-availability' });
   const chatLimiter = createRateLimiter({ windowMs: 60_000, max: 12, name: 'chat' });
   app.use('/api', generalApiLimiter);
   app.use('/api', (req, res, next) => {
@@ -594,6 +595,32 @@ async function startServer() {
     activeSessions.delete(token);
     deleteSessionFromRedis(token); // fire-and-forget
   }
+
+  // Lightweight preflight for the registration form. Registration still
+  // performs the authoritative uniqueness check below to avoid race conditions.
+  app.get("/api/auth/username-availability", usernameAvailabilityLimiter, async (req, res) => {
+    try {
+      const rawUsername = typeof req.query.username === "string" ? req.query.username : "";
+      const cleanUsername = rawUsername.trim();
+
+      if (!/^[a-zA-Z0-9_.-]{3,32}$/.test(cleanUsername)) {
+        return res.status(400).json({
+          available: false,
+          error: "Username must be 3-32 characters and may only contain letters, numbers, dot, underscore, or hyphen.",
+        });
+      }
+
+      const db = await readDBAsync(false);
+      const available = !db.users.some(
+        (user) => user.username.toLowerCase() === cleanUsername.toLowerCase()
+      );
+
+      return res.json({ available, username: cleanUsername });
+    } catch (error: any) {
+      console.error("Username Availability Error:", error);
+      return res.status(500).json({ error: "Failed to check username availability." });
+    }
+  });
 
   // User Registration
   app.post("/api/auth/register", authLimiter, async (req, res) => {

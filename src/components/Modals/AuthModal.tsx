@@ -46,6 +46,15 @@ const AUTH_LOOP_ITEMS = [
 // being secret.
 const GOOGLE_CLIENT_ID = '266806941595-ecv3f1f5pah0nrni31e9a4huevruv8i6.apps.googleusercontent.com';
 
+const GoogleMark = () => (
+  <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+    <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.05H12v3.87h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.35Z" />
+    <path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.42l-3.24-2.51c-.9.6-2.04.96-3.38.96-2.6 0-4.81-1.76-5.6-4.13H3.05v2.59A10 10 0 0 0 12 22Z" />
+    <path fill="#FBBC05" d="M6.4 13.9A6.02 6.02 0 0 1 6.09 12c0-.66.11-1.3.31-1.9V7.51H3.05A10 10 0 0 0 2 12c0 1.61.39 3.14 1.05 4.49L6.4 13.9Z" />
+    <path fill="#EA4335" d="M12 5.97c1.47 0 2.79.51 3.82 1.5l2.87-2.87A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.95 5.51L6.4 10.1C7.19 7.73 9.4 5.97 12 5.97Z" />
+  </svg>
+);
+
 declare global {
   interface Window {
     google?: {
@@ -72,6 +81,12 @@ interface AuthModalProps {
   onLoginSuccess: (user: UserProfile, token?: string) => void;
 }
 
+type UsernameAvailabilityStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'error';
+type GoogleButtonStatus = 'loading' | 'ready' | 'error';
+type AuthSuccessKind = 'login' | 'register' | 'google';
+
+const USERNAME_PATTERN = /^[a-zA-Z0-9_.-]{3,32}$/;
+
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
@@ -87,17 +102,47 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<UsernameAvailabilityStatus>('idle');
+  const [usernameMessage, setUsernameMessage] = useState('');
+  const [googleStatus, setGoogleStatus] = useState<GoogleButtonStatus>('loading');
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleRetryKey, setGoogleRetryKey] = useState(0);
+  const [authSuccess, setAuthSuccess] = useState<AuthSuccessKind | null>(null);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const authSuccessTimerRef = useRef<number | null>(null);
+
+  const completeAuthentication = (
+    user: UserProfile,
+    token: string | undefined,
+    successKind: AuthSuccessKind
+  ) => {
+    setLoading(false);
+    setError(null);
+    setGoogleError(null);
+    setAuthSuccess(successKind);
+
+    if (authSuccessTimerRef.current !== null) {
+      window.clearTimeout(authSuccessTimerRef.current);
+    }
+    authSuccessTimerRef.current = window.setTimeout(() => {
+      onLoginSuccess(user, token);
+      onClose();
+      setAuthSuccess(null);
+      authSuccessTimerRef.current = null;
+    }, 1100);
+  };
 
   const switchMode = (nextMode: 'login' | 'register') => {
     if (loading) return;
     setMode(nextMode);
     setShowPassword(false);
     setError(null);
+    setGoogleError(null);
   };
 
   const handleGoogleCredential = async (credential: string) => {
     setError(null);
+    setGoogleError(null);
     setLoading(true);
     try {
       const response = await fetch('/api/auth/google', {
@@ -107,13 +152,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        setError(data.error || 'Google sign-in failed. Please try again.');
+        setGoogleError(data.error || 'Google sign-in failed. Please try again.');
         return;
       }
-      onLoginSuccess(data.user, data.token);
-      onClose();
+      completeAuthentication(data.user, data.token, 'google');
     } catch {
-      setError('Server connection error. Please try again.');
+      setGoogleError('Google sign-in could not reach the server. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -124,40 +168,121 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     let cancelled = false;
     let attempts = 0;
+    let retryTimer: number | null = null;
+    setGoogleStatus('loading');
+    setGoogleError(null);
 
     const tryRender = () => {
       if (cancelled) return;
       const google = window.google;
       if (!google || !googleButtonRef.current) {
         attempts += 1;
-        if (attempts < 50) window.setTimeout(tryRender, 100);
+        if (attempts < 50) {
+          retryTimer = window.setTimeout(tryRender, 100);
+        } else {
+          setGoogleStatus('error');
+          setGoogleError('Google sign-in could not be loaded. Check your connection and try again.');
+        }
         return;
       }
-      google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: (response) => {
-          if (response?.credential) void handleGoogleCredential(response.credential);
-        },
-        auto_select: false,
-        cancel_on_tap_outside: true,
-      });
-      googleButtonRef.current.innerHTML = '';
-      google.accounts.id.renderButton(googleButtonRef.current, {
-        type: 'standard',
-        theme: 'filled_black',
-        size: 'large',
-        shape: 'pill',
-        text: mode === 'register' ? 'signup_with' : 'signin_with',
-        width: 340,
-        logo_alignment: 'center',
-      });
+      try {
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: (response) => {
+            if (response?.credential) void handleGoogleCredential(response.credential);
+          },
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+        googleButtonRef.current.innerHTML = '';
+        const buttonWidth = Math.max(240, Math.floor(googleButtonRef.current.clientWidth));
+        google.accounts.id.renderButton(googleButtonRef.current, {
+          type: 'standard',
+          theme: 'filled_black',
+          size: 'large',
+          shape: 'pill',
+          text: mode === 'register' ? 'signup_with' : 'signin_with',
+          width: buttonWidth,
+          logo_alignment: 'center',
+        });
+        setGoogleStatus('ready');
+      } catch {
+        setGoogleStatus('error');
+        setGoogleError('Google sign-in could not be initialized. Please try again.');
+      }
     };
 
     tryRender();
     return () => {
       cancelled = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [isOpen, mode]);
+  }, [isOpen, mode, googleRetryKey]);
+
+  useEffect(() => {
+    if (!isOpen || mode !== 'register') {
+      setUsernameStatus('idle');
+      setUsernameMessage('');
+      return;
+    }
+
+    const cleanUsername = regUsername.trim();
+    if (!cleanUsername) {
+      setUsernameStatus('idle');
+      setUsernameMessage('');
+      return;
+    }
+    if (!USERNAME_PATTERN.test(cleanUsername)) {
+      setUsernameStatus('invalid');
+      setUsernameMessage(
+        cleanUsername.length < 3
+          ? 'Use at least 3 characters.'
+          : 'Only letters, numbers, dot, underscore and hyphen are allowed.'
+      );
+      return;
+    }
+
+    const controller = new AbortController();
+    setUsernameStatus('checking');
+    setUsernameMessage('Checking availability...');
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/auth/username-availability?username=${encodeURIComponent(cleanUsername)}`,
+          { signal: controller.signal }
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          setUsernameStatus('error');
+          setUsernameMessage(data.error || 'Availability check failed. Registration can still be attempted.');
+          return;
+        }
+        if (data.available) {
+          setUsernameStatus('available');
+          setUsernameMessage('Username is available.');
+        } else {
+          setUsernameStatus('taken');
+          setUsernameMessage('This username is already taken.');
+        }
+      } catch (requestError) {
+        if ((requestError as Error).name === 'AbortError') return;
+        setUsernameStatus('error');
+        setUsernameMessage('Could not check availability. Registration can still be attempted.');
+      }
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [isOpen, mode, regUsername]);
+
+  useEffect(() => () => {
+    if (authSuccessTimerRef.current !== null) {
+      window.clearTimeout(authSuccessTimerRef.current);
+    }
+  }, []);
 
   if (!isOpen) return null;
 
@@ -177,8 +302,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setError(data.error || 'Login failed. Please check your credentials.');
         return;
       }
-      onLoginSuccess(data.user, data.token);
-      onClose();
+      completeAuthentication(data.user, data.token, 'login');
     } catch {
       setError('Server connection error. Please try again.');
     } finally {
@@ -189,6 +313,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
+
+    if (usernameStatus === 'checking') {
+      setError('Please wait for the username availability check to finish.');
+      return;
+    }
+    if (usernameStatus === 'invalid' || usernameStatus === 'taken') {
+      setError(usernameMessage || 'Please choose another username.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -207,8 +341,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setError(data.error || 'Registration failed.');
         return;
       }
-      onLoginSuccess(data.user, data.token);
-      onClose();
+      completeAuthentication(data.user, data.token, 'register');
     } catch {
       setError('Server connection error. Please try again.');
     } finally {
@@ -248,6 +381,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 items-center justify-center">
         <section className="relative grid w-full overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#111012]/[0.91] shadow-[0_30px_100px_rgba(0,0,0,0.75),0_0_80px_rgba(168,85,247,0.08)] backdrop-blur-xl animate-in zoom-in-95 duration-300 md:grid-cols-[0.92fr_1.08fr]">
+          {authSuccess && (
+            <div
+              className="absolute inset-0 z-30 flex items-center justify-center bg-[#0d0b0f]/95 p-6 text-center backdrop-blur-xl animate-in fade-in duration-300"
+              role="status"
+              aria-live="assertive"
+            >
+              <div className="animate-in zoom-in-95 duration-500">
+                <div className="relative mx-auto flex h-24 w-24 items-center justify-center">
+                  <span className="absolute inset-2 animate-ping rounded-full bg-emerald-400/20" />
+                  <span className="relative flex h-20 w-20 items-center justify-center rounded-full border border-emerald-300/35 bg-emerald-400/15 shadow-[0_0_55px_rgba(52,211,153,0.28)]">
+                    <CheckCircle2 className="h-10 w-10 text-emerald-300" />
+                  </span>
+                </div>
+                <p className="mt-6 text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300">Authentication successful</p>
+                <h2 className="mt-2 text-3xl font-black tracking-tight">
+                  {authSuccess === 'register'
+                    ? 'Your account is ready!'
+                    : authSuccess === 'google'
+                      ? 'Google sign-in complete!'
+                      : 'Welcome back!'}
+                </h2>
+                <p className="mt-3 text-sm text-zinc-400">Taking you to your music space...</p>
+              </div>
+            </div>
+          )}
+
           <aside className="relative hidden min-h-[640px] overflow-hidden border-r border-white/10 bg-gradient-to-br from-[#2b1738]/90 via-[#17111d]/90 to-[#0d0d0f]/90 p-9 md:flex md:flex-col md:justify-between">
             <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-[#A855F7]/25 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-[#D946EF]/15 blur-3xl" />
@@ -304,7 +463,60 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               )}
 
               <div className="mt-6 flex flex-col items-center gap-3">
-                <div ref={googleButtonRef} className={`flex w-full justify-center ${loading ? 'pointer-events-none opacity-50' : ''}`} />
+                <div className={`relative w-full ${loading ? 'pointer-events-none opacity-50' : ''}`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (googleStatus === 'error') setGoogleRetryKey((key) => key + 1);
+                    }}
+                    disabled={loading || googleStatus === 'loading'}
+                    tabIndex={googleStatus === 'ready' ? -1 : undefined}
+                    aria-hidden={googleStatus === 'ready'}
+                    className={`control-press flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-black transition-all ${
+                      googleStatus === 'error'
+                        ? 'border border-red-400/25 bg-red-500/10 text-red-100 hover:bg-red-500/15'
+                        : 'bg-gradient-to-r from-[#A855F7] to-[#D946EF] shadow-[0_14px_36px_rgba(168,85,247,0.25)]'
+                    } ${googleStatus === 'ready' ? 'pointer-events-none' : ''} disabled:cursor-wait`}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Please wait...
+                      </>
+                    ) : googleStatus === 'loading' ? (
+                      <>
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Loading Google sign-in...
+                      </>
+                    ) : googleStatus === 'error' ? (
+                      <>
+                        <AlertCircle className="h-4 w-4" />
+                        Retry Google sign-in
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-sm">
+                          <GoogleMark />
+                        </span>
+                        {mode === 'register' ? 'Sign up with Google' : 'Sign in with Google'}
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                  <div
+                    ref={googleButtonRef}
+                    className={`absolute inset-0 z-10 flex h-full w-full cursor-pointer overflow-hidden opacity-0 [&>div]:!h-full [&>div]:!w-full [&_iframe]:!h-full [&_iframe]:!w-full ${
+                      googleStatus === 'ready' && !loading ? '' : 'pointer-events-none'
+                    }`}
+                  />
+                </div>
+                {googleError && (
+                  <div className="flex w-full items-start gap-2 rounded-xl border border-red-400/20 bg-red-500/[0.08] px-3 py-2.5 text-[11px] font-semibold leading-4 text-red-200 animate-in fade-in slide-in-from-top-1" role="alert">
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>{googleError}</span>
+                  </div>
+                )}
                 <div className="flex w-full items-center gap-3 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600">
                   <span className="h-px flex-1 bg-white/10" /> Or <span className="h-px flex-1 bg-white/10" />
                 </div>
@@ -319,13 +531,54 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               ) : (
                 <form onSubmit={handleRegister} className="mt-6 space-y-3.5">
                   <div className="grid gap-3.5 sm:grid-cols-2">
-                    <div><label className={labelClass}>Username</label><div className="relative"><User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="username" required minLength={3} maxLength={32} value={regUsername} onChange={(event) => setRegUsername(event.target.value)} placeholder="username" className={inputClass} /></div></div>
+                    <div>
+                      <label className={labelClass}>Username</label>
+                      <div className="relative">
+                        <User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                        <input
+                          type="text"
+                          autoComplete="username"
+                          required
+                          minLength={3}
+                          maxLength={32}
+                          value={regUsername}
+                          onChange={(event) => setRegUsername(event.target.value)}
+                          placeholder="username"
+                          aria-describedby="username-availability"
+                          className={`${inputClass} pr-10`}
+                        />
+                        {usernameStatus === 'checking' && (
+                          <span className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-zinc-500 border-t-[#C084FC]" />
+                        )}
+                        {usernameStatus === 'available' && (
+                          <CheckCircle2 className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-400" />
+                        )}
+                        {(usernameStatus === 'taken' || usernameStatus === 'invalid' || usernameStatus === 'error') && (
+                          <AlertCircle className={`pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 ${usernameStatus === 'error' ? 'text-amber-400' : 'text-red-400'}`} />
+                        )}
+                      </div>
+                      <p
+                        id="username-availability"
+                        aria-live="polite"
+                        className={`mt-1.5 min-h-4 px-1 text-[10px] font-semibold leading-4 ${
+                          usernameStatus === 'available'
+                            ? 'text-emerald-400'
+                            : usernameStatus === 'error'
+                              ? 'text-amber-300'
+                              : usernameStatus === 'taken' || usernameStatus === 'invalid'
+                                ? 'text-red-300'
+                                : 'text-zinc-500'
+                        }`}
+                      >
+                        {usernameMessage}
+                      </p>
+                    </div>
                     <div><label className={labelClass}>Display name</label><div className="relative"><Sparkles className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="name" maxLength={80} value={regDisplayName} onChange={(event) => setRegDisplayName(event.target.value)} placeholder="Public name" className={inputClass} /></div></div>
                   </div>
                   <div><label className={labelClass}>Email address</label><div className="relative"><Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="email" autoComplete="email" required value={regEmail} onChange={(event) => setRegEmail(event.target.value)} placeholder="yourname@example.com" className={inputClass} /></div></div>
                   <div><label className={labelClass}>Password</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={8} maxLength={128} value={regPassword} onChange={(event) => setRegPassword(event.target.value)} placeholder="At least 8 characters" className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
                   <div className="flex items-center gap-2 px-1 text-[10px] font-semibold text-zinc-500"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Your library remains tied to this account.</div>
-                  <button type="submit" disabled={loading} className="control-press flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3.5 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Creating account...</> : <>Create account <ArrowRight className="h-4 w-4" /></>}</button>
+                  <button type="submit" disabled={loading || usernameStatus === 'checking' || usernameStatus === 'taken' || usernameStatus === 'invalid'} className="control-press flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3.5 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Creating account...</> : <>Create account <ArrowRight className="h-4 w-4" /></>}</button>
                 </form>
               )}
 
