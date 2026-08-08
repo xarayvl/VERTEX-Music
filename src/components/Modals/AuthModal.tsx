@@ -39,10 +39,6 @@ const AUTH_LOOP_ITEMS = [
     node: <span className="flex items-center gap-2 font-bold"><Library className="h-[1em] w-[1em] text-[#E879F9]" /> Your music library</span>,
     title: 'Your music library',
   },
-  {
-    node: <span className="flex items-center gap-2 font-bold"><ShieldCheck className="h-[1em] w-[1em] text-[#D8B4FE]" /> Secure profiles</span>,
-    title: 'Secure profiles',
-  },
 ];
 
 // Public OAuth client id — safe to expose in frontend code, Google's Sign-In
