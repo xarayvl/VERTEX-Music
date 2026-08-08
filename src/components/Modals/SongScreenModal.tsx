@@ -73,7 +73,6 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
   if (!isOpen || !currentTrack) return null;
 
   const releaseName = currentTrack.releaseTitle || currentTrack.album || currentTrack.title;
-  const releaseType = (currentTrack.releaseType || 'Single').toUpperCase();
   const progress = currentTrack.duration > 0
     ? Math.min(1, Math.max(0, currentTimeSeconds / currentTrack.duration))
     : 0;
@@ -93,10 +92,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               <div className="mb-0.5 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] md:mb-1 md:gap-2 md:text-[10px] md:tracking-[0.24em]">
                 <Sparkles className="h-3.5 w-3.5" /> Now playing
               </div>
-              <h1 data-track-id={currentTrack.id} data-context-type="track" className="truncate text-lg font-black tracking-tight md:text-3xl">{currentTrack.title}</h1>
-              <p className="hidden mt-1 truncate text-xs text-zinc-400 md:block md:text-sm">
-                Playing from {releaseType.toLowerCase()} · {releaseName}
-              </p>
+              <h1 data-track-id={currentTrack.id} data-context-type="track" className="truncate text-lg font-black tracking-tight md:text-3xl">{releaseName}</h1>
             </div>
           </div>
           <button
