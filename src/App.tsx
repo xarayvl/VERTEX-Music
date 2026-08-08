@@ -1908,11 +1908,11 @@ export default function App() {
   return (
     <div
       onContextMenu={handleContextMenu}
-      className="h-[100dvh] w-screen bg-black text-zinc-100 font-sans flex flex-col overflow-hidden p-0 gap-0 select-none relative md:h-screen md:p-2 md:gap-2"
+      className="vertex-shell h-[100dvh] w-screen bg-black text-zinc-100 font-sans flex flex-col overflow-hidden p-0 gap-0 select-none relative md:h-screen md:p-3 md:gap-3"
     >
       {/* Interactive Radial Spotlight following mouse cursor & current track accent color */}
       <div
-        className="fixed inset-0 pointer-events-none transition-opacity duration-300 z-0 opacity-25"
+        className="vertex-ambient fixed inset-0 pointer-events-none transition-opacity duration-300 z-0 opacity-25"
         style={{
           background: `radial-gradient(650px circle at ${mousePos.x}px ${mousePos.y}px, ${currentTrack?.accentColor || '#A855F7'} 0%, transparent 80%)`,
         }}
@@ -2013,7 +2013,7 @@ export default function App() {
         )}
 
         {/* Central VERTEX Music View Container */}
-        <main className="flex-1 bg-[#121212] flex flex-col min-w-0 overflow-hidden border-0 shadow-2xl relative md:rounded-xl md:border md:border-white/[0.04]">
+        <main className="vertex-main-stage flex-1 bg-[#121212] flex flex-col min-w-0 overflow-hidden border-0 shadow-2xl relative md:rounded-[22px] md:border md:border-white/[0.04]">
           {/* Top Header Navigation Bar */}
           <SpotifyTopHeader
             activeTab={activeTab}
@@ -2037,7 +2037,7 @@ export default function App() {
 
           {/* Scrollable View Content */}
           <div
-            className={`relative flex-1 overflow-x-hidden custom-scrollbar ${
+            className={`vertex-content relative flex-1 overflow-x-hidden custom-scrollbar ${
               isWorkspacePanelOpen
                 ? 'overflow-y-auto p-0 pb-40 md:pb-24'
                 : isSongScreenOpen

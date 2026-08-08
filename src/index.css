@@ -1,13 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Plus Jakarta Sans', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
   --animate-shimmer: shimmer 1.8s infinite;
 }
 
 html {
-  font-family: 'Plus Jakarta Sans', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -356,5 +355,400 @@ button, a {
 
   .mobile-mini-player button:first-of-type {
     display: none;
+  }
+}
+
+/* =====================================================================
+   VERTEX Liquid UI
+
+   A restrained, platform-native visual system. Chrome floats above the
+   library, artwork provides the color, and every touchable surface answers
+   immediately on press.
+===================================================================== */
+:root {
+  color-scheme: dark;
+  --vertex-accent: #ff3b6b;
+  --vertex-accent-soft: #ff7898;
+  --vertex-blue: #63a7ff;
+  --vertex-canvas: #07080b;
+  --vertex-surface: rgba(24, 25, 31, 0.72);
+  --vertex-surface-heavy: rgba(19, 20, 25, 0.9);
+  --vertex-hairline: rgba(255, 255, 255, 0.09);
+  --vertex-text-muted: rgba(235, 235, 245, 0.6);
+  --vertex-spring: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body {
+  background: var(--vertex-canvas);
+  color: #f7f7fa;
+  font-weight: 450;
+  letter-spacing: 0;
+}
+
+::selection {
+  background: rgba(255, 59, 107, 0.35);
+  color: white;
+}
+
+.vertex-shell {
+  background:
+    radial-gradient(circle at 20% -10%, rgba(83, 58, 132, 0.18), transparent 34rem),
+    radial-gradient(circle at 90% 20%, rgba(34, 73, 109, 0.13), transparent 30rem),
+    linear-gradient(145deg, #08090c 0%, #050609 56%, #0a090d 100%) !important;
+}
+
+.vertex-ambient {
+  opacity: 0.13 !important;
+  filter: saturate(0.8);
+  mix-blend-mode: screen;
+}
+
+.vertex-main-stage,
+.vertex-sidebar > div,
+[data-context-type='now-playing'] > div {
+  background: linear-gradient(155deg, rgba(35, 36, 43, 0.78), rgba(18, 19, 24, 0.84)) !important;
+  border: 1px solid var(--vertex-hairline) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 18px 50px rgba(0, 0, 0, 0.22) !important;
+  backdrop-filter: blur(32px) saturate(145%);
+  -webkit-backdrop-filter: blur(32px) saturate(145%);
+}
+
+.vertex-sidebar > div,
+[data-context-type='now-playing'] > div {
+  border-radius: 22px !important;
+}
+
+.vertex-main-stage::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: '';
+  background: radial-gradient(circle at 58% 4%, rgba(255, 255, 255, 0.035), transparent 25rem);
+  pointer-events: none;
+}
+
+.spotify-top-header {
+  min-height: 64px;
+  background: rgba(22, 23, 28, 0.68) !important;
+  border-color: rgba(255, 255, 255, 0.065) !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(28px) saturate(170%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(170%) !important;
+}
+
+.spotify-global-search input {
+  min-height: 38px;
+  background: rgba(255, 255, 255, 0.075) !important;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+.spotify-global-search input:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.spotify-global-search input:focus {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 4px rgba(99, 167, 255, 0.12) !important;
+}
+
+.spotify-header-categories button,
+.vertex-sidebar nav button,
+.vertex-sidebar button,
+.spotify-top-header button,
+[data-context-type='player'] button,
+.mobile-bottom-nav button,
+.mobile-mini-player button {
+  transform: translateZ(0);
+  transition:
+    transform 180ms var(--vertex-spring),
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    opacity 180ms ease !important;
+}
+
+.vertex-sidebar nav button:active,
+.vertex-sidebar button:active,
+.spotify-top-header button:active,
+[data-context-type='player'] button:active,
+.mobile-bottom-nav button:active,
+.mobile-mini-player button:active,
+.card-interactive:active,
+.control-press:active {
+  transform: scale(0.96) !important;
+  transition-duration: 80ms !important;
+}
+
+.vertex-sidebar nav button[title='Home'][class*='bg-white'],
+.vertex-sidebar nav button[title='Search'][class*='bg-white'],
+.vertex-sidebar nav button[title='Explore Genres'][class*='bg-white'],
+.vertex-sidebar nav button[title='Profile & Account'][class*='bg-white'] {
+  background: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.vertex-sidebar nav button:hover,
+.vertex-sidebar [data-context-type]:hover {
+  background: rgba(255, 255, 255, 0.065) !important;
+}
+
+.vertex-sidebar nav svg,
+.spotify-top-header svg {
+  stroke-width: 1.9;
+}
+
+.vertex-sidebar > div:first-child > div:first-child > div:first-child {
+  background: linear-gradient(145deg, #ff6b87, #ff2d55) !important;
+  box-shadow: 0 8px 24px rgba(255, 45, 85, 0.28) !important;
+}
+
+.vertex-sidebar h4,
+.vertex-sidebar span,
+.spotify-top-header span {
+  letter-spacing: -0.005em;
+}
+
+.vertex-content {
+  scroll-behavior: smooth;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.026), transparent 26rem),
+    transparent;
+}
+
+.vertex-home {
+  max-width: 1500px;
+  margin-inline: auto;
+}
+
+.vertex-home-hero {
+  min-height: 286px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border-radius: 28px !important;
+  background:
+    radial-gradient(circle at 88% -5%, rgba(255, 94, 139, 0.26), transparent 28rem),
+    radial-gradient(circle at 20% 10%, rgba(111, 94, 235, 0.24), transparent 26rem),
+    linear-gradient(145deg, #24212e 0%, #17181e 58%, #121318 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 28px 70px rgba(0, 0, 0, 0.28) !important;
+}
+
+.vertex-home-hero h1 {
+  font-size: clamp(2.25rem, 5vw, 4.75rem) !important;
+  line-height: 0.98;
+  letter-spacing: -0.045em !important;
+  font-weight: 760 !important;
+}
+
+.vertex-home-hero > div:first-of-type span {
+  color: rgba(255, 255, 255, 0.62) !important;
+  font-family: inherit !important;
+  letter-spacing: 0.1em !important;
+}
+
+.vertex-home-hero > div:first-of-type span > span {
+  background: var(--vertex-accent) !important;
+  box-shadow: 0 0 0 5px rgba(255, 59, 107, 0.12);
+  animation: none;
+}
+
+.vertex-home-hero .card-interactive {
+  min-height: 68px;
+  background: rgba(255, 255, 255, 0.09) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+  backdrop-filter: blur(16px) saturate(140%);
+}
+
+.card-interactive {
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025) !important;
+  transition:
+    transform 380ms var(--vertex-spring),
+    box-shadow 380ms var(--vertex-spring),
+    background-color 200ms ease,
+    border-color 200ms ease !important;
+}
+
+.card-interactive:hover {
+  transform: translateY(-3px) scale(1.008);
+  background: rgba(255, 255, 255, 0.075) !important;
+  border-color: rgba(255, 255, 255, 0.105);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.22) !important;
+}
+
+.card-interactive img {
+  border-radius: 12px;
+}
+
+.mobile-card-action,
+.vertex-content button[class*='from-[#A855F7]'][class*='to-[#D946EF]'] {
+  background: linear-gradient(145deg, #ff6b87, #ff2d55) !important;
+  box-shadow: 0 10px 24px rgba(255, 45, 85, 0.3) !important;
+}
+
+.vertex-content h1,
+.vertex-content h2,
+.vertex-content h3 {
+  font-optical-sizing: auto;
+}
+
+.vertex-content h2 {
+  letter-spacing: -0.025em !important;
+  font-weight: 720 !important;
+}
+
+[data-context-type='player'] {
+  inset: auto 12px 12px 12px !important;
+  width: auto !important;
+  height: 82px !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 24px !important;
+  background: rgba(27, 28, 34, 0.8) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 20px 50px rgba(0, 0, 0, 0.54) !important;
+  backdrop-filter: blur(34px) saturate(175%);
+  -webkit-backdrop-filter: blur(34px) saturate(175%);
+}
+
+[data-context-type='player'] > div:first-child > div:first-child {
+  border-radius: 14px !important;
+}
+
+[data-context-type='player'] button[title='Play'],
+[data-context-type='player'] button[title='Pause'] {
+  width: 38px !important;
+  height: 38px !important;
+  box-shadow: 0 7px 18px rgba(0, 0, 0, 0.24);
+}
+
+[data-context-type='now-playing'] > div {
+  overflow: hidden;
+}
+
+[data-context-type='now-playing'] img {
+  border-radius: 18px;
+}
+
+.mobile-bottom-nav > div,
+.mobile-mini-player > div {
+  background: rgba(27, 28, 34, 0.78) !important;
+  border-color: rgba(255, 255, 255, 0.13) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 45px rgba(0, 0, 0, 0.54) !important;
+  backdrop-filter: blur(30px) saturate(175%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(175%) !important;
+}
+
+.mobile-bottom-nav button[aria-current='page'] svg {
+  color: #ff5a7f !important;
+}
+
+.mobile-bottom-nav button[aria-current='page'] span {
+  color: #ff8ba5 !important;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid var(--vertex-blue) !important;
+  outline-offset: 3px;
+}
+
+@media (max-width: 767px) {
+  .spotify-top-header {
+    min-height: 58px;
+    background: rgba(11, 12, 16, 0.78) !important;
+  }
+
+  .vertex-content {
+    background: linear-gradient(180deg, rgba(45, 34, 55, 0.16), transparent 18rem);
+  }
+
+  .vertex-home {
+    gap: 1.75rem;
+  }
+
+  .vertex-home-hero {
+    min-height: auto;
+    padding: 1.25rem !important;
+    border-radius: 24px !important;
+  }
+
+  .vertex-home-hero h1 {
+    font-size: 2.35rem !important;
+  }
+
+  .card-interactive:hover {
+    transform: none;
+  }
+
+  .mobile-bottom-nav {
+    bottom: max(0.55rem, env(safe-area-inset-bottom));
+  }
+
+  .mobile-mini-player {
+    bottom: calc(max(0.55rem, env(safe-area-inset-bottom)) + 4.35rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+
+  .vertex-content {
+    scroll-behavior: auto;
+  }
+
+  .view-transition,
+  .stagger-item,
+  .workspace-screen,
+  .workspace-card,
+  .section-reveal,
+  .media-fade {
+    animation: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .vertex-main-stage,
+  .vertex-sidebar > div,
+  [data-context-type='now-playing'] > div,
+  .spotify-top-header,
+  [data-context-type='player'],
+  .mobile-bottom-nav > div,
+  .mobile-mini-player > div {
+    background: #17181d !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .vertex-main-stage,
+  .vertex-sidebar > div,
+  [data-context-type='now-playing'] > div,
+  .spotify-top-header,
+  [data-context-type='player'] {
+    border-color: rgba(255, 255, 255, 0.38) !important;
+    background: #111216 !important;
+  }
+
+  .text-zinc-400,
+  .text-zinc-500 {
+    color: #d2d2d8 !important;
   }
 }

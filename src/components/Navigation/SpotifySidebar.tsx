@@ -77,7 +77,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
     <aside
       data-context-type="sidebar"
       style={style}
-      className="w-full flex-shrink-0 flex flex-col gap-2 select-none h-full text-zinc-300"
+      className="vertex-sidebar w-full flex-shrink-0 flex flex-col gap-2 select-none h-full text-zinc-300"
     >
       {/* Navigation Block (Home & Search) */}
       <div className={`bg-[#121212] rounded-xl flex flex-col border border-white/[0.04] transition-[padding,gap] ${isCompact ? 'p-2 gap-2' : 'p-4 gap-4'}`}>
@@ -105,7 +105,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
             }`}
           >
             <Home className={`w-6 h-6 transition-transform group-hover:scale-110 ${activeTab === 'home' ? 'text-white' : 'text-zinc-400'}`} />
-            <span className={isCompact ? 'hidden' : ''}>Home</span>
+            <span className={isCompact ? 'hidden' : ''}>Listen Now</span>
           </button>
 
           <button
