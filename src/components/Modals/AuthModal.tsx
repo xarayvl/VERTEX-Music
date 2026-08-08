@@ -17,9 +17,33 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { UserProfile } from '../../types';
+import LogoLoop from '../LogoLoop/LogoLoop';
 
 const AUTH_TERMINAL_GRID = [2, 1];
 const FaultyTerminal = React.lazy(() => import('../Backgrounds/FaultyTerminal'));
+
+const AUTH_LOOP_ITEMS = [
+  {
+    node: <span className="flex items-center gap-2 font-black tracking-tight"><Music2 className="h-[1em] w-[1em] text-[#D8B4FE]" /> VERTEX Music</span>,
+    title: 'VERTEX Music',
+  },
+  {
+    node: <span className="flex items-center gap-2 font-bold"><Headphones className="h-[1em] w-[1em] text-[#F0ABFC]" /> Immersive listening</span>,
+    title: 'Immersive listening',
+  },
+  {
+    node: <span className="flex items-center gap-2 font-bold"><Sparkles className="h-[1em] w-[1em] text-[#C084FC]" /> Artist powered</span>,
+    title: 'Artist powered',
+  },
+  {
+    node: <span className="flex items-center gap-2 font-bold"><Library className="h-[1em] w-[1em] text-[#E879F9]" /> Your music library</span>,
+    title: 'Your music library',
+  },
+  {
+    node: <span className="flex items-center gap-2 font-bold"><ShieldCheck className="h-[1em] w-[1em] text-[#D8B4FE]" /> Secure profiles</span>,
+    title: 'Secure profiles',
+  },
+];
 
 // Public OAuth client id — safe to expose in frontend code, Google's Sign-In
 // flow relies on the ID token being verified server-side, not on this value
@@ -200,7 +224,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const labelClass = 'mb-2 block text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400';
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black p-2 text-white animate-in fade-in duration-200 sm:p-5">
+    <div className="fixed inset-0 z-50 flex min-h-0 flex-col overflow-y-auto bg-black p-2 text-white animate-in fade-in duration-200 sm:p-5">
       <div className="pointer-events-none fixed inset-0" aria-hidden="true">
         <React.Suspense fallback={<div className="h-full w-full bg-[#050307]" />}>
           <FaultyTerminal
@@ -226,7 +250,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       </div>
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.08),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.35),rgba(0,0,0,0.78))]" aria-hidden="true" />
 
-      <div className="relative z-10 mx-auto flex min-h-full max-w-5xl items-center justify-center">
+      <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 items-center justify-center">
         <section className="relative grid w-full overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#111012]/[0.91] shadow-[0_30px_100px_rgba(0,0,0,0.75),0_0_80px_rgba(168,85,247,0.08)] backdrop-blur-xl animate-in zoom-in-95 duration-300 md:grid-cols-[0.92fr_1.08fr]">
           <aside className="relative hidden min-h-[640px] overflow-hidden border-r border-white/10 bg-gradient-to-br from-[#2b1738]/90 via-[#17111d]/90 to-[#0d0d0f]/90 p-9 md:flex md:flex-col md:justify-between">
             <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-[#A855F7]/25 blur-3xl" />
@@ -313,6 +337,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           </main>
         </section>
+      </div>
+
+      <div className="relative z-10 mx-auto mt-3 w-full max-w-5xl shrink-0 overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0d0b0f]/90 px-2 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <LogoLoop
+          logos={AUTH_LOOP_ITEMS}
+          speed={64}
+          direction="left"
+          logoHeight={14}
+          gap={42}
+          hoverSpeed={0}
+          scaleOnHover
+          fadeOut
+          fadeOutColor="#0d0b0f"
+          ariaLabel="VERTEX Music highlights"
+          className="text-zinc-400"
+        />
       </div>
     </div>
   );
