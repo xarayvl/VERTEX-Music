@@ -92,7 +92,7 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
             disabled={controlsDisabled}
             aria-pressed={webSearchEnabled}
             title="Search current web sources"
-            className={`control-press flex h-8 flex-none items-center gap-1 overflow-hidden rounded-full border px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`flex h-8 flex-none items-center gap-1 overflow-hidden rounded-full border px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               webSearchEnabled
                 ? 'border-[#D946EF]/55 bg-[#D946EF]/15 text-[#F0ABFC]'
                 : 'border-transparent text-zinc-500 hover:bg-white/5 hover:text-zinc-200'
@@ -127,7 +127,7 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
             disabled={controlsDisabled}
             aria-pressed={highReasoningEnabled}
             title="Use NVIDIA high reasoning effort"
-            className={`control-press flex h-8 flex-none items-center gap-1 overflow-hidden rounded-full border px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`flex h-8 flex-none items-center gap-1 overflow-hidden rounded-full border px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               highReasoningEnabled
                 ? 'border-[#D946EF]/55 bg-[#D946EF]/15 text-[#F0ABFC]'
                 : 'border-transparent text-zinc-500 hover:bg-white/5 hover:text-zinc-200'
@@ -165,7 +165,7 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
           disabled={!isLoading && (!hasContent || disabled)}
           aria-label={isLoading ? 'Cancel AI request' : 'Send message'}
           title={isLoading ? 'Cancel request' : 'Send message'}
-          className={`control-press flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${
+          className={`flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${
             isLoading || hasContent
               ? 'bg-[#D946EF] text-white hover:bg-[#C026D3]'
               : 'bg-white/5 text-zinc-600'
