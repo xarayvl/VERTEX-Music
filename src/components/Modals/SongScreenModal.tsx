@@ -182,8 +182,8 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                 </button>
                 <button
                   onClick={onTogglePlay}
-                  className="control-press flex h-14 w-14 items-center justify-center rounded-full text-black shadow-[0_14px_34px_rgba(0,0,0,0.35)] hover:brightness-110 md:h-16 md:w-16"
-                  style={{ backgroundColor: palette.accent }}
+                  className="now-playing-gradient-button control-press flex h-14 w-14 items-center justify-center rounded-full text-black shadow-[0_14px_34px_rgba(0,0,0,0.35)] hover:brightness-110 md:h-16 md:w-16"
+                  style={{ background: `linear-gradient(135deg, ${palette.accent}, ${palette.secondary})` }}
                   title={isPlaying ? 'Pause' : 'Play'}
                 >
                   {isPlaying ? (

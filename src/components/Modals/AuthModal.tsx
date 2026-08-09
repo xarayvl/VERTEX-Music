@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import VertexLogo from '../Brand/VertexLogo';
+import GlassSurface from '../GlassSurface/GlassSurface';
 import LogoLoop from '../LogoLoop/LogoLoop';
 
 const AUTH_TERMINAL_GRID = [2, 1];
@@ -396,36 +397,73 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
-          <aside className="relative hidden h-[640px] self-center overflow-hidden rounded-[2rem] border border-white/[0.14] bg-gradient-to-br from-[#24152d]/55 via-[#161119]/55 to-[#0d0d0f]/55 p-9 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-md md:flex md:flex-col md:justify-center">
-            <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-[#A855F7]/15 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-[#D946EF]/10 blur-3xl" />
-            <div className="relative w-full">
-              <div className="flex items-center gap-3">
-                <VertexLogo alt="" className="h-12 w-12 shrink-0" />
-                <div><p className="text-[13px] font-bold uppercase tracking-[0.14em] text-[#D946EF]">Your sound. Your space.</p><h1 className="mt-1 text-2xl font-black tracking-tight">VERTEX Music</h1></div>
-              </div>
-
-              <div className="mt-12">
-                <h2 className="max-w-sm text-[2rem] font-black leading-[1.12] tracking-[-0.03em]">Everything you listen to, create and share in one place.</h2>
-                <p className="mt-4 max-w-sm text-sm leading-6 text-zinc-300">Return to your library or create an account to publish music, build playlists and keep listening history synced.</p>
-              </div>
-
-              <div className="mt-10 grid gap-4 px-1">
-                {[
-                  { icon: Headphones, text: 'Synced listening history' },
-                  { icon: Library, text: 'Music and playlists together' },
-                  { icon: ShieldCheck, text: 'Secure account ownership' },
-                ].map(({ icon: Icon, text }) => (
-                  <div key={text} className="flex items-center gap-3 text-[15px] font-semibold text-zinc-300">
-                    <Icon className="h-[18px] w-[18px] shrink-0 text-[#D946EF]" />
-                    <span>{text}</span>
+          <aside className="hidden h-[640px] self-center md:block">
+            <GlassSurface
+              width="100%"
+              height="100%"
+              borderRadius={32}
+              borderWidth={0.32}
+              brightness={52}
+              opacity={0.9}
+              blur={7}
+              displace={0.6}
+              backgroundOpacity={0.8}
+              saturation={1.45}
+              distortionScale={-230}
+              redOffset={0}
+              greenOffset={0}
+              blueOffset={0}
+              className="auth-glass-surface"
+            >
+              <div className="relative flex h-full w-full flex-col justify-center overflow-hidden p-9">
+                <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-[#A855F7]/15 blur-3xl" />
+                <div className="pointer-events-none absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-[#D946EF]/10 blur-3xl" />
+                <div className="relative w-full">
+                  <div className="flex items-center gap-3">
+                    <VertexLogo alt="" className="h-12 w-12 shrink-0" />
+                    <div><p className="text-[13px] font-bold uppercase tracking-[0.14em] text-[#D946EF]">Your sound. Your space.</p><h1 className="mt-1 text-2xl font-black tracking-tight">VERTEX Music</h1></div>
                   </div>
-                ))}
+
+                  <div className="mt-12">
+                    <h2 className="max-w-sm text-[2rem] font-black leading-[1.12] tracking-[-0.03em]">Everything you listen to, create and share in one place.</h2>
+                    <p className="mt-4 max-w-sm text-sm leading-6 text-zinc-300">Return to your library or create an account to publish music, build playlists and keep listening history synced.</p>
+                  </div>
+
+                  <div className="mt-10 grid gap-4 px-1">
+                    {[
+                      { icon: Headphones, text: 'Synced listening history' },
+                      { icon: Library, text: 'Music and playlists together' },
+                      { icon: ShieldCheck, text: 'Secure account ownership' },
+                    ].map(({ icon: Icon, text }) => (
+                      <div key={text} className="flex items-center gap-3 text-[15px] font-semibold text-zinc-300">
+                        <Icon className="h-[18px] w-[18px] shrink-0 text-[#D946EF]" />
+                        <span>{text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
+            </GlassSurface>
           </aside>
 
-          <main className={`relative flex min-h-0 flex-col justify-center overflow-hidden rounded-[1.5rem] border border-white/[0.14] bg-[#09070b]/55 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-md animate-in zoom-in-95 duration-300 sm:min-h-[560px] sm:rounded-[2rem] sm:p-8 md:min-h-[640px] ${mode === 'register' ? 'md:p-8' : 'md:p-10'}`}>
+          <GlassSurface
+            width="100%"
+            height="auto"
+            borderRadius={32}
+            borderWidth={0.34}
+            brightness={54}
+            opacity={0.88}
+            blur={8}
+            displace={0.7}
+            backgroundOpacity={0.8}
+            saturation={1.5}
+            distortionScale={-240}
+            redOffset={0}
+            greenOffset={0}
+            blueOffset={0}
+            className="auth-glass-surface animate-in zoom-in-95 duration-300 max-sm:!rounded-[1.5rem]"
+          >
+          <main className={`relative flex min-h-0 w-full flex-col justify-center overflow-hidden p-4 sm:min-h-[560px] sm:p-8 md:min-h-[640px] ${mode === 'register' ? 'md:p-8' : 'md:p-10'}`}>
             <div className="mx-auto w-full max-w-md">
               <div className="mb-5 flex items-center gap-3 md:hidden sm:mb-7">
                 <VertexLogo alt="" className="h-11 w-11 shrink-0" />
@@ -576,6 +614,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <p className={`mx-auto mt-6 max-w-sm text-center text-[11px] leading-5 text-zinc-500 ${mode === 'register' ? 'md:mt-4' : ''}`}>By continuing, you confirm that this account belongs to you and that uploaded music follows the platform rules.</p>
             </div>
           </main>
+          </GlassSurface>
         </section>
       </div>
 

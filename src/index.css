@@ -34,10 +34,14 @@ button,
 [role='button'] {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  background-image: none !important;
   box-shadow: none !important;
   filter: none !important;
   text-shadow: none !important;
+}
+
+button:not(.now-playing-gradient-button),
+[role='button']:not(.now-playing-gradient-button) {
+  background-image: none !important;
 }
 
 /* Buttons use flat fills throughout the app. Tailwind's gradient utilities
