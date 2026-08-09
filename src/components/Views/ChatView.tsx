@@ -13,17 +13,16 @@ interface ChatViewProps {
   userDisplayName?: string;
 }
 
-// Generic pending-state labels. They deliberately avoid claiming that a
-// specific backend operation is currently happening because this endpoint
-// does not stream internal execution stages to the client.
+// Pending-state labels mirror the request flow. Web-assisted requests search
+// first, then the model reasons over the returned source snippets.
 const THINKING_PHASES = [
-  { text: 'Processing your request...', Icon: BrainCircuit },
+  { text: 'Thinking...', Icon: BrainCircuit },
   { text: 'Preparing a response...', Icon: Sparkles },
 ];
 
 const WEB_SEARCH_PHASES = [
-  { text: 'Processing your request...', Icon: BrainCircuit },
   { text: 'Searching the web...', Icon: Globe },
+  { text: 'Thinking with sources...', Icon: BrainCircuit },
   { text: 'Preparing a response...', Icon: Sparkles },
 ];
 
