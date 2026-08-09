@@ -22,7 +22,7 @@ interface AgentPlanningProps {
 
 const statusClasses: Record<PlanStepStatus, string> = {
   success: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20',
-  active: 'bg-[#A855F7]/20 text-[#E879F9] ring-[#D946EF]/25',
+  active: 'bg-[#D946EF]/20 text-[#F0ABFC] ring-[#D946EF]/25',
   error: 'bg-rose-500/15 text-rose-300 ring-rose-400/20',
   pending: 'bg-white/[0.05] text-zinc-600 ring-white/[0.06]',
 };

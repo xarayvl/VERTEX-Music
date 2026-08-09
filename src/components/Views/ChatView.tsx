@@ -17,14 +17,39 @@ interface ChatViewProps {
 // Pending-state labels mirror the request flow. Web-assisted requests search
 // first, then the model reasons over the returned source snippets.
 const THINKING_PHASES = [
-  { text: 'Understand your request', detail: 'Analyzing the conversation and deciding how to respond.', Icon: BrainCircuit },
-  { text: 'Prepare the answer', detail: 'Writing a clear response for the chat.', Icon: Sparkles },
+  {
+    text: 'Understand your request',
+    detail: 'Analyzing the conversation and deciding how to respond.',
+    completedDetail: 'Identified the request and the relevant conversation context.',
+    Icon: BrainCircuit,
+  },
+  {
+    text: 'Prepare the answer',
+    detail: 'Writing a clear response for the chat.',
+    completedDetail: 'Prepared the final response for the chat.',
+    Icon: Sparkles,
+  },
 ];
 
 const WEB_SEARCH_PHASES = [
-  { text: 'Search the web', detail: 'Finding current sources relevant to your request.', Icon: Globe },
-  { text: 'Review the sources', detail: 'Comparing the retrieved results before answering.', Icon: BrainCircuit },
-  { text: 'Prepare the answer', detail: 'Writing a grounded response with source references.', Icon: Sparkles },
+  {
+    text: 'Search the web',
+    detail: 'Finding current sources relevant to your request.',
+    completedDetail: 'Retrieved current web results relevant to the request.',
+    Icon: Globe,
+  },
+  {
+    text: 'Review the sources',
+    detail: 'Comparing the retrieved results before answering.',
+    completedDetail: 'Reviewed the returned source snippets for relevant information.',
+    Icon: BrainCircuit,
+  },
+  {
+    text: 'Prepare the answer',
+    detail: 'Writing a grounded response with source references.',
+    completedDetail: 'Prepared a response grounded in the available search results.',
+    Icon: Sparkles,
+  },
 ];
 
 const AI_HIGH_DEMAND_MESSAGE = 'AI is in high demand right now. Please try again later.';
@@ -65,6 +90,26 @@ const shouldRequestWebSearch = (message: string): boolean => {
 const createMessageId = (prefix: 'user' | 'ai' | 'err'): string => {
   const randomId = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
   return `${prefix}_${randomId}`;
+};
+
+const createCompletedReasoningSteps = (usedWebSearch: boolean): PlanStep[] => {
+  const phases = usedWebSearch ? WEB_SEARCH_PHASES : THINKING_PHASES;
+  return phases.map((phase, index) => {
+    const PhaseIcon = phase.Icon;
+    return {
+      id: `completed-${usedWebSearch ? 'web' : 'chat'}-${index}`,
+      title: phase.text,
+      status: 'success',
+      duration: 'Done',
+      icon: <PhaseIcon className="h-3.5 w-3.5" />,
+      content: (
+        <div className="flex items-start gap-2 rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+          <PhaseIcon className="mt-0.5 h-3.5 w-3.5 flex-none text-[#F0ABFC]" />
+          <span>{phase.completedDetail}</span>
+        </div>
+      ),
+    };
+  });
 };
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -286,7 +331,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       icon: <PhaseIcon className="h-3.5 w-3.5" />,
       defaultExpanded: status === 'active',
       content: status === 'active' ? (
-        <div className="flex items-start gap-2 rounded-xl border border-[#A855F7]/15 bg-[#A855F7]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+        <div className="flex items-start gap-2 rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
           <PhaseIcon className="mt-0.5 h-3.5 w-3.5 flex-none animate-pulse text-[#E879F9]" />
           <span>{phase.detail}</span>
         </div>
@@ -295,10 +340,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
   });
 
   return (
-    <section className="workspace-screen flex h-full min-h-0 w-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_38%),#121212] text-white select-none md:bg-[#121212]">
+    <section className="workspace-screen flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#121212] text-white select-none">
       <header className="workspace-header flex flex-shrink-0 items-center justify-between gap-2 border-b border-white/10 px-3 py-3 sm:gap-3 sm:px-0 sm:pb-3 sm:pt-0">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-          <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-11 sm:w-11 sm:rounded-2xl">
+          <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] bg-[#D946EF] shadow-[0_12px_34px_rgba(217,70,239,0.22)] sm:h-11 sm:w-11 sm:rounded-2xl">
             <Bot className="h-5 w-5" />
             <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#121212] bg-emerald-400" />
           </div>
@@ -331,7 +376,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           {messages.length === 0 && !isLoading && (
             <div className="flex min-h-full items-center justify-center py-5 sm:py-8">
               <div className="max-w-lg text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#A855F7]/30 bg-gradient-to-br from-[#A855F7]/25 to-[#D946EF]/10 text-[#E879F9] shadow-[0_18px_50px_rgba(168,85,247,0.14)] sm:h-16 sm:w-16 sm:rounded-3xl">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#D946EF]/30 bg-[#D946EF]/10 text-[#F0ABFC] shadow-[0_18px_50px_rgba(217,70,239,0.12)] sm:h-16 sm:w-16 sm:rounded-3xl">
                   <Bot className="h-7 w-7 sm:h-8 sm:w-8" />
                 </div>
                 <p className="mt-4 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] sm:mt-5 sm:text-[10px] sm:tracking-[0.22em]">VERTEX Music intelligence</p>
@@ -356,7 +401,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   className={`flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border shadow-md sm:h-9 sm:w-9 sm:rounded-2xl ${
                     msg.sender === 'user'
                       ? 'border-white/20 bg-[#242424]'
-                      : 'border-[#D946EF]/30 bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white'
+                      : 'border-[#D946EF]/40 bg-[#D946EF] text-white'
                   }`}
                 >
                   {msg.sender === 'user' ? (
@@ -379,10 +424,18 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <div
                   className={`max-w-[calc(100%_-_40px)] rounded-2xl border p-3 text-[13px] leading-relaxed shadow-lg sm:max-w-[76%] sm:rounded-2xl sm:p-4 sm:text-[13px] ${
                     msg.sender === 'user'
-                      ? 'rounded-tr-md border-[#D946EF]/30 bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white'
+                      ? 'rounded-tr-md border-[#F0ABFC]/25 bg-[#D946EF] text-white'
                       : 'rounded-tl-md border-white/[0.08] bg-[#202020] text-zinc-100'
                   }`}
                 >
+                  {msg.sender === 'ai' && msg.text !== AI_HIGH_DEMAND_MESSAGE && !/^(?:⚠️|⏳)/.test(msg.text) && (
+                    <AgentPlanning
+                      title="How this answer was prepared"
+                      steps={createCompletedReasoningSteps(msg.webSearchUsed === true)}
+                      className="mb-3"
+                    />
+                  )}
+
                   {msg.sender === 'ai' && msg.webSearchUsed && (
                     <div className="mb-3">
                       <button
@@ -482,7 +535,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 exit={{ opacity: 0, y: -6 }}
                 className="flex items-start gap-2 sm:gap-3"
               >
-                <div className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-md">
+                <div className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-[#D946EF] text-white shadow-md">
                   <Bot className="h-4 w-4" />
                   <span className="absolute -inset-1 animate-ping rounded-2xl border border-[#D946EF]/35" />
                 </div>
@@ -559,7 +612,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <button
               type="submit"
               disabled={!input.trim() || isLoading || rateLimitSeconds > 0}
-            className="control-press flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-md hover:brightness-110 disabled:cursor-not-allowed disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 sm:h-10 sm:w-10 sm:rounded-xl"
+              className="control-press flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[14px] bg-[#D946EF] text-white shadow-md hover:bg-[#C026D3] disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600 sm:h-10 sm:w-10 sm:rounded-xl"
               aria-label="Send message"
             >
               <Send className="ml-0.5 h-4 w-4 fill-current" />
