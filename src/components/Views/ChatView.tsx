@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bot, Send, Sparkles, Play, Trash2, Music, Globe, Search, ChevronDown, BrainCircuit } from 'lucide-react';
+import { Bot, Sparkles, Play, Trash2, Music, Globe, Search, ChevronDown, BrainCircuit } from 'lucide-react';
 import { Track, ChatMessage } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import { AgentPlanning, type PlanStep } from '../ui/ai-planning';
+import { AiPromptBox } from '../ui/ai-prompt-box';
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -52,6 +53,24 @@ const WEB_SEARCH_PHASES = [
   },
 ];
 
+const HIGH_REASONING_PHASE = {
+  text: 'Reason carefully',
+  detail: 'Using NVIDIA high reasoning effort to work through the request.',
+  completedDetail: 'Used NVIDIA high reasoning effort before preparing the response.',
+  Icon: BrainCircuit,
+};
+
+const getReasoningPhases = (usedWebSearch: boolean, usedHighReasoning: boolean) => {
+  if (usedWebSearch) {
+    return usedHighReasoning
+      ? [WEB_SEARCH_PHASES[0], WEB_SEARCH_PHASES[1], HIGH_REASONING_PHASE, WEB_SEARCH_PHASES[2]]
+      : WEB_SEARCH_PHASES;
+  }
+  return usedHighReasoning
+    ? [THINKING_PHASES[0], HIGH_REASONING_PHASE, THINKING_PHASES[1]]
+    : THINKING_PHASES;
+};
+
 const AI_HIGH_DEMAND_MESSAGE = 'AI is in high demand right now. Please try again later.';
 
 const shouldRequestWebSearch = (message: string): boolean => {
@@ -92,8 +111,8 @@ const createMessageId = (prefix: 'user' | 'ai' | 'err'): string => {
   return `${prefix}_${randomId}`;
 };
 
-const createCompletedReasoningSteps = (usedWebSearch: boolean): PlanStep[] => {
-  const phases = usedWebSearch ? WEB_SEARCH_PHASES : THINKING_PHASES;
+const createCompletedReasoningSteps = (usedWebSearch: boolean, usedHighReasoning: boolean): PlanStep[] => {
+  const phases = getReasoningPhases(usedWebSearch, usedHighReasoning);
   return phases.map((phase, index) => {
     const PhaseIcon = phase.Icon;
     return {
@@ -127,8 +146,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [thinkingPhaseIdx, setThinkingPhaseIdx] = useState(0);
   const [isWebSearchPending, setIsWebSearchPending] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [highReasoningEnabled, setHighReasoningEnabled] = useState(false);
+  const [isHighReasoningPending, setIsHighReasoningPending] = useState(false);
   const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatRequestAbortRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -144,12 +166,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
       setThinkingPhaseIdx(0);
       return;
     }
-    const phaseCount = isWebSearchPending ? WEB_SEARCH_PHASES.length : THINKING_PHASES.length;
+    const phaseCount = getReasoningPhases(isWebSearchPending, isHighReasoningPending).length;
     const interval = setInterval(() => {
       setThinkingPhaseIdx((i) => Math.min(i + 1, phaseCount - 1));
     }, 950);
     return () => clearInterval(interval);
-  }, [isLoading, isWebSearchPending]);
+  }, [isLoading, isWebSearchPending, isHighReasoningPending]);
 
   useEffect(() => {
     if (rateLimitSeconds <= 0) return;
@@ -184,9 +206,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
     onUpdateMessages((prev) => [...prev, userMsg]);
     if (!customText) setInput('');
     const webSearchRequested = webSearchEnabled || shouldRequestWebSearch(textToSend);
+    const highReasoningRequested = highReasoningEnabled;
     setWebSearchEnabled(false);
+    setHighReasoningEnabled(false);
     setIsWebSearchPending(webSearchRequested);
+    setIsHighReasoningPending(highReasoningRequested);
     setIsLoading(true);
+    const requestController = new AbortController();
+    chatRequestAbortRef.current = requestController;
 
     try {
       // Build conversation history for API
@@ -210,7 +237,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
           history: historyPayload,
           userId,
           forceWebSearch: webSearchRequested,
+          reasoningEffort: highReasoningRequested ? 'high' : 'medium',
         }),
+        signal: requestController.signal,
       });
 
       const data = await res.json().catch(() => ({}));
@@ -236,6 +265,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         timestamp: new Date().toISOString(),
         webSearchUsed: !!data.webSearchUsed,
         searchProvider: data.searchProvider === 'google' ? 'google' : data.searchProvider === 'web' ? 'web' : undefined,
+        reasoningEffort: data.reasoningEffort === 'high' ? 'high' : 'medium',
         searchQueries: Array.isArray(data.searchQueries) ? data.searchQueries : undefined,
         sources: Array.isArray(data.sources) ? data.sources : undefined,
       };
@@ -243,6 +273,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
       onUpdateMessages((prev) => [...prev, aiMsg]);
       setQuotaNotice('');
     } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        const cancelledMsg: ChatMessage = {
+          id: createMessageId('err'),
+          sender: 'ai',
+          text: '⏳ Request cancelled.',
+          timestamp: new Date().toISOString(),
+        };
+        onUpdateMessages((prev) => [...prev, cancelledMsg]);
+        return;
+      }
       console.error('AI chat request failed.');
       const isRateLimited = !!err?.rateLimited;
       const retryAfterSeconds = Math.max(0, Math.min(300, Math.ceil(Number(err?.retryAfterSeconds || 0))));
@@ -260,9 +300,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
       };
       onUpdateMessages((prev) => [...prev, errorMsg]);
     } finally {
+      if (chatRequestAbortRef.current === requestController) chatRequestAbortRef.current = null;
       setIsLoading(false);
       setIsWebSearchPending(false);
+      setIsHighReasoningPending(false);
     }
+  };
+
+  const handleCancelRequest = () => {
+    chatRequestAbortRef.current?.abort();
   };
 
   const handleClearHistory = async () => {
@@ -313,7 +359,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
-  const activePhases = isWebSearchPending ? WEB_SEARCH_PHASES : THINKING_PHASES;
+  const activePhases = getReasoningPhases(isWebSearchPending, isHighReasoningPending);
   const activePhaseIndex = Math.min(thinkingPhaseIdx, activePhases.length - 1);
   const reasoningSteps: PlanStep[] = activePhases.map((phase, index) => {
     const status: PlanStep['status'] = index < activePhaseIndex
@@ -431,7 +477,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   {msg.sender === 'ai' && msg.text !== AI_HIGH_DEMAND_MESSAGE && !/^(?:⚠️|⏳)/.test(msg.text) && (
                     <AgentPlanning
                       title="How this answer was prepared"
-                      steps={createCompletedReasoningSteps(msg.webSearchUsed === true)}
+                      steps={createCompletedReasoningSteps(msg.webSearchUsed === true, msg.reasoningEffort === 'high')}
                       className="mb-3"
                     />
                   )}
@@ -541,7 +587,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </div>
                 <div className="min-w-0 max-w-[calc(100%_-_40px)] flex-1 sm:max-w-lg sm:flex-none">
                   <AgentPlanning
-                    title={isWebSearchPending ? 'Searching and reasoning' : 'Thinking'}
+                    title={isWebSearchPending
+                      ? isHighReasoningPending ? 'Searching with high reasoning' : 'Searching and reasoning'
+                      : isHighReasoningPending ? 'High reasoning' : 'Thinking'}
                     steps={reasoningSteps}
                   />
                 </div>
@@ -579,45 +627,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
               </span>
             </div>
           )}
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              handleSendMessage();
-            }}
-            className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] p-1.5 transition-all focus-within:border-[#C084FC]/60 focus-within:bg-white/[0.06] focus-within:ring-4 focus-within:ring-[#A855F7]/10 sm:p-2"
-          >
-            <input
-              type="text"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder={rateLimitSeconds > 0 ? `NVIDIA AI paused · retry in ${rateLimitSeconds}s` : 'Ask about music, artists, genres or your next playlist...'}
-              disabled={isLoading || rateLimitSeconds > 0}
-              className="min-w-0 flex-1 bg-transparent px-2.5 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 disabled:opacity-50 sm:px-3"
-            />
-            <button
-              type="button"
-              onClick={() => setWebSearchEnabled((enabled) => !enabled)}
-              disabled={isLoading || rateLimitSeconds > 0}
-              aria-label="Search the web for this message"
-              aria-pressed={webSearchEnabled}
-              title={webSearchEnabled ? 'Web search enabled' : 'Search the web for this message'}
-              className={`control-press flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                webSearchEnabled
-                  ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-300'
-                  : 'border-transparent text-zinc-500 hover:border-white/10 hover:bg-white/5 hover:text-zinc-200'
-              }`}
-            >
-              <Globe className="h-4 w-4" />
-            </button>
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading || rateLimitSeconds > 0}
-              className="control-press flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[14px] bg-[#D946EF] text-white shadow-md hover:bg-[#C026D3] disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600 sm:h-10 sm:w-10 sm:rounded-xl"
-              aria-label="Send message"
-            >
-              <Send className="ml-0.5 h-4 w-4 fill-current" />
-            </button>
-          </form>
+          <AiPromptBox
+            value={input}
+            onValueChange={setInput}
+            onSubmit={() => handleSendMessage()}
+            onCancel={handleCancelRequest}
+            isLoading={isLoading}
+            disabled={rateLimitSeconds > 0}
+            placeholder={rateLimitSeconds > 0
+              ? `NVIDIA AI paused · retry in ${rateLimitSeconds}s`
+              : 'Ask about music, artists, genres or your next playlist...'}
+            webSearchEnabled={webSearchEnabled}
+            onWebSearchChange={setWebSearchEnabled}
+            highReasoningEnabled={highReasoningEnabled}
+            onHighReasoningChange={setHighReasoningEnabled}
+          />
           <p className="mt-2 hidden px-2 text-center text-[9px] font-medium text-zinc-600 sm:block">
             AI responses can be inaccurate. Verify important music and artist information.
           </p>

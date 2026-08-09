@@ -108,6 +108,7 @@ function sanitizeChatHistory(value: unknown, tracks: TrackRecord[] = []): any[] 
         : undefined,
       webSearchUsed: message.webSearchUsed === true,
       searchProvider: message.searchProvider === "google" || message.searchProvider === "web" ? message.searchProvider : undefined,
+      reasoningEffort: message.reasoningEffort === "high" ? "high" : message.reasoningEffort === "medium" ? "medium" : undefined,
       searchQueries: Array.isArray(message.searchQueries) ? message.searchQueries.filter((item: unknown): item is string => typeof item === "string").slice(0, 10) : undefined,
       sources: Array.isArray(message.sources)
         ? message.sources.filter((item: any) => item && typeof item.title === "string" && typeof item.uri === "string" && isHttpUrl(item.uri)).slice(0, 10)
@@ -2318,7 +2319,12 @@ function formatNvidiaHistory(value: unknown): Array<{ role: "user" | "assistant"
   return normalized.slice(-20);
 }
 
-async function searchGoogle(query: string): Promise<WebSearchSource[]> {
+function withTimeoutSignal(parentSignal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  return parentSignal ? AbortSignal.any([parentSignal, timeoutSignal]) : timeoutSignal;
+}
+
+async function searchGoogle(query: string, signal?: AbortSignal): Promise<WebSearchSource[]> {
   const apiKey = process.env.GOOGLE_SEARCH_API_KEY?.trim();
   const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID?.trim();
   if (!apiKey || !searchEngineId) {
@@ -2338,7 +2344,7 @@ async function searchGoogle(query: string): Promise<WebSearchSource[]> {
   });
   const response = await fetch(`https://customsearch.googleapis.com/customsearch/v1?${params.toString()}`, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(12_000),
+    signal: withTimeoutSignal(signal, 12_000),
   });
   const payload: any = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -2361,7 +2367,7 @@ async function searchGoogle(query: string): Promise<WebSearchSource[]> {
   }).slice(0, 5);
 }
 
-async function searchTavily(query: string, apiKey: string): Promise<WebSearchSource[]> {
+async function searchTavily(query: string, apiKey: string, signal?: AbortSignal): Promise<WebSearchSource[]> {
   const response = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: {
@@ -2377,7 +2383,7 @@ async function searchTavily(query: string, apiKey: string): Promise<WebSearchSou
       include_raw_content: false,
       include_images: false,
     }),
-    signal: AbortSignal.timeout(12_000),
+    signal: withTimeoutSignal(signal, 12_000),
   });
   const payload: any = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -2399,19 +2405,20 @@ async function searchTavily(query: string, apiKey: string): Promise<WebSearchSou
   }).slice(0, 5);
 }
 
-async function searchWeb(query: string): Promise<WebSearchResult> {
+async function searchWeb(query: string, signal?: AbortSignal): Promise<WebSearchResult> {
   const tavilyApiKey = process.env.TAVILY_API_KEY?.trim();
   if (process.env.GOOGLE_SEARCH_API_KEY?.trim() && process.env.GOOGLE_SEARCH_ENGINE_ID?.trim()) {
     try {
-      return { provider: "google", sources: await searchGoogle(query) };
+      return { provider: "google", sources: await searchGoogle(query, signal) };
     } catch (error) {
+      if (signal?.aborted) throw error;
       if (!tavilyApiKey) throw error;
       console.warn("Google Search failed; using the configured web-search fallback.");
     }
   }
 
   if (tavilyApiKey) {
-    return { provider: "web", sources: await searchTavily(query, tavilyApiKey) };
+    return { provider: "web", sources: await searchTavily(query, tavilyApiKey, signal) };
   }
 
   const error: any = new Error(
@@ -2458,6 +2465,10 @@ function buildNvidiaMessages(
 
   // NVIDIA NIM AI Chat Endpoint
   app.post("/api/chat", chatLimiter, async (req, res) => {
+    const clientAbortController = new AbortController();
+    res.once("close", () => {
+      if (!res.writableEnded) clientAbortController.abort();
+    });
     const requestDiagnostics = {
       model: process.env.NVIDIA_CHAT_MODEL?.trim() || "openai/gpt-oss-120b",
       keyFingerprint: "not-loaded",
@@ -2465,11 +2476,12 @@ function buildNvidiaMessages(
       historyCharacters: 0,
       webSearchRequested: false,
       searchProvider: "none",
+      reasoningEffort: "medium",
       stage: "validation",
     };
 
     try {
-      const { message, history, userId, forceWebSearch } = req.body;
+      const { message, history, userId, forceWebSearch, reasoningEffort } = req.body;
 
       const sessionUserId = getUserIdFromToken(req);
       if (!sessionUserId) {
@@ -2480,6 +2492,9 @@ function buildNvidiaMessages(
       }
       if (userId && sessionUserId !== userId) {
         return res.status(403).json({ error: "Forbidden: You can only use your own account context." });
+      }
+      if (reasoningEffort !== undefined && reasoningEffort !== "medium" && reasoningEffort !== "high") {
+        return res.status(400).json({ error: "reasoningEffort must be medium or high." });
       }
 
       if (!message || typeof message !== "string") {
@@ -2514,12 +2529,14 @@ function buildNvidiaMessages(
 
       const formattedHistory = formatNvidiaHistory(history);
       const webSearchRequested = forceWebSearch === true || shouldUseWebSearch(cleanMessage);
+      const requestedReasoningEffort: "medium" | "high" = reasoningEffort === "high" ? "high" : "medium";
       requestDiagnostics.historyMessages = formattedHistory.length;
       requestDiagnostics.historyCharacters = formattedHistory.reduce(
         (total, item) => total + item.content.length,
         0,
       );
       requestDiagnostics.webSearchRequested = webSearchRequested;
+      requestDiagnostics.reasoningEffort = requestedReasoningEffort;
       const currentIstanbulDateTime = new Intl.DateTimeFormat("en-GB", {
         timeZone: "Europe/Istanbul",
         weekday: "long",
@@ -2551,7 +2568,7 @@ function buildNvidiaMessages(
       let searchSources: WebSearchSource[] = [];
       if (webSearchRequested) {
         requestDiagnostics.stage = "web-search";
-        const searchResult = await searchWeb(cleanMessage);
+        const searchResult = await searchWeb(cleanMessage, clientAbortController.signal);
         requestDiagnostics.searchProvider = searchResult.provider;
         searchSources = searchResult.sources;
       }
@@ -2573,10 +2590,10 @@ function buildNvidiaMessages(
           model: requestDiagnostics.model,
           messages,
           max_tokens: 4_096,
-          reasoning_effort: "medium",
+          reasoning_effort: requestedReasoningEffort,
           stream: false,
         }),
-        signal: AbortSignal.timeout(120_000),
+        signal: withTimeoutSignal(clientAbortController.signal, 120_000),
       });
       const response: any = await providerResponse.json().catch(() => ({}));
       if (!providerResponse.ok) {
@@ -2602,10 +2619,15 @@ function buildNvidiaMessages(
         reply: replyText,
         webSearchUsed: webSearchRequested,
         searchProvider: requestDiagnostics.searchProvider,
+        reasoningEffort: requestedReasoningEffort,
         searchQueries: webSearchRequested ? [cleanMessage] : [],
         sources: searchSources.map(({ title, uri }) => ({ title, uri })),
       });
     } catch (error: any) {
+      if (clientAbortController.signal.aborted || res.destroyed) {
+        console.info("AI chat request cancelled by the client.");
+        return;
+      }
       if (error?.configurationError) {
         console.error("AI Chat Configuration Error:", error.message);
         return res.status(500).json({ error: error.message, configurationError: true });

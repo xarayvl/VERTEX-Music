@@ -112,6 +112,7 @@ export interface ChatMessage {
   matchedTracks?: Track[];
   webSearchUsed?: boolean;
   searchProvider?: 'google' | 'web';
+  reasoningEffort?: 'medium' | 'high';
   searchQueries?: string[];
   sources?: ChatSource[];
 }
