@@ -72,9 +72,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
       <div className="mx-auto w-full min-w-0 max-w-6xl px-3 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
         <header className="workspace-header flex min-w-0 items-start justify-between gap-3 border-b border-white/10 pb-5 sm:gap-5 sm:pb-6">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-12 sm:w-12">
-              <SlidersHorizontal className="h-6 w-6" />
-            </div>
+            <SlidersHorizontal className="h-7 w-7 shrink-0 text-[#D946EF]" />
             <div className="min-w-0">
               <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-[#D8B4FE] sm:gap-2 sm:text-[10px] sm:tracking-[0.24em]">
                 <Sparkles className="h-3.5 w-3.5" /> Audio engine

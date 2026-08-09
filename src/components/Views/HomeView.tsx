@@ -528,11 +528,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
                       <Play className="w-5 h-5 fill-white ml-0.5" />
                     )}
                   </div>
-                  {isThisTrackPlaying && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-[#A855F7] text-white text-[9px] font-extrabold">
-                      PLAYING
-                    </div>
-                  )}
                 </div>
 
                 <div>

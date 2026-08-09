@@ -7,7 +7,6 @@ import {
   Clock,
   Music,
   Heart,
-  Sparkles,
   Headphones,
   Download,
   ShieldCheck,
@@ -734,14 +733,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       {/* ACCOUNT INFORMATION */}
       {activeSubTab === 'information' && (
         <div className="animate-in space-y-6 fade-in">
-          <header className="workspace-header flex items-start gap-4 border-b border-white/10 pb-6">
-            <BadgeInfo className="mt-1 h-7 w-7 shrink-0 text-[#D946EF]" />
+          <header className="workspace-header flex items-center gap-4 border-b border-white/10 pb-6">
+            <BadgeInfo className="h-7 w-7 shrink-0 text-[#D946EF]" />
             <div>
-              <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
-                <Sparkles className="h-3.5 w-3.5" /> Account overview
-              </div>
               <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Account information</h2>
-              <p className="mt-1 text-xs text-zinc-400 sm:text-sm">Your authenticated identity and server-backed activity in one place.</p>
             </div>
           </header>
 
@@ -816,14 +811,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       {/* ACCOUNT SETTINGS */}
       {activeSubTab === 'settings' && (
         <div className="animate-in space-y-6 fade-in">
-          <header className="workspace-header flex min-w-0 items-start gap-3 border-b border-white/10 pb-5 sm:gap-4 sm:pb-6">
-            <Settings className="mt-1 h-7 w-7 shrink-0 text-[#D946EF]" />
+          <header className="workspace-header flex min-w-0 items-center gap-3 border-b border-white/10 pb-5 sm:gap-4 sm:pb-6">
+            <Settings className="h-7 w-7 shrink-0 text-[#D946EF]" />
             <div className="min-w-0">
-              <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] sm:gap-2 sm:text-[10px] sm:tracking-[0.24em]">
-                <Sparkles className="h-3.5 w-3.5" /> Personal controls
-              </div>
               <h2 className="text-xl font-black tracking-tight sm:text-3xl">Account settings</h2>
-              <p className="mt-1 text-[11px] leading-4 text-zinc-400 sm:text-sm">Manage your public identity, password and active browser session.</p>
             </div>
           </header>
 

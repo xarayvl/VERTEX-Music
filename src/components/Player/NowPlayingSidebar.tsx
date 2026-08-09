@@ -143,12 +143,6 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
-            {isPlaying && (
-              <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[9px] font-extrabold text-[#D946EF] border border-white/10 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#D946EF] animate-pulse" />
-                <span>LIVE AUDIO</span>
-              </div>
-            )}
           </div>
 
           {/* Track Title and Artist Details */}
