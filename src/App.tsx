@@ -2129,9 +2129,7 @@ export default function App() {
         )}
 
         {/* Central VERTEX Music View Container */}
-        <main className={`flex-1 bg-[#121212] flex flex-col min-w-0 overflow-hidden border-0 shadow-2xl relative md:rounded-xl md:border md:border-white/[0.04] ${
-          isSongScreenOpen || isEQOpen ? 'md:mb-20' : ''
-        }`}>
+        <main className="flex-1 bg-[#121212] flex flex-col min-w-0 overflow-hidden border-0 shadow-2xl relative md:rounded-xl md:border md:border-white/[0.04]">
           {/* Top Header Navigation Bar */}
           <SpotifyTopHeader
             activeTab={activeTab}
@@ -2157,7 +2155,7 @@ export default function App() {
           <div
             className={`relative min-w-0 max-w-full flex-1 overflow-x-hidden custom-scrollbar ${
               isWorkspacePanelOpen
-                ? `overflow-y-auto p-0 pb-40 ${isEQOpen ? 'md:pb-6' : 'md:pb-24'}`
+                ? 'overflow-y-auto p-0 pb-40 md:pb-24'
                 : isSongScreenOpen
                   ? 'overflow-hidden p-0'
                 : activeTab === 'chat'
