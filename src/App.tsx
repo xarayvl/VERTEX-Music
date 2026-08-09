@@ -29,6 +29,7 @@ import { AuthModal } from './components/Modals/AuthModal';
 import { SongScreenModal } from './components/Modals/SongScreenModal';
 import { ContextMenu, ContextMenuTarget } from './components/ContextMenu';
 import { Toast } from './components/Toast';
+import { SiteTooltip } from './components/SiteTooltip';
 import { NowPlayingSidebar } from './components/Player/NowPlayingSidebar';
 import { DEFAULT_AVATAR_URL } from './utils/profilePlaceholders';
 import { getReleaseTracksInPlaybackOrder } from './utils/artistUtils';
@@ -2582,6 +2583,7 @@ export default function App() {
 
       {/* Visual Toast Notification Banner */}
       <Toast message={toastMessage} hasPlayer={Boolean(currentTrack)} onClose={() => setToastMessage(null)} />
+      <SiteTooltip />
     </div>
   );
 }

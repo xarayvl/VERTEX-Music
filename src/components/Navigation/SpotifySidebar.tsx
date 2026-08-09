@@ -143,7 +143,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <Bot className={`h-6 w-6 shrink-0 ${activeTab === 'chat' ? 'text-[#D946EF]' : 'text-zinc-400'}`} />
+            <Bot className={`h-6 w-6 shrink-0 transition-transform group-hover:scale-110 ${activeTab === 'chat' ? 'text-[#D946EF]' : 'text-zinc-400'}`} />
             <span className={isCompact ? 'hidden' : 'flex min-w-0 items-center gap-1.5'}>
               <span className="truncate whitespace-nowrap">AI DJ Chat</span>
             </span>
