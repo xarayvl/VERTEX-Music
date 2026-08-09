@@ -735,9 +735,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       {activeSubTab === 'information' && (
         <div className="animate-in space-y-6 fade-in">
           <header className="workspace-header flex items-start gap-4 border-b border-white/10 pb-6">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
-              <BadgeInfo className="h-6 w-6 text-white" />
-            </div>
+            <BadgeInfo className="mt-1 h-7 w-7 shrink-0 text-[#D946EF]" />
             <div>
               <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
                 <Sparkles className="h-3.5 w-3.5" /> Account overview
@@ -819,9 +817,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       {activeSubTab === 'settings' && (
         <div className="animate-in space-y-6 fade-in">
           <header className="workspace-header flex min-w-0 items-start gap-3 border-b border-white/10 pb-5 sm:gap-4 sm:pb-6">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-12 sm:w-12">
-              <Settings className="h-6 w-6 text-white" />
-            </div>
+            <Settings className="mt-1 h-7 w-7 shrink-0 text-[#D946EF]" />
             <div className="min-w-0">
               <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] sm:gap-2 sm:text-[10px] sm:tracking-[0.24em]">
                 <Sparkles className="h-3.5 w-3.5" /> Personal controls

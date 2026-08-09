@@ -532,7 +532,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   };
 
   return (
-    <section className="workspace-screen min-h-full w-full min-w-0 max-w-full overflow-x-hidden bg-[#121212] text-white select-none">
+    <section className="workspace-screen no-button-lift min-h-full w-full min-w-0 max-w-full overflow-x-hidden bg-[#121212] text-white select-none">
       <div className="mx-auto w-full min-w-0 max-w-6xl px-3 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
         <header className="workspace-header flex min-w-0 items-start justify-between gap-3 border-b border-white/10 pb-5 sm:gap-5 sm:pb-6">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
@@ -586,17 +586,17 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                     type="button"
                     onClick={() => setReleaseType(type)}
                     style={{ '--stagger-index': index } as React.CSSProperties}
-                    className={`stagger-item control-press flex min-h-20 items-center justify-between rounded-2xl border px-4 text-left transition-all ${
+                    className={`stagger-item control-press flex min-h-20 items-center justify-between gap-3 rounded-2xl border px-4 text-left transition-all ${
                       active
-                        ? 'border-[#C084FC]/70 bg-gradient-to-r from-[#A855F7]/30 to-[#D946EF]/20 shadow-[0_10px_30px_rgba(168,85,247,0.16)]'
+                        ? 'border-[#D946EF]/65 bg-[#D946EF]/12 shadow-[0_10px_30px_rgba(217,70,239,0.12)]'
                         : 'border-white/[0.08] bg-white/[0.035] hover:border-white/[0.15] hover:bg-white/[0.07]'
                     }`}
                   >
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className={`text-sm font-black ${active ? 'text-white' : 'text-zinc-300'}`}>{type}</p>
-                      <p className="mt-1 text-[10px] font-semibold text-zinc-500">{copy}</p>
+                      <p className={`mt-1 break-words text-[10px] font-semibold leading-4 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>{copy}</p>
                     </div>
-                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${active ? 'bg-white/15 text-[#F0ABFC]' : 'bg-white/5 text-zinc-500'}`}>
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-[#D946EF] text-white' : 'bg-white/5 text-zinc-500'}`}>
                       {type === 'Single' ? <FileAudio className="h-4 w-4" /> : <ListMusic className="h-4 w-4" />}
                     </div>
                   </button>

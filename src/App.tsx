@@ -33,6 +33,10 @@ import { NowPlayingSidebar } from './components/Player/NowPlayingSidebar';
 import { DEFAULT_AVATAR_URL } from './utils/profilePlaceholders';
 import { getReleaseTracksInPlaybackOrder } from './utils/artistUtils';
 
+const LEFT_SIDEBAR_MIN_WIDTH = 96;
+const LEFT_SIDEBAR_MAX_WIDTH = 520;
+const LEFT_SIDEBAR_COMPACT_THRESHOLD = 196;
+
 const normalizePublicArtist = (raw: any): Artist => ({
   id: String(raw?.id || ''),
   name: String(raw?.name || raw?.artistName || raw?.displayName || raw?.username || ''),
@@ -184,7 +188,7 @@ export default function App() {
       if (saved) {
         const parsed = parseInt(saved, 10);
         if (!isNaN(parsed)) {
-          return Math.min(520, Math.max(180, parsed));
+          return Math.min(LEFT_SIDEBAR_MAX_WIDTH, Math.max(LEFT_SIDEBAR_MIN_WIDTH, parsed));
         }
       }
     } catch {
@@ -215,7 +219,7 @@ export default function App() {
   useEffect(() => {
     const updateWidthFromClientX = (clientX: number) => {
       const leftOffset = sidebarRef.current?.getBoundingClientRect().left ?? 0;
-      const newWidth = Math.min(520, Math.max(180, clientX - leftOffset));
+      const newWidth = Math.min(LEFT_SIDEBAR_MAX_WIDTH, Math.max(LEFT_SIDEBAR_MIN_WIDTH, clientX - leftOffset));
       setSidebarWidth(newWidth);
       try {
         localStorage.setItem('vertex_sidebar_width', newWidth.toString());
@@ -297,7 +301,7 @@ export default function App() {
       const available = window.innerWidth - MIN_MAIN_CONTENT;
       if (left + rightBudget <= available) return; // plenty of room, nothing to do
 
-      const nextLeft = Math.max(180, Math.min(left, available - (rightOpen ? 280 : 0)));
+      const nextLeft = Math.max(LEFT_SIDEBAR_MIN_WIDTH, Math.min(left, available - (rightOpen ? 280 : 0)));
       const nextRight = rightOpen ? Math.max(280, Math.min(right, available - nextLeft)) : right;
 
       if (nextLeft !== left) {
@@ -2041,7 +2045,7 @@ export default function App() {
             recentlyPlayed={recentlyPlayed}
             onSelectAlbum={handleSelectAlbum}
             onSelectArtist={handleSelectArtist}
-            isCompact={sidebarWidth <= 220}
+            isCompact={sidebarWidth <= LEFT_SIDEBAR_COMPACT_THRESHOLD}
             onOpenLikedSongs={() => handleOpenLibrary('liked')}
           />
         </div>
@@ -2079,14 +2083,14 @@ export default function App() {
             className="fixed inset-0 z-[9999] cursor-col-resize select-none bg-transparent"
             onMouseMove={(e) => {
               const leftOffset = sidebarRef.current?.getBoundingClientRect().left ?? 0;
-              const newWidth = Math.min(520, Math.max(180, e.clientX - leftOffset));
+              const newWidth = Math.min(LEFT_SIDEBAR_MAX_WIDTH, Math.max(LEFT_SIDEBAR_MIN_WIDTH, e.clientX - leftOffset));
               setSidebarWidth(newWidth);
             }}
             onMouseUp={() => setIsResizingSidebar(false)}
             onTouchMove={(e) => {
               if (e.touches[0]) {
                 const leftOffset = sidebarRef.current?.getBoundingClientRect().left ?? 0;
-                const newWidth = Math.min(520, Math.max(180, e.touches[0].clientX - leftOffset));
+                const newWidth = Math.min(LEFT_SIDEBAR_MAX_WIDTH, Math.max(LEFT_SIDEBAR_MIN_WIDTH, e.touches[0].clientX - leftOffset));
                 setSidebarWidth(newWidth);
               }
             }}

@@ -139,11 +139,11 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
             title="AI DJ Chat"
             className={`flex items-center rounded-lg font-bold text-sm transition-all duration-200 group ${isCompact ? 'justify-center px-2 py-2.5' : 'space-x-4 px-3 py-2.5'} ${
               activeTab === 'chat'
-                ? 'text-white bg-[#A855F7]/20 border border-[#A855F7]/40'
+                ? 'text-white bg-white/10'
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <Bot className={`w-6 h-6 transition-transform group-hover:scale-110 ${activeTab === 'chat' ? 'text-[#D946EF]' : 'text-[#D946EF]'}`} />
+            <Bot className={`w-6 h-6 ${activeTab === 'chat' ? 'text-[#D946EF]' : 'text-zinc-400'}`} />
             <span className={isCompact ? 'hidden' : 'flex items-center gap-1.5'}>
               <span>AI DJ Chat</span>
             </span>

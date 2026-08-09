@@ -89,7 +89,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
     : 0;
 
   return (
-    <section className="workspace-screen h-full min-h-0 w-full overflow-hidden bg-[#121212] text-white select-none">
+    <section className="workspace-screen no-button-lift h-full min-h-0 w-full overflow-hidden bg-[#121212] text-white select-none">
       <div className="song-screen-shell mx-auto flex h-full w-full max-w-6xl flex-col px-3 py-2 md:max-w-[90rem] md:px-6 md:py-3 md:pb-[5.75rem] lg:px-8">
         <header className="song-screen-header workspace-header flex flex-shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-2.5 md:gap-4 md:pb-3">
           <div className="flex min-w-0 items-center gap-3 md:gap-4">

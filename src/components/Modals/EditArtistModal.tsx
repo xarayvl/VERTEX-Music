@@ -156,7 +156,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
   };
 
   return (
-    <section className="workspace-screen min-h-full w-full bg-[#121212] text-white select-none">
+    <section className="workspace-screen no-button-lift min-h-full w-full bg-[#121212] text-white select-none">
       <div className="mx-auto w-full min-w-0 max-w-6xl px-3 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
         <header className="workspace-header flex min-w-0 items-start justify-between gap-3 border-b border-white/10 pb-5 sm:gap-5 sm:pb-6">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">

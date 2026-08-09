@@ -104,7 +104,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   if (!userProfile) {
     return (
       <div
-        className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/80 px-0 pt-[max(4rem,env(safe-area-inset-top))] animate-in fade-in duration-200 sm:p-4"
+        className="no-button-lift fixed inset-0 z-[1000] flex items-end justify-center bg-black/80 px-0 pt-[max(4rem,env(safe-area-inset-top))] animate-in fade-in duration-200 sm:p-4"
         onMouseDown={handleBackdropClick}
       >
         <section
@@ -130,7 +130,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               onClose();
               onOpenAuthModal?.();
             }}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] py-3.5 text-sm font-black text-white shadow-lg shadow-[#A855F7]/20 transition-transform hover:scale-[1.01]"
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] py-3.5 text-sm font-black text-white shadow-lg shadow-[#A855F7]/20 transition-colors hover:brightness-110"
           >
             <Sparkles className="h-4 w-4" />
             Sign In / Register
@@ -152,7 +152,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/80 px-0 pt-[max(2.5rem,env(safe-area-inset-top))] animate-in fade-in duration-200 sm:p-4"
+      className="no-button-lift fixed inset-0 z-[1000] flex items-end justify-center bg-black/80 px-0 pt-[max(2.5rem,env(safe-area-inset-top))] animate-in fade-in duration-200 sm:p-4"
       onMouseDown={handleBackdropClick}
     >
       <section
@@ -168,7 +168,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <p className="text-[9px] font-black uppercase tracking-[0.26em] text-[#D8B4FE]">Personal space</p>
               <h2 id="profile-panel-title" className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl">Profile & account</h2>
             </div>
-            <button onClick={onClose} className="rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-400 transition-all hover:rotate-6 hover:bg-white/10 hover:text-white" aria-label="Close profile panel">
+            <button onClick={onClose} className="rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white" aria-label="Close profile panel">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -254,7 +254,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     <button type="button" onClick={() => setAvatarUrl('')} className="rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-white">Remove photo</button>
                     <input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarFileUpload} className="hidden" />
                   </div>
-                  <button type="submit" className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-[#A855F7]/20 transition-transform hover:scale-[1.02]">
+                  <button type="submit" className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-[#A855F7]/20 transition-colors hover:brightness-110">
                     <Save className="h-4 w-4" />
                     Save changes
                   </button>

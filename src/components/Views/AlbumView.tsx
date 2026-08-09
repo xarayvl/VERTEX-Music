@@ -200,7 +200,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   const formattedReleaseDate = albumTrack.createdAt ? new Date(albumTrack.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : `Released ${effectiveYear}`;
 
   return (
-    <div className="flex min-h-full min-w-0 flex-col space-y-2 overflow-x-hidden animate-in fade-in duration-500 sm:space-y-8">
+    <div className="no-button-lift flex min-h-full min-w-0 flex-col space-y-2 overflow-x-hidden animate-in fade-in duration-500 sm:space-y-8">
       {/* Dynamic Header mimicking Spotify Release Page */}
       <div className="relative -mx-3 -mt-3 flex flex-col items-center gap-4 overflow-hidden px-4 pb-2 pt-5 text-center sm:-mx-6 sm:-mt-4 sm:gap-5 sm:p-8 md:flex-row md:items-end md:gap-6 md:text-left">
         {/* Background Blur */}
@@ -256,7 +256,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
       <div className="flex items-center justify-center gap-5 px-2 md:justify-start md:gap-6">
         <button
           onClick={() => onPlayTrack(activeAlbumTrack || albumTracks[0], albumTracks)}
-          className="w-14 h-14 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all"
+          className="w-14 h-14 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl hover:bg-[#E05AF2] active:scale-95 transition-all"
         >
           {isCurrentAlbumPlaying ? (
             <Pause className="w-6 h-6 fill-white" />
@@ -571,7 +571,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
-                  <div className="mobile-card-action absolute right-2 bottom-2 w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-200">
+                  <div className="mobile-card-action absolute right-2 bottom-2 w-10 h-10 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                     <ChevronRight className="h-4 w-4 stroke-[3]" />
                   </div>
                 </div>
