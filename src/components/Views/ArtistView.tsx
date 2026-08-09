@@ -286,7 +286,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-8 overflow-x-hidden pb-24 select-none touch-pan-y animate-in fade-in duration-300">
+    <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden pb-24 select-none touch-pan-y animate-in fade-in duration-300 sm:space-y-8">
       {loadError && (
         <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
           {loadError}
@@ -304,7 +304,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
       )}
 
       {/* SPOTIFY HERO ARTIST BANNER */}
-      <div data-artist-id={artist.id} data-context-type="artist" className="relative rounded-2xl overflow-hidden min-h-[320px] sm:min-h-[380px] flex flex-col justify-end p-6 sm:p-10 border border-white/10 shadow-2xl group bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827]">
+      <div data-artist-id={artist.id} data-context-type="artist" className="group relative flex min-h-[280px] flex-col justify-end overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827] p-5 shadow-2xl sm:min-h-[380px] sm:p-10">
         {/* Background Image & Dynamic Gradient Overlay */}
         <div
           className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
@@ -328,7 +328,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
           )}
 
           {/* Massive Artist Name */}
-          <h1 className="text-4xl sm:text-6xl md:text-8xl font-black text-white tracking-tight drop-shadow-2xl">
+          <h1 className="max-w-full break-words text-3xl font-black leading-[1.05] tracking-tight text-white drop-shadow-2xl [overflow-wrap:anywhere] sm:text-6xl md:text-8xl">
             {artistName}
           </h1>
 
@@ -348,7 +348,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
       </div>
 
       {/* VERTEX ACTION BAR (Play Button, Follow, Edit Profile, Shuffle, Options) */}
-      <div className="flex flex-wrap items-center gap-3 sm:gap-4 px-2">
+      <div className="flex flex-wrap items-center justify-center gap-3 px-1 sm:justify-start sm:gap-4 sm:px-2">
         {/* Play Button */}
         <button
           onClick={handlePlayArtist}
@@ -386,7 +386,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
             title="Edit Artist Profile"
           >
             <Sparkles className="w-4 h-4 text-[#D946EF]" />
-            <span>Edit Artist Profile</span>
+            <span className="sm:hidden">Edit profile</span>
+            <span className="hidden sm:inline">Edit Artist Profile</span>
           </button>
         )}
 
@@ -428,7 +429,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
               role="menu"
               onClick={(event) => event.stopPropagation()}
               onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
-              className="fixed z-[1000] w-64 max-h-[calc(100dvh-24px)] overflow-y-auto rounded-2xl border border-white/12 bg-[#161618] p-1.5 text-xs font-medium text-zinc-200 shadow-[0_24px_70px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-100 select-none"
+              className="viewport-menu fixed z-[1000] max-h-[calc(100dvh-24px)] max-w-64 overflow-y-auto rounded-2xl border border-white/12 bg-[#161618] p-1.5 text-xs font-medium text-zinc-200 shadow-[0_24px_70px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-100 select-none"
               style={{ top: artistMenuPosition.top, left: artistMenuPosition.left }}
             >
               <div className="space-y-0.5">
@@ -453,7 +454,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
       </div>
 
       {/* MAIN CONTENT GRID (Popular Tracks + Artist Pick) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-6 sm:gap-8 lg:grid-cols-3">
         {/* LEFT 2 COLUMNS: POPULAR TRACKS TABLE */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-2xl font-black text-white tracking-tight">Popular</h2>
@@ -473,11 +474,11 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                     key={track.id}
                     data-track-id={track.id}
                     onClick={() => onPlayTrack(track)}
-                    className={`flex items-center justify-between gap-4 px-4 py-3 hover:bg-white/10 group transition-colors cursor-pointer ${
+                    className={`group flex cursor-pointer items-center justify-between gap-2 px-3 py-3 transition-colors hover:bg-white/10 sm:gap-4 sm:px-4 ${
                       isCurrent ? 'bg-white/10 text-[#D946EF]' : ''
                     }`}
                   >
-                    <div className="flex items-center space-x-4 min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
                       <span
                         className={`w-6 text-center text-xs font-mono ${
                           isCurrent ? 'text-[#D946EF] font-bold' : 'text-zinc-400 group-hover:hidden'
@@ -533,20 +534,20 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-end space-x-4 w-20 flex-shrink-0">
+                    <div className="flex flex-shrink-0 items-center justify-end gap-2 sm:w-20 sm:gap-4">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onToggleLike(track.id);
                         }}
-                        className={`transition-colors ${
+                        className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
                           track.isLiked ? 'text-[#D946EF]' : 'text-zinc-500 hover:text-white'
                         }`}
                       >
                         <Heart className={`w-4 h-4 ${track.isLiked ? 'fill-[#D946EF]' : ''}`} />
                       </button>
 
-                      <span className="text-xs font-mono text-zinc-400 text-right min-w-[36px]">
+                      <span className="hidden min-w-[36px] text-right font-mono text-xs text-zinc-400 sm:inline">
                         {Math.floor(track.duration / 60)}:
                         {(track.duration % 60).toString().padStart(2, '0')}
                       </span>
@@ -612,10 +613,10 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
 
       {/* DISCOGRAPHY SECTION */}
       <div className="space-y-4 pt-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-2xl font-black text-white tracking-tight">Discography</h2>
           {displayTracks.length > 0 && (
-            <div className="flex items-center space-x-2">
+            <div className="scrollbar-none flex max-w-full items-center gap-2 overflow-x-auto pb-1">
               <button
                 onClick={() => setDiscographyFilter('popular')}
                 className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
@@ -647,7 +648,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
             <p className="text-xs text-zinc-500">This artist hasn't uploaded any music yet.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
             {(discographyFilter === 'singles'
               ? releaseGroups.filter((g) => g.releaseType === 'Single' || g.releaseType === 'EP')
               : releaseGroups

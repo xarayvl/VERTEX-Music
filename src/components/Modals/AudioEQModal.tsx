@@ -69,23 +69,23 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
 
   return (
     <section className="workspace-screen min-h-full w-full bg-[#121212] text-white select-none">
-      <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
-        <header className="workspace-header flex items-start justify-between gap-5 border-b border-white/10 pb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
+      <div className="mx-auto w-full min-w-0 max-w-6xl px-3 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
+        <header className="workspace-header flex min-w-0 items-start justify-between gap-3 border-b border-white/10 pb-5 sm:gap-5 sm:pb-6">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-12 sm:w-12">
               <SlidersHorizontal className="h-6 w-6" />
             </div>
-            <div>
-              <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-[#D8B4FE] sm:gap-2 sm:text-[10px] sm:tracking-[0.24em]">
                 <Sparkles className="h-3.5 w-3.5" /> Audio engine
               </div>
-              <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Equalizer</h1>
-              <p className="mt-1 text-xs text-zinc-400 sm:text-sm">Tune your sound without leaving the main player.</p>
+              <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">Equalizer</h1>
+              <p className="mt-1 text-[11px] leading-4 text-zinc-400 sm:text-sm">Tune your sound without leaving the main player.</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="control-press rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white"
+            className="control-press shrink-0 rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white"
             aria-label="Close equalizer"
           >
             <X className="h-5 w-5" />
@@ -94,7 +94,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
 
         <div className="mt-7 grid gap-6 lg:grid-cols-[0.78fr_1.22fr]">
           <aside className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
-            <div className="mb-5 flex items-center justify-between">
+            <div className="mb-5 flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Presets</p>
                 <p className="mt-1 text-sm text-zinc-500">Fast profiles for different listening styles.</p>
@@ -130,7 +130,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
           </aside>
 
           <div className="workspace-card section-reveal rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-5 sm:p-7">
-            <div className="mb-7 flex items-end justify-between gap-4">
+            <div className="mb-7 flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-end min-[360px]:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Custom curve</p>
                 <h2 className="mt-1 text-xl font-black tracking-tight">Frequency controls</h2>

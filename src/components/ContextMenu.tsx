@@ -178,7 +178,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     <div
       ref={menuRef}
       style={{ top: `${adjustedPos.y}px`, left: `${adjustedPos.x}px` }}
-      className="fixed z-50 w-60 max-h-[calc(100dvh-24px)] overflow-y-auto overflow-x-hidden custom-scrollbar bg-[#161618] border border-white/12 shadow-[0_20px_50px_rgba(0,0,0,0.85)] rounded-2xl py-2 px-1 text-zinc-200 text-xs font-medium animate-in fade-in zoom-in-95 duration-150 select-none"
+      className="context-menu fixed z-50 max-h-[calc(100dvh-24px)] overflow-y-auto overflow-x-hidden custom-scrollbar bg-[#161618] border border-white/12 shadow-[0_20px_50px_rgba(0,0,0,0.85)] rounded-2xl py-2 px-1 text-zinc-200 text-xs font-medium animate-in fade-in zoom-in-95 duration-150 select-none"
     >
       {/* Header Info Banner */}
       <div className="px-3 py-1.5 mb-1.5 border-b border-white/10 flex items-center justify-between text-[11px] text-zinc-400">

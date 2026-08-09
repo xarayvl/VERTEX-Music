@@ -1914,7 +1914,7 @@ export default function App() {
   return (
     <div
       onContextMenu={handleContextMenu}
-      className="h-[100dvh] w-screen bg-black text-zinc-100 font-sans flex flex-col overflow-hidden p-0 gap-0 select-none relative md:h-screen md:p-2 md:gap-2"
+      className="relative flex h-[100dvh] w-full max-w-full flex-col gap-0 overflow-hidden bg-black p-0 font-sans text-zinc-100 select-none md:h-screen md:gap-2 md:p-2"
     >
       {/* Interactive Radial Spotlight following mouse cursor & current track accent color */}
       <div
@@ -2051,7 +2051,7 @@ export default function App() {
                   ? 'overflow-hidden p-0'
                 : activeTab === 'chat'
                   ? `overflow-hidden p-0 ${currentTrack ? 'pb-[9.5rem]' : 'pb-[5.25rem]'} md:px-6 md:pt-4 md:pb-24`
-                  : 'overflow-y-auto px-3 pt-4 pb-44 sm:px-6 md:pb-24'
+                  : `overflow-y-auto overscroll-contain px-3 pt-3 ${currentTrack ? 'pb-44' : 'pb-28'} sm:px-6 sm:pt-4 md:pb-24`
             }`}
           >
             {isEQOpen ? (
@@ -2474,7 +2474,7 @@ export default function App() {
       />
 
       {/* Visual Toast Notification Banner */}
-      <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+      <Toast message={toastMessage} hasPlayer={Boolean(currentTrack)} onClose={() => setToastMessage(null)} />
     </div>
   );
 }

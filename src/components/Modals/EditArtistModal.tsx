@@ -157,31 +157,31 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
 
   return (
     <section className="workspace-screen min-h-full w-full bg-[#121212] text-white select-none">
-      <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
-        <header className="workspace-header flex items-start justify-between gap-5 border-b border-white/10 pb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
+      <div className="mx-auto w-full min-w-0 max-w-6xl px-3 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
+        <header className="workspace-header flex min-w-0 items-start justify-between gap-3 border-b border-white/10 pb-5 sm:gap-5 sm:pb-6">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-12 sm:w-12">
               <User className="h-6 w-6" />
             </div>
-            <div>
-              <div className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-[#D8B4FE] sm:gap-2 sm:text-[10px] sm:tracking-[0.24em]">
                 <Sparkles className="h-3.5 w-3.5" /> Artist workspace
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Edit artist profile</h1>
+                <h1 className="break-words text-xl font-black tracking-tight sm:text-3xl">Edit artist profile</h1>
                 {artistVerified && (
                   <span className="flex items-center gap-1 rounded-full border border-blue-400/25 bg-blue-500/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-blue-300">
                     <ShieldCheck className="h-3.5 w-3.5" /> Verified
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-xs text-zinc-400 sm:text-sm">Shape how listeners see your identity, story and featured release.</p>
+              <p className="mt-1 text-[11px] leading-4 text-zinc-400 sm:text-sm">Shape how listeners see your identity, story and featured release.</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="control-press rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white"
+            className="control-press shrink-0 rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white"
             aria-label="Close artist profile editor"
           >
             <X className="h-5 w-5" />

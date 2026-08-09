@@ -75,7 +75,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
         <div className="z-10 flex flex-shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => onToggleLike(currentTrack.id)}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-rose-400"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-rose-400"
             title="Like track"
           >
             <Heart
@@ -99,7 +99,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
 
           <button
             onClick={onNext}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
             title="Next Track"
           >
             <SkipForward className="w-4.5 h-4.5" />

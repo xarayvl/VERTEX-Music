@@ -315,7 +315,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   if (!userProfile) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-[#181818] border border-white/10 rounded-2xl shadow-2xl max-w-xl mx-auto my-12 animate-in fade-in duration-300">
+      <div className="mx-auto my-6 flex min-h-[52vh] max-w-xl flex-col items-center justify-center rounded-2xl border border-white/10 bg-[#181818] p-6 text-center shadow-2xl animate-in fade-in duration-300 sm:my-12 sm:min-h-[60vh] sm:p-8">
         <div className="w-16 h-16 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] flex items-center justify-center mb-4 shadow-xl">
           <User className="w-8 h-8 text-white" />
         </div>
@@ -338,12 +338,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   return (
     <div className="w-full min-w-0 max-w-full overflow-x-hidden pb-20 select-none touch-pan-y animate-in fade-in duration-300">
       {/* SPOTIFY PROFILE HERO BANNER */}
-      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-b from-[#A855F7]/30 via-[#181818] to-[#121212] p-6 sm:p-8 border border-white/10 shadow-2xl mb-6">
-        <div className="flex flex-col md:flex-row items-center md:items-end gap-6 sm:gap-8">
+      <div className="relative mb-6 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#A855F7]/30 via-[#181818] to-[#121212] p-4 shadow-2xl sm:p-8">
+        <div className="flex flex-col items-center gap-4 sm:gap-8 md:flex-row md:items-end">
           {/* Circular Avatar with Edit Overlay */}
           <div
             onClick={openProfileEditor}
-            className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-full overflow-hidden shadow-2xl border-4 border-black/40 group cursor-pointer flex-shrink-0"
+            className="group relative h-32 w-32 flex-shrink-0 cursor-pointer overflow-hidden rounded-full border-4 border-black/40 shadow-2xl sm:h-44 sm:w-44"
             title="Click to edit profile avatar"
           >
             <img
@@ -366,7 +366,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </span>
             </div>
 
-            <h1 className="text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-tight drop-shadow-md truncate">
+            <h1 className="max-w-full break-words text-3xl font-black leading-tight tracking-tight text-white drop-shadow-md [overflow-wrap:anywhere] sm:text-6xl md:text-7xl">
               {userProfile.displayName}
             </h1>
 
@@ -387,13 +387,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
 
         {/* Action Bar */}
-        <div className="flex items-center space-x-3 pt-8 flex-wrap gap-y-3">
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-6 md:justify-start md:pt-8">
           {onSelectArtist && (
             <button
               data-artist-id={userProfile.id}
               data-context-type="artist"
               onClick={() => onSelectArtist(userProfile)}
-              className="px-5 py-2.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white text-xs font-extrabold shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+              className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-4 py-2.5 text-xs font-extrabold text-white shadow-lg transition-all hover:scale-105 hover:opacity-90 active:scale-95 sm:flex-none sm:px-5"
             >
               <ShieldCheck className="w-4 h-4 text-white" />
               <span>View Artist Page</span>
@@ -402,7 +402,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
           <button
             onClick={openProfileEditor}
-            className="px-5 py-2.5 rounded-full border border-zinc-500 hover:border-white text-xs font-bold text-white transition-all hover:scale-105 active:scale-95"
+            className="min-w-0 flex-1 rounded-full border border-zinc-500 px-4 py-2.5 text-xs font-bold text-white transition-all hover:scale-105 hover:border-white active:scale-95 sm:flex-none sm:px-5"
           >
             {isEditing ? 'Continue Editing' : 'Edit Profile'}
           </button>
@@ -651,9 +651,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     data-track-id={track.id}
                     data-context-type="track"
                     onClick={() => onPlayTrack(track)}
-                    className="flex items-center justify-between px-4 py-3 hover:bg-white/10 group transition-colors cursor-pointer"
+                    className="group flex cursor-pointer items-center justify-between gap-2 px-3 py-3 transition-colors hover:bg-white/10 sm:px-4"
                   >
-                    <div className="flex items-center space-x-4 min-w-0">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
                       <span className="w-5 text-center text-xs font-bold text-zinc-400 group-hover:hidden">
                         {index + 1}
                       </span>
@@ -674,14 +674,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-6">
+                    <div className="flex shrink-0 items-center gap-2 sm:gap-6">
                       <span className="hidden sm:inline text-xs font-mono text-zinc-400">
                         {track.plays ? `${Number(track.plays).toLocaleString()} plays` : '0 plays'}
                       </span>
 
                       <button
                         onClick={(event) => { event.stopPropagation(); onToggleLike(track.id); }}
-                        className={`transition-colors ${
+                        className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
                           track.isLiked
                             ? 'text-[#D946EF]'
                             : 'text-zinc-500 hover:text-white'
@@ -692,7 +692,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         />
                       </button>
 
-                      <span className="text-xs font-mono text-zinc-400">{`${Math.floor(track.duration / 60)}:${Math.floor(track.duration % 60).toString().padStart(2, '0')}`}</span>
+                      <span className="hidden font-mono text-xs text-zinc-400 sm:inline">{`${Math.floor(track.duration / 60)}:${Math.floor(track.duration % 60).toString().padStart(2, '0')}`}</span>
                     </div>
                   </div>
                 ))}
@@ -719,7 +719,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 );
               }
               return (
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5">
                   {personalTopArtists.map(({ profile: artist, fallbackAvatar }, idx) => (
                     <div
                       key={artist.id}
@@ -727,7 +727,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       data-context-type="artist"
                       onClick={() => onSelectArtist && onSelectArtist(artist)}
                       style={{ '--stagger-index': idx } as React.CSSProperties}
-                      className="stagger-item card-interactive group flex cursor-pointer flex-col items-center space-y-3 rounded-xl border border-white/5 bg-[#181818] p-4 text-center transition-all hover:bg-[#282828]"
+                      className="stagger-item card-interactive group flex cursor-pointer flex-col items-center space-y-3 rounded-xl border border-white/5 bg-[#181818] p-3 text-center transition-all hover:bg-[#282828] sm:p-4"
                     >
                       <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-xl font-black text-white shadow-lg transition-transform duration-300 group-hover:scale-105">
                         <ReliableArtistImage
@@ -736,7 +736,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                           alt={artist.name}
                         />
                       </div>
-                      <div>
+                      <div className="w-full min-w-0">
                         <h3 className="w-full truncate text-sm font-extrabold tracking-tight text-white">
                           {artist.name}
                         </h3>

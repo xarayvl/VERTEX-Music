@@ -229,16 +229,17 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               onClick={onOpenAuthModal}
-              className="px-4 py-1.5 rounded-full text-xs font-bold text-zinc-300 hover:text-white hover:bg-white/10 transition-all"
+              className="flex h-10 items-center rounded-[14px] border border-white/[0.06] bg-white/[0.035] px-3 text-xs font-bold text-zinc-200 transition-all hover:bg-white/10 hover:text-white sm:h-auto sm:rounded-full sm:border-0 sm:bg-transparent sm:px-4 sm:py-1.5"
             >
-              Log In
+              <span className="sm:hidden">Sign in</span>
+              <span className="hidden sm:inline">Log In</span>
             </button>
             <button
               onClick={onOpenAuthModal}
-              className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white text-xs font-extrabold shadow-md active:scale-95 transition-all"
+              className="hidden rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-4 py-1.5 text-xs font-extrabold text-white shadow-md transition-all hover:opacity-90 active:scale-95 sm:block"
             >
               Register
             </button>

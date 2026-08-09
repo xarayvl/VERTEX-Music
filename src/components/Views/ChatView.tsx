@@ -391,8 +391,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                               {msg.searchQueries && msg.searchQueries.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5">
                                   {msg.searchQueries.map((query, index) => (
-                                    <span key={index} className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-zinc-300">
-                                      <Search className="h-2.5 w-2.5" /> {query}
+                                    <span key={index} className="flex max-w-full items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-zinc-300">
+                                      <Search className="h-2.5 w-2.5 shrink-0" /> <span className="min-w-0 break-words [overflow-wrap:anywhere]">{query}</span>
                                     </span>
                                   ))}
                                 </div>
@@ -420,7 +420,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     </div>
                   )}
 
-                  <div className="whitespace-pre-wrap">{renderFormattedText(msg.text)}</div>
+                  <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{renderFormattedText(msg.text)}</div>
 
                   {msg.matchedTracks && msg.matchedTracks.length > 0 && (
                     <div className="mt-4 space-y-2 border-t border-white/10 pt-4">

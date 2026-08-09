@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Sparkles,
   User,
+  X,
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import VertexLogo from '../Brand/VertexLogo';
@@ -189,7 +190,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           cancel_on_tap_outside: true,
         });
         googleButtonRef.current.innerHTML = '';
-        const buttonWidth = Math.max(240, Math.floor(googleButtonRef.current.clientWidth));
+        const buttonWidth = Math.max(200, Math.min(400, Math.floor(googleButtonRef.current.clientWidth)));
         google.accounts.id.renderButton(googleButtonRef.current, {
           type: 'standard',
           theme: 'filled_black',
@@ -347,7 +348,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const labelClass = 'mb-2 block text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400';
 
   return (
-    <div className={`fixed inset-0 z-50 flex min-h-0 flex-col overflow-y-auto bg-black p-2 text-white animate-in fade-in duration-200 sm:p-5 ${mode === 'register' ? 'max-sm:overflow-hidden' : ''}`}>
+    <div className={`fixed inset-0 z-50 flex min-h-0 flex-col overflow-y-auto overscroll-contain bg-black px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] text-white animate-in fade-in duration-200 sm:p-5 ${mode === 'register' ? 'max-sm:overflow-hidden' : ''}`}>
       <div className="pointer-events-none fixed inset-0" aria-hidden="true">
         <React.Suspense fallback={<div className="h-full w-full bg-[#050307]" />}>
           <FaultyTerminal
@@ -373,7 +374,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       </div>
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.06),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.18),rgba(0,0,0,0.5))]" aria-hidden="true" />
 
-      <div className={`relative z-10 mx-auto mb-14 flex w-full max-w-5xl flex-1 items-center justify-center sm:mb-16 ${mode === 'register' ? 'max-sm:min-h-0 max-sm:items-start max-sm:overflow-y-auto' : ''}`}>
+      <button
+        type="button"
+        onClick={onClose}
+        className="fixed right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-40 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-black/55 text-zinc-300 shadow-xl backdrop-blur-md transition-colors hover:bg-white/10 hover:text-white sm:right-5 sm:top-5"
+        aria-label="Close authentication"
+      >
+        <X className="h-5 w-5" />
+      </button>
+
+      <div className={`relative z-10 mx-auto mb-14 flex w-full max-w-5xl flex-1 items-center justify-center sm:mb-16 ${mode === 'register' ? 'max-sm:min-h-0 max-sm:items-start max-sm:overflow-y-auto max-sm:overscroll-contain' : ''}`}>
         <section className="relative grid w-full md:grid-cols-[0.92fr_1.08fr] md:items-center md:gap-4">
           {authSuccess && (
             <div
@@ -425,9 +435,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           </aside>
 
-          <main className={`relative flex min-h-[560px] flex-col justify-center overflow-hidden rounded-[2rem] border border-white/[0.14] bg-[#09070b]/55 p-5 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-md animate-in zoom-in-95 duration-300 sm:p-8 md:min-h-[640px] ${mode === 'register' ? 'md:p-8' : 'md:p-10'}`}>
+          <main className={`relative flex min-h-0 flex-col justify-center overflow-hidden rounded-[1.5rem] border border-white/[0.14] bg-[#09070b]/55 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-md animate-in zoom-in-95 duration-300 sm:min-h-[560px] sm:rounded-[2rem] sm:p-8 md:min-h-[640px] ${mode === 'register' ? 'md:p-8' : 'md:p-10'}`}>
             <div className="mx-auto w-full max-w-md">
-              <div className="mb-7 flex items-center gap-3 md:hidden">
+              <div className="mb-5 flex items-center gap-3 pr-12 md:hidden sm:mb-7">
                 <VertexLogo alt="" className="h-11 w-11 shrink-0" />
                 <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D946EF]">Welcome to</p><p className="mt-0.5 text-lg font-black">VERTEX Music</p></div>
               </div>
@@ -437,9 +447,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button type="button" role="tab" aria-selected={mode === 'register'} onClick={() => switchMode('register')} className={`-mb-px border-b px-0.5 pb-2.5 text-[13px] font-semibold transition-colors ${mode === 'register' ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>Sign up</button>
               </div>
 
-              <div key={mode} className={`mt-7 animate-in fade-in slide-in-from-right-2 duration-300 ${mode === 'register' ? 'md:mt-5' : ''}`}>
+              <div key={mode} className={`mt-5 animate-in fade-in slide-in-from-right-2 duration-300 sm:mt-7 ${mode === 'register' ? 'md:mt-5' : ''}`}>
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#D946EF]">{mode === 'login' ? 'Welcome back' : 'New listener'}</p>
-                <h2 className="mt-1.5 text-[1.75rem] font-black leading-tight tracking-[-0.025em]">{mode === 'login' ? 'Sign in to continue' : 'Create your account'}</h2>
+                <h2 className="mt-1.5 break-words text-2xl font-black leading-tight tracking-[-0.025em] sm:text-[1.75rem]">{mode === 'login' ? 'Sign in to continue' : 'Create your account'}</h2>
                 <p className="mt-2 text-sm leading-5 text-zinc-400">{mode === 'login' ? 'Your library, playlists and artist tools are waiting.' : 'Set up your profile and start building your music space.'}</p>
               </div>
 
@@ -579,7 +589,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </section>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 overflow-hidden px-2 pb-4 pt-3 sm:px-5 sm:pb-5">
+      <div className="fixed inset-x-0 bottom-0 z-20 overflow-hidden px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-5 sm:pb-5">
         <LogoLoop
           logos={AUTH_LOOP_ITEMS}
           speed={64}

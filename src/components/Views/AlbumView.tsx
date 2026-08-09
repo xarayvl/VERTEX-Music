@@ -200,9 +200,9 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   const formattedReleaseDate = albumTrack.createdAt ? new Date(albumTrack.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : `Released ${effectiveYear}`;
 
   return (
-    <div className="flex flex-col space-y-8 animate-in fade-in duration-500 min-h-full">
+    <div className="flex min-h-full min-w-0 flex-col space-y-6 overflow-x-hidden animate-in fade-in duration-500 sm:space-y-8">
       {/* Dynamic Header mimicking Spotify Release Page */}
-      <div className="relative -mx-6 -mt-4 p-8 flex flex-col md:flex-row items-end gap-6 overflow-hidden">
+      <div className="relative -mx-3 -mt-3 flex flex-col items-center gap-5 overflow-hidden px-4 py-6 text-center sm:-mx-6 sm:-mt-4 sm:p-8 md:flex-row md:items-end md:gap-6 md:text-left">
         {/* Background Blur */}
         <div
           className="absolute inset-0 opacity-40 blur-[100px] z-0 saturate-200"
@@ -221,22 +221,22 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
           src={albumTrack.coverUrl}
           alt={albumTrack.album}
           referrerPolicy="no-referrer"
-          className="w-48 h-48 md:w-56 md:h-56 rounded-lg shadow-2xl z-10 object-cover flex-shrink-0"
+          className="z-10 h-44 w-44 flex-shrink-0 rounded-2xl object-cover shadow-2xl sm:h-48 sm:w-48 md:h-56 md:w-56 md:rounded-lg"
         />
 
-        <div className="z-10 flex flex-col space-y-3 pb-2 w-full">
+        <div className="z-10 flex w-full min-w-0 flex-col items-center space-y-2 pb-1 md:items-start md:space-y-3 md:pb-2">
           <p className="text-sm font-semibold uppercase tracking-widest text-white/80">
             {albumTrack.releaseType ? albumTrack.releaseType.toUpperCase() : (albumTrack.album === 'Single' ? 'SINGLE' : 'ALBUM')}
           </p>
-          <h1 data-track-id={albumTrack.id} data-context-type="track" className="text-4xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter drop-shadow-lg leading-none py-1">
+          <h1 data-track-id={albumTrack.id} data-context-type="track" className="max-w-full break-words py-1 text-3xl font-black leading-[1.05] tracking-tighter text-white drop-shadow-lg [overflow-wrap:anywhere] sm:text-4xl md:text-6xl lg:text-7xl">
             {albumTrack.releaseTitle || (albumTrack.album === 'Single' ? albumTrack.title : albumTrack.album)}
           </h1>
-          <div className="flex items-center space-x-2 text-sm text-zinc-300 font-medium pt-2">
+          <div className="flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 pt-1 text-xs font-medium text-zinc-300 sm:text-sm md:justify-start md:pt-2">
             <span
               data-artist-id={albumTrack.userId}
               data-context-type="artist"
               onClick={() => onSelectArtist(albumTrack.userId || '')}
-              className="font-bold text-white hover:underline cursor-pointer tracking-tight"
+              className="max-w-full break-words font-bold tracking-tight text-white hover:underline [overflow-wrap:anywhere] cursor-pointer"
             >
               {albumTrack.artist}
             </span>
@@ -253,7 +253,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
       </div>
 
       {/* Action Row */}
-      <div className="flex items-center space-x-6 px-2">
+      <div className="flex items-center justify-center gap-5 px-2 md:justify-start md:gap-6">
         <button
           onClick={() => onPlayTrack(activeAlbumTrack || albumTracks[0], albumTracks)}
           className="w-14 h-14 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all"
@@ -267,7 +267,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
         <button
           onClick={() => void toggleReleaseLike()}
           disabled={isLikePending}
-          className={`${isReleaseLiked ? 'text-[#D946EF]' : 'text-zinc-400 hover:text-white'} transition-colors disabled:cursor-wait disabled:opacity-50`}
+          className={`flex h-11 w-11 items-center justify-center rounded-full ${isReleaseLiked ? 'text-[#D946EF]' : 'text-zinc-400 hover:bg-white/5 hover:text-white'} transition-colors disabled:cursor-wait disabled:opacity-50`}
           aria-label={isReleaseLiked ? 'Remove release from Liked Songs' : 'Save release to Liked Songs'}
         >
           <Heart className={`w-8 h-8 ${isReleaseLiked ? 'fill-[#D946EF]' : ''}`} />
@@ -289,7 +289,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
               ref={menuPanelRef}
               role="menu"
               onClick={(event) => event.stopPropagation()}
-              className="custom-scrollbar fixed z-[1000] w-72 max-h-[calc(100dvh-24px)] overflow-y-auto rounded-2xl border border-white/12 bg-[#161618] p-1.5 text-xs font-medium text-zinc-200 shadow-[0_24px_70px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-100 select-none"
+              className="viewport-menu custom-scrollbar fixed z-[1000] max-h-[calc(100dvh-24px)] overflow-y-auto rounded-2xl border border-white/12 bg-[#161618] p-1.5 text-xs font-medium text-zinc-200 shadow-[0_24px_70px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-100 select-none"
               style={{ top: menuPosition.top, left: menuPosition.left }}
             >
               <div className="mb-1.5 flex items-center gap-3 border-b border-white/10 px-2.5 py-2.5">
@@ -430,7 +430,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
       {/* Tracklist Table */}
       <div className="bg-[#181818]/60 rounded-xl overflow-hidden border border-white/[0.04]">
         {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-4 py-2.5 text-xs font-bold text-zinc-400 border-b border-white/10 uppercase tracking-wider">
+        <div className="grid grid-cols-12 gap-2 border-b border-white/10 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-400 sm:gap-4 sm:px-4">
           <div className="col-span-1 text-center">#</div>
           <div className="col-span-8 sm:col-span-9">Title</div>
           <div className="col-span-3 sm:col-span-2 flex items-center justify-end pr-2 gap-4">
@@ -448,7 +448,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                 data-track-id={track.id}
                 data-context-type="track"
                 onClick={() => onPlayTrack(track, albumTracks)}
-                className={`grid grid-cols-12 gap-4 px-4 py-3 items-center text-sm cursor-pointer transition-colors group ${
+                className={`group grid cursor-pointer grid-cols-12 items-center gap-2 px-3 py-3 text-sm transition-colors sm:gap-4 sm:px-4 ${
                   isSelected ? 'bg-white/10 text-[#D946EF]' : 'hover:bg-white/10 text-zinc-300'
                 }`}
               >
@@ -513,7 +513,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                       e.stopPropagation();
                       onToggleLike(track.id);
                     }}
-                    className="p-1 text-zinc-400 hover:text-white transition-colors"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
                   >
                     <Heart
                       className={`w-4 h-4 ${
@@ -521,7 +521,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                       }`}
                     />
                   </button>
-                  <span className="text-xs font-mono text-zinc-400">
+                  <span className="hidden text-xs font-mono text-zinc-400 sm:inline">
                     {Math.floor(track.duration / 60)}:
                     {track.duration % 60 < 10 ? '0' : ''}
                     {track.duration % 60}
@@ -535,9 +535,9 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
 
       {/* Copyright Footer */}
       <div className="px-2 pb-6">
-        <p className="text-[11px] text-zinc-500 font-medium">{formattedReleaseDate}</p>
+        <p className="break-words text-[11px] font-medium text-zinc-500">{formattedReleaseDate}</p>
         {albumTrack.copyright ? (
-          <p className="text-[11px] text-zinc-500">{albumTrack.copyright}</p>
+          <p className="break-words text-[11px] text-zinc-500 [overflow-wrap:anywhere]">{albumTrack.copyright}</p>
         ) : (
           <>
             <p className="text-[11px] text-zinc-500">© {effectiveYear} {albumTrack.artist} Records</p>
@@ -549,19 +549,19 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
       {/* More by Artist Section */}
       {moreByArtist.length > 0 && (
         <div className="pt-6 border-t border-white/5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 data-artist-id={albumTrack.userId} data-context-type="artist" className="text-xl font-bold text-white hover:underline cursor-pointer" onClick={() => onSelectArtist(albumTrack.userId || '')}>
+          <div className="mb-4 flex min-w-0 items-center justify-between">
+            <h2 data-artist-id={albumTrack.userId} data-context-type="artist" className="min-w-0 break-words text-lg font-bold text-white hover:underline cursor-pointer sm:text-xl" onClick={() => onSelectArtist(albumTrack.userId || '')}>
               More by {albumTrack.artist}
             </h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
             {moreByArtist.slice(0, 5).map((track) => (
               <div
                 key={track.id}
                 data-track-id={track.id}
                 data-context-type="track"
                 onClick={() => onSelectAlbum(track)}
-                className="group bg-[#181818] hover:bg-[#282828] p-4 rounded-xl transition-all cursor-pointer flex flex-col justify-between shadow-md"
+                className="group flex cursor-pointer flex-col justify-between rounded-xl bg-[#181818] p-3 shadow-md transition-all hover:bg-[#282828] sm:p-4"
                 aria-label={`Open ${track.releaseTitle || (track.album === 'Single' ? track.title : track.album)}`}
               >
                 <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 shadow">

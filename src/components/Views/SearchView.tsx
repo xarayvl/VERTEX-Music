@@ -165,11 +165,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-12 select-none">
+    <div className="min-w-0 space-y-6 overflow-x-hidden pb-12 select-none">
       {/* Header & Search Bar */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">Search</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Search</h1>
         </div>
 
         <div className="relative w-full max-w-xl">
@@ -206,7 +206,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
               onClick={() => setFilterType(tab.id as typeof filterType)}
               className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
                 filterType === tab.id
-                  ? 'bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white shadow-lg scale-105'
+                  ? 'bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white shadow-lg sm:scale-105'
                   : 'bg-white/10 text-zinc-300 hover:text-white hover:bg-white/20'
               }`}
             >
@@ -240,7 +240,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
               Browse Music Categories
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
               {[
                 { title: 'Synthwave & Cyber', color: 'from-purple-600 to-indigo-700', query: 'Synthwave' },
                 { title: 'Lo-Fi Chill Beats', color: 'from-fuchsia-600 to-pink-700', query: 'Lo-Fi' },
@@ -468,13 +468,13 @@ export const SearchView: React.FC<SearchViewProps> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center space-x-3">
+                        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               onToggleLike(track.id);
                             }}
-                            className="p-1.5 text-zinc-400 hover:text-white transition-colors"
+                            className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
                           >
                             <Heart
                               className={`w-4 h-4 ${
@@ -482,7 +482,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                               }`}
                             />
                           </button>
-                          <span className="text-xs font-mono text-zinc-400">
+                          <span className="hidden text-xs font-mono text-zinc-400 sm:inline">
                             {Math.floor(track.duration / 60)}:
                             {track.duration % 60 < 10 ? '0' : ''}
                             {track.duration % 60}
@@ -508,14 +508,14 @@ export const SearchView: React.FC<SearchViewProps> = ({
               {matchedArtists.length === 0 ? (
                 <p className="text-xs text-zinc-400 italic py-2">No matching artists or user profiles found.</p>
               ) : (
-                <div className="grid grid-cols-2 items-start gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
                   {matchedArtists.map((art) => (
                     <div
                       key={art.id || art.name}
                       data-artist-id={art.id}
                       data-context-type="artist"
                       onClick={() => handleArtistClick(art)}
-                      className="group flex self-start cursor-pointer flex-col items-center rounded-2xl border border-white/5 bg-[#18181a] p-4 text-center shadow-md transition-all hover:border-[#D946EF]/40 hover:bg-[#222226] hover:shadow-xl"
+                      className="group flex self-start cursor-pointer flex-col items-center rounded-2xl border border-white/5 bg-[#18181a] p-3 text-center shadow-md transition-all hover:border-[#D946EF]/40 hover:bg-[#222226] hover:shadow-xl sm:p-4"
                     >
                       <div className="relative mb-3">
                         <img
@@ -543,7 +543,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                         {art.username ? `@${art.username}` : art.genre || 'Artist'}
                       </p>
 
-                      <span className="mt-2 px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-white/5 text-zinc-300 group-hover:bg-[#D946EF]/20 group-hover:text-[#D946EF] transition-colors">
+                      <span className="mt-2 max-w-full truncate rounded-full bg-white/5 px-2 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-zinc-300 transition-colors group-hover:bg-[#D946EF]/20 group-hover:text-[#D946EF] sm:px-2.5 sm:text-[9px]">
                         {art.isUser ? 'User Profile' : art.verified ? 'Verified Artist' : 'Catalog Artist'}
                       </span>
                     </div>
@@ -564,14 +564,14 @@ export const SearchView: React.FC<SearchViewProps> = ({
               {matchedPlaylists.length === 0 ? (
                 <p className="text-xs text-zinc-400 italic py-2">No matching playlists found.</p>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
                   {matchedPlaylists.map((pl) => (
                     <div
                       key={pl.id}
                       data-playlist-id={pl.id}
                       data-context-type="playlist"
                       onClick={() => onSelectPlaylist(pl)}
-                      className="bg-[#18181a] border border-white/5 hover:border-[#D946EF]/40 hover:bg-[#222226] p-4 rounded-2xl flex flex-col justify-between group cursor-pointer transition-all shadow-md hover:shadow-xl"
+                      className="group flex cursor-pointer flex-col justify-between rounded-2xl border border-white/5 bg-[#18181a] p-3 shadow-md transition-all hover:border-[#D946EF]/40 hover:bg-[#222226] hover:shadow-xl sm:p-4"
                     >
                       <img
                         src={pl.coverUrl}

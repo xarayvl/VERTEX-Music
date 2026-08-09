@@ -188,8 +188,8 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
         </div>
       </section>
 
-      <section className="workspace-card section-reveal flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-5">
-        <div className="flex flex-wrap items-center gap-2.5">
+      <section className="workspace-card section-reveal flex flex-col items-stretch gap-4 rounded-3xl border border-white/10 bg-[#181818] p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-5">
+        <div className="flex flex-wrap items-center justify-center gap-2.5 sm:justify-start">
           <button type="button" onClick={handlePlayButton} disabled={playlistTracks.length === 0} className="control-press flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-[0_14px_34px_rgba(168,85,247,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40" title={isCurrentPlaylistPlaying ? 'Pause playlist' : 'Play playlist'}>
             {isCurrentPlaylistPlaying ? <Pause className="h-6 w-6 fill-white" /> : <Play className="ml-0.5 h-6 w-6 fill-white" />}
           </button>
@@ -201,7 +201,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
           <button type="button" onClick={handleCopyLink} className="control-press flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"><Copy className="h-4 w-4" /><span className="hidden sm:inline">Copy link</span></button>
         </div>
 
-        {canManage && <button type="button" onClick={() => { if (window.confirm(`Delete "${playlist.title}" permanently?`)) onDeletePlaylist(playlist.id); }} className="control-press flex h-11 items-center gap-2 rounded-2xl border border-red-400/20 bg-red-400/[0.07] px-4 text-xs font-black text-red-300 hover:bg-red-400/15"><Trash2 className="h-4 w-4" /> Delete</button>}
+        {canManage && <button type="button" onClick={() => { if (window.confirm(`Delete "${playlist.title}" permanently?`)) onDeletePlaylist(playlist.id); }} className="control-press flex h-11 items-center justify-center gap-2 rounded-2xl border border-red-400/20 bg-red-400/[0.07] px-4 text-xs font-black text-red-300 hover:bg-red-400/15"><Trash2 className="h-4 w-4" /> Delete</button>}
       </section>
 
       <section className="workspace-card section-reveal overflow-hidden rounded-3xl border border-white/10 bg-[#181818]">
@@ -241,7 +241,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1 sm:gap-2">
-                    <button type="button" onClick={(event) => { event.stopPropagation(); onToggleLike(track.id); }} className={`control-press rounded-xl p-2 ${track.isLiked ? 'text-[#D946EF]' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`} aria-label={track.isLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'}><Heart className={`h-4 w-4 ${track.isLiked ? 'fill-current' : ''}`} /></button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); onToggleLike(track.id); }} className={`control-press flex h-10 w-10 items-center justify-center rounded-xl ${track.isLiked ? 'text-[#D946EF]' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`} aria-label={track.isLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'}><Heart className={`h-4 w-4 ${track.isLiked ? 'fill-current' : ''}`} /></button>
                     <span className="hidden w-10 text-right font-mono text-[10px] text-zinc-500 sm:block">{formatDuration(track.duration)}</span>
                     {canManage && <button type="button" disabled={pendingTrackIds.size > 0} onClick={(event) => { event.stopPropagation(); void mutateTrack(track, 'remove'); }} className="control-press flex h-9 w-9 items-center justify-center rounded-xl text-zinc-600 hover:bg-red-400/10 hover:text-red-300 disabled:cursor-wait disabled:opacity-40" aria-label={`Remove ${track.title} from playlist`}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button>}
                   </div>

@@ -48,30 +48,30 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       : tracks;
 
   return (
-    <div className="space-y-8 pb-12 select-none">
+    <div className="space-y-7 pb-12 select-none sm:space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">Explore & Browse</h1>
+        <h1 className="break-words text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Explore & Browse</h1>
         <p className="text-xs text-zinc-400 mt-1">Discover new music by genre and artist</p>
       </div>
 
       {/* VERTEX Music Colorful Genre Cards Grid */}
       <div>
         <h2 className="text-2xl font-extrabold text-white tracking-tight mb-4">Browse All</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
           {BROWSE_CATEGORIES.map((cat, idx) => (
             <div
               key={idx}
               onClick={() =>
                 setSelectedCategory(selectedCategory === cat.name ? null : cat.name)
               }
-              className={`group relative overflow-hidden rounded-xl p-4 h-32 cursor-pointer transition-all duration-300 shadow-lg border ${
+              className={`group relative h-32 cursor-pointer overflow-hidden rounded-xl border p-3 shadow-lg transition-all duration-300 sm:p-4 ${
                 selectedCategory === cat.name
-                  ? 'border-[#D946EF] ring-2 ring-[#D946EF] scale-105'
+                  ? 'border-[#D946EF] ring-2 ring-[#D946EF] sm:scale-105'
                   : 'border-white/5 hover:scale-[1.02]'
               } bg-gradient-to-br ${cat.gradient}`}
             >
-              <h3 className="text-xl font-black text-white tracking-tight max-w-[70%] leading-tight">
+              <h3 className="max-w-[72%] break-words text-base font-black leading-tight tracking-tight text-white sm:text-xl">
                 {cat.name}
               </h3>
 
@@ -87,13 +87,13 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       {/* Genre-Filtered Track Results (only shown once a real genre is picked above) */}
       {selectedCategory && (
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-extrabold text-white tracking-tight">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h2 className="min-w-0 break-words text-lg font-extrabold tracking-tight text-white sm:text-xl">
             {selectedCategory} Tracks
           </h2>
           <button
             onClick={() => setSelectedCategory(null)}
-            className="text-xs font-bold text-[#D946EF] hover:underline"
+            className="shrink-0 text-xs font-bold text-[#D946EF] hover:underline"
           >
             Clear Filter
           </button>
@@ -141,7 +141,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                     e.stopPropagation();
                     onToggleLike(track.id);
                   }}
-                  className="p-1.5 text-zinc-400 hover:text-white"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-400 hover:bg-white/5 hover:text-white"
                 >
                   <Heart
                     className={`w-4 h-4 ${
@@ -154,7 +154,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                     e.stopPropagation();
                     onPlayTrack(track);
                   }}
-                  className="w-8 h-8 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white flex items-center justify-center hover:scale-105 transition-transform shadow"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white shadow transition-transform hover:scale-105"
                   title={isThisTrackPlaying ? 'Pause' : 'Play'}
                 >
                   {isThisTrackPlaying ? (
@@ -175,7 +175,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       {/* Artists Section */}
       <div>
         <h2 className="text-xl font-extrabold text-white tracking-tight mb-4">Artists</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
           {artists.map((artist) => {
             const artistTrack = tracks.find((track) => track.userId === artist.id);
             return (
@@ -184,9 +184,9 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 data-artist-id={artist.id}
                 data-context-type="artist"
                 onClick={() => { if (onSelectArtist) onSelectArtist(artist); else if (artistTrack) onPlayTrack(artistTrack); }}
-                className="bg-[#181818] hover:bg-[#282828] p-4 rounded-xl text-center flex flex-col items-center group cursor-pointer transition-all shadow"
+                className="group flex cursor-pointer flex-col items-center rounded-xl bg-[#181818] p-3 text-center shadow transition-all hover:bg-[#282828] sm:p-4"
               >
-                <div className="w-24 h-24 rounded-full overflow-hidden mb-3 border-2 border-white/10 group-hover:border-[#D946EF] transition-colors shadow-lg">
+                <div className="mb-3 aspect-square w-full max-w-24 overflow-hidden rounded-full border-2 border-white/10 shadow-lg transition-colors group-hover:border-[#D946EF]">
                   <img
                     src={artist.avatarUrl}
                     alt={artist.name}

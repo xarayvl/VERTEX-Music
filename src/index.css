@@ -21,6 +21,13 @@ html,
 body,
 #root {
   min-height: 100%;
+  width: 100%;
+  min-width: 0;
+}
+
+body {
+  min-height: 100dvh;
+  overflow: hidden;
 }
 
 button,
@@ -83,6 +90,25 @@ button,
 }
 .custom-scrollbar:hover::-webkit-scrollbar-thumb {
   background-color: rgba(255, 255, 255, 0.28);
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Floating menus are also used from compact touch layouts. Keep their
+   measured width inside the viewport so the positioning code can clamp them. */
+.viewport-menu {
+  width: min(18rem, calc(100vw - 1.5rem));
+}
+
+.context-menu {
+  width: min(15rem, calc(100vw - 1.5rem));
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: rgba(217, 70, 239, 0.55);
@@ -332,6 +358,45 @@ button, a {
     animation-duration: 0.28s;
   }
 
+  .workspace-screen,
+  .workspace-card,
+  .section-reveal {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .spotify-top-header {
+    padding-top: max(0.625rem, env(safe-area-inset-top));
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+
+  .mobile-bottom-nav,
+  .mobile-mini-player {
+    left: max(0.5rem, env(safe-area-inset-left));
+    right: max(0.5rem, env(safe-area-inset-right));
+  }
+
+  h1,
+  h2,
+  h3 {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-safe-footer {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .toast-banner {
+    bottom: calc(max(0.5rem, env(safe-area-inset-bottom)) + 4.5rem);
+    max-width: calc(100vw - 1rem);
+  }
+
+  .toast-banner[data-has-player='true'] {
+    bottom: calc(max(0.5rem, env(safe-area-inset-bottom)) + 9rem);
+  }
+
   .control-press:hover,
   .card-interactive:hover {
     transform: none;
@@ -350,11 +415,53 @@ button, a {
 }
 
 @media (max-width: 359px) {
+  .mobile-bottom-nav {
+    left: max(0.25rem, env(safe-area-inset-left));
+    right: max(0.25rem, env(safe-area-inset-right));
+  }
+
   .mobile-bottom-nav span {
     font-size: 8px;
   }
 
   .mobile-mini-player button:first-of-type {
     display: none;
+  }
+}
+
+/* The full-screen player also needs to fit short landscape phones. */
+@media (max-width: 767px) and (max-height: 520px) {
+  .song-screen-shell {
+    padding-block: 0.25rem;
+  }
+
+  .song-screen-header {
+    padding-bottom: 0.25rem;
+  }
+
+  .song-screen-header > div:first-child > div:first-child {
+    display: none;
+  }
+
+  .song-screen-grid {
+    grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+  }
+
+  .song-screen-art {
+    width: 100%;
+    max-height: 100%;
+  }
+
+  .song-screen-controls {
+    align-self: center;
+    padding: 0.6rem;
+  }
+
+  .song-screen-controls > div:nth-child(2) {
+    margin-top: 0.45rem;
+    padding: 0.45rem;
   }
 }

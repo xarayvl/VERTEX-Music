@@ -228,15 +228,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <ArrowLeft className="h-4 w-4" /> Home
         </button>
 
-        <header className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-[#2b1738] via-[#19131f] to-[#121212] p-6 shadow-2xl sm:p-8">
+        <header className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-[#2b1738] via-[#19131f] to-[#121212] p-4 shadow-2xl sm:p-8">
           <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[#D946EF]/20 blur-3xl" />
-          <div className="relative flex items-center gap-4">
-            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
-              {isPlaylistScreen ? <ListMusic className="h-7 w-7" /> : <History className="h-7 w-7" />}
+          <div className="relative flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-14 sm:w-14">
+              {isPlaylistScreen ? <ListMusic className="h-6 w-6 sm:h-7 sm:w-7" /> : <History className="h-6 w-6 sm:h-7 sm:w-7" />}
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">Home collection</p>
-              <h1 className="mt-1 truncate text-3xl font-black tracking-tight text-white sm:text-4xl">
+              <h1 className="mt-1 break-words text-2xl font-black leading-tight tracking-tight text-white sm:text-4xl">
                 {isPlaylistScreen ? 'All Playlists' : 'Recently Played'}
               </h1>
               <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
@@ -255,7 +255,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <p className="mt-2 text-xs text-zinc-400">Create a playlist and it will appear here.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
               {filteredPlaylists.map((playlist, idx) => (
                 <div
                   key={playlist.id}
@@ -263,7 +263,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   data-context-type="playlist"
                   onClick={() => onSelectPlaylist(playlist)}
                   style={{ '--stagger-index': idx } as React.CSSProperties}
-                  className="stagger-item card-interactive group relative flex cursor-pointer flex-col justify-between rounded-xl bg-[#181818] p-4 shadow-md transition-all duration-300 hover:bg-[#282828]"
+                  className="stagger-item card-interactive group relative flex cursor-pointer flex-col justify-between rounded-xl bg-[#181818] p-3 shadow-md transition-all duration-300 hover:bg-[#282828] sm:p-4"
                 >
                   <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-lg shadow-md">
                     <img src={playlist.coverUrl} alt={playlist.title} referrerPolicy="no-referrer" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
@@ -285,7 +285,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <p className="mt-2 text-xs text-zinc-400">Your listening history will appear here.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
             {allRecentReleaseGroups.map((group, idx) => {
               const track = group.representative;
               const isThisTrackPlaying = group.tracks.some((candidate) => candidate.id === currentTrackId) && isPlaying;
@@ -296,7 +296,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   data-context-type="track"
                   onClick={() => onSelectAlbum?.(track)}
                   style={{ '--stagger-index': idx } as React.CSSProperties}
-                  className="stagger-item card-interactive group relative flex cursor-pointer flex-col justify-between rounded-xl bg-[#181818] p-4 shadow-md transition-all duration-300 hover:bg-[#282828]"
+                  className="stagger-item card-interactive group relative flex cursor-pointer flex-col justify-between rounded-xl bg-[#181818] p-3 shadow-md transition-all duration-300 hover:bg-[#282828] sm:p-4"
                 >
                   <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-lg shadow-md">
                     <img src={group.coverUrl} alt={group.title} referrerPolicy="no-referrer" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
@@ -339,7 +339,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   return (
     <div className="space-y-8 pb-12 select-none">
       {/* Top Gradient Banner Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-white/[0.05] bg-gradient-to-b from-[#A855F7]/30 via-[#181818]/70 to-[#121212] p-6 sm:p-8">
+      <div className="relative overflow-hidden rounded-2xl border border-white/[0.05] bg-gradient-to-b from-[#A855F7]/30 via-[#181818]/70 to-[#121212] p-4 sm:p-8">
         <div
           className="pointer-events-none absolute inset-0 will-change-opacity transition-opacity duration-700 ease-out"
           style={{
@@ -347,9 +347,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
             opacity: isGreetingAccentActive ? 1 : 0,
           }}
         />
-        <div className="relative mb-6 flex items-center justify-between">
-          <div>
-            <span className="text-xs font-mono uppercase tracking-widest text-[#D946EF] font-bold flex items-center gap-2">
+        <div className="relative mb-5 flex flex-col items-start gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <span className="flex items-center gap-2 text-[10px] font-mono font-bold uppercase tracking-wider text-[#D946EF] sm:text-xs sm:tracking-widest">
               <span className="w-2 h-2 rounded-full bg-[#D946EF] animate-ping" />
               VERTEX Music Audio Engine
             </span>
@@ -358,7 +358,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </h1>
           </div>
           {selectedCategory !== 'All' && (
-            <span className="px-3 py-1 rounded-full bg-[#A855F7]/20 border border-[#A855F7]/40 text-[#C084FC] text-xs font-bold">
+            <span className="max-w-full break-words rounded-full border border-[#A855F7]/40 bg-[#A855F7]/20 px-3 py-1 text-xs font-bold text-[#C084FC]">
               Category: {selectedCategory}
             </span>
           )}
@@ -410,14 +410,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
       {/* Real playlist catalog */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="text-2xl font-extrabold text-white tracking-tight">Playlists</h2>
             <p className="text-xs text-zinc-400">Playlists currently available in the catalog</p>
           </div>
           <button
             onClick={() => setActiveHomeSection('playlists')}
-            className="text-xs font-bold text-zinc-400 hover:text-white uppercase tracking-wider transition-colors"
+            className="shrink-0 text-xs font-bold uppercase tracking-wider text-zinc-400 transition-colors hover:text-white"
           >
             Show all
           </button>
@@ -439,7 +439,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
             {filteredPlaylists.map((playlist, idx) => (
               <div
                 key={playlist.id}
@@ -447,7 +447,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 data-context-type="playlist"
                 onClick={() => onSelectPlaylist(playlist)}
                 style={{ '--stagger-index': idx } as React.CSSProperties}
-                className="stagger-item card-interactive group relative bg-[#181818] hover:bg-[#282828] p-4 rounded-lg transition-all duration-300 cursor-pointer shadow-md flex flex-col justify-between"
+                className="stagger-item card-interactive group relative flex cursor-pointer flex-col justify-between rounded-lg bg-[#181818] p-3 shadow-md transition-all duration-300 hover:bg-[#282828] sm:p-4"
               >
                 <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 shadow-md">
                   <img
@@ -477,17 +477,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
       {/* "Recently Played" Track Cards */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-extrabold text-white tracking-tight">Recently Played</h2>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="min-w-0 text-xl font-extrabold tracking-tight text-white sm:text-2xl">Recently Played</h2>
           <button
             onClick={() => setActiveHomeSection('recent')}
-            className="text-xs font-bold text-zinc-400 hover:text-white uppercase tracking-wider transition-colors"
+            className="shrink-0 text-xs font-bold uppercase tracking-wider text-zinc-400 transition-colors hover:text-white"
           >
             Show all
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
           {recentReleaseGroups.map((group, idx) => {
             const track = group.representative;
             const isThisTrackPlaying = group.tracks.some((t) => t.id === currentTrackId) && isPlaying;
@@ -501,7 +501,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   if (onSelectAlbum) onSelectAlbum(track);
                 }}
                 style={{ '--stagger-index': idx } as React.CSSProperties}
-                className="stagger-item card-interactive group relative bg-[#181818] hover:bg-[#282828] p-4 rounded-lg transition-all duration-300 cursor-pointer shadow-md flex flex-col justify-between"
+                className="stagger-item card-interactive group relative flex cursor-pointer flex-col justify-between rounded-lg bg-[#181818] p-3 shadow-md transition-all duration-300 hover:bg-[#282828] sm:p-4"
               >
                 <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 shadow-md">
                   <img

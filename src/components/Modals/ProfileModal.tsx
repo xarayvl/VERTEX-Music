@@ -104,14 +104,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   if (!userProfile) {
     return (
       <div
-        className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/80 px-0 pt-16 animate-in fade-in duration-200 sm:p-4"
+        className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/80 px-0 pt-[max(4rem,env(safe-area-inset-top))] animate-in fade-in duration-200 sm:p-4"
         onMouseDown={handleBackdropClick}
       >
         <section
           role="dialog"
           aria-modal="true"
           aria-labelledby="profile-auth-title"
-          className="w-full max-w-xl rounded-t-[2rem] border border-white/10 bg-gradient-to-b from-[#25142d] to-[#141416] p-6 shadow-[0_-24px_80px_rgba(0,0,0,0.65)] animate-in slide-in-from-bottom-8 duration-300 sm:rounded-[2rem]"
+          className="w-full max-w-xl rounded-t-[2rem] border border-white/10 bg-gradient-to-b from-[#25142d] to-[#141416] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-24px_80px_rgba(0,0,0,0.65)] animate-in slide-in-from-bottom-8 duration-300 sm:rounded-[2rem] sm:p-6"
         >
           <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-white/15 sm:hidden" />
           <div className="flex items-start justify-between gap-4">
@@ -152,7 +152,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/80 px-0 pt-10 animate-in fade-in duration-200 sm:p-4"
+      className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/80 px-0 pt-[max(2.5rem,env(safe-area-inset-top))] animate-in fade-in duration-200 sm:p-4"
       onMouseDown={handleBackdropClick}
     >
       <section
@@ -179,7 +179,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <section className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.055] p-5 sm:p-6">
               <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-[#D946EF]/20 blur-3xl" />
               <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
-                <div className="relative shrink-0 self-start">
+                <div className="relative shrink-0 self-center sm:self-start">
                   <img
                     src={avatarUrl || DEFAULT_AVATAR_URL}
                     onError={(event) => { event.currentTarget.src = DEFAULT_AVATAR_URL; }}
@@ -191,12 +191,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   </div>
                 </div>
 
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="max-w-full truncate text-2xl font-black tracking-tight text-white sm:text-3xl">{displayName}</h3>
+                <div className="min-w-0 flex-1 text-center sm:text-left">
+                  <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                    <h3 className="max-w-full break-words text-2xl font-black tracking-tight text-white [overflow-wrap:anywhere] sm:text-3xl">{displayName}</h3>
                     <span className="rounded-full border border-[#D946EF]/25 bg-[#D946EF]/15 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-[#F0ABFC]">{accountType}</span>
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400">
+                  <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-zinc-400 sm:justify-start">
                     <span className="flex items-center gap-1.5"><AtSign className="h-3.5 w-3.5" />{username}</span>
                     <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Joined {joinedDate}</span>
                   </div>
@@ -205,7 +205,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
                 <button
                   onClick={() => setIsEditing((value) => !value)}
-                  className={`flex shrink-0 items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-black transition-all ${isEditing ? 'border-white/10 bg-white/10 text-white hover:bg-white/15' : 'border-[#D946EF]/25 bg-[#D946EF]/15 text-[#F5D0FE] hover:bg-[#D946EF]/25'}`}
+                  className={`flex w-full shrink-0 items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-black transition-all sm:w-auto ${isEditing ? 'border-white/10 bg-white/10 text-white hover:bg-white/15' : 'border-[#D946EF]/25 bg-[#D946EF]/15 text-[#F5D0FE] hover:bg-[#D946EF]/25'}`}
                 >
                   <Edit3 className="h-4 w-4" />
                   {isEditing ? 'Cancel editing' : 'Edit profile'}
@@ -306,7 +306,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         </div>
 
-        <footer className="flex items-center justify-between gap-3 border-t border-white/[0.08] bg-black/20 px-5 py-4 sm:px-7">
+        <footer className="mobile-safe-footer flex items-center justify-between gap-3 border-t border-white/[0.08] bg-black/20 px-5 py-4 sm:px-7">
           <button onClick={() => { onClose(); onLogout?.(); }} className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-xs font-black text-red-300 transition-colors hover:bg-red-500/20 hover:text-red-200">
             <LogOut className="h-4 w-4" />
             Log out

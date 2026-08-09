@@ -92,16 +92,16 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[900] flex items-center justify-center overflow-y-auto bg-black/80 p-3 text-white select-none sm:p-6">
-      <div className="relative my-auto w-full max-w-4xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#121212] shadow-[0_32px_100px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-[900] flex items-start justify-center overflow-y-auto bg-black/80 p-2 text-white select-none sm:items-center sm:p-6">
+      <div className="relative my-auto w-full min-w-0 max-w-4xl overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#121212] shadow-[0_32px_100px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-200 sm:rounded-[2rem]">
         <div className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full bg-[#D946EF]/15 blur-3xl" />
-        <header className="relative flex items-start justify-between gap-5 border-b border-white/10 px-5 py-5 sm:px-7">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)]">
+        <header className="relative flex min-w-0 items-start justify-between gap-3 border-b border-white/10 px-4 py-4 sm:gap-5 sm:px-7 sm:py-5">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-12 sm:w-12">
               <Edit3 className="h-6 w-6" />
             </div>
-            <div>
-              <div className="mb-1 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]"><Sparkles className="h-3.5 w-3.5" /> Playlist workspace</div>
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-1.5 text-[8px] font-black uppercase tracking-[0.14em] text-[#D8B4FE] sm:gap-2 sm:text-[9px] sm:tracking-[0.22em]"><Sparkles className="h-3.5 w-3.5" /> Playlist workspace</div>
               <h2 className="text-xl font-black tracking-tight sm:text-2xl">Edit playlist</h2>
               <p className="mt-1 text-xs text-zinc-500">Update its identity without changing the track order.</p>
             </div>
@@ -110,14 +110,14 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="control-press rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40"
+            className="control-press shrink-0 rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40"
             aria-label="Close playlist editor"
           >
             <X className="h-5 w-5" />
           </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="relative grid gap-6 p-5 sm:p-7 lg:grid-cols-[0.9fr_1.1fr]">
+        <form onSubmit={handleSubmit} className="relative grid min-w-0 gap-5 p-4 sm:gap-6 sm:p-7 lg:grid-cols-[0.9fr_1.1fr]">
           <section className="rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
             <div className="group relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-[1.6rem] border border-white/10 bg-black shadow-2xl">
               <img key={coverUrl} src={coverUrl.trim() || DEFAULT_COVER_URL} alt="Playlist cover preview" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
