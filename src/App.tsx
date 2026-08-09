@@ -2145,7 +2145,7 @@ export default function App() {
                 : isSongScreenOpen
                   ? 'overflow-hidden p-0'
                 : activeTab === 'chat'
-                  ? `overflow-hidden p-0 ${currentTrack ? 'pb-[9.5rem]' : 'pb-[5.25rem]'} md:px-6 md:pt-4 md:pb-24`
+                  ? `overflow-hidden p-0 ${currentTrack ? 'pb-[9.5rem]' : 'pb-[5.25rem]'} md:px-6 md:pt-4 md:pb-16`
                   : `overflow-y-auto overscroll-contain px-3 pt-3 ${currentTrack ? 'pb-44' : 'pb-28'} sm:px-6 sm:pt-4 md:pb-24`
             }`}
           >
