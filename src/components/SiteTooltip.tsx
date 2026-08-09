@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'motion/react';
 
 type TooltipContent = {
   text: string;
@@ -136,21 +137,30 @@ export const SiteTooltip: React.FC = () => {
     setPosition({ left, top });
   }, [tooltip]);
 
-  if (!tooltip || typeof document === 'undefined') return null;
+  if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div
-      ref={tooltipRef}
-      role="tooltip"
-      style={{
-        left: position?.left ?? 0,
-        top: position?.top ?? 0,
-        visibility: position ? 'visible' : 'hidden',
-      }}
-      className="pointer-events-none fixed z-[10000] max-w-[min(18rem,calc(100vw-1rem))] rounded-lg border border-white/[0.12] bg-[#1B1B1E]/95 px-3 py-2 text-center text-[11px] font-bold leading-4 text-zinc-200 shadow-[0_14px_38px_rgba(0,0,0,0.65)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100"
-    >
-      {tooltip.text}
-    </div>,
+    <AnimatePresence>
+      {tooltip && (
+        <motion.div
+          key="site-tooltip"
+          ref={tooltipRef}
+          role="tooltip"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: position ? 1 : 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.12, ease: 'easeOut' }}
+          style={{
+            left: position?.left ?? 0,
+            top: position?.top ?? 0,
+            visibility: position ? 'visible' : 'hidden',
+          }}
+          className="pointer-events-none fixed z-[10000] max-w-[min(18rem,calc(100vw-1rem))] rounded-lg border border-white/[0.12] bg-[#1B1B1E]/95 px-3 py-2 text-center text-[11px] font-bold leading-4 text-zinc-200 shadow-[0_14px_38px_rgba(0,0,0,0.65)] backdrop-blur-xl"
+        >
+          {tooltip.text}
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body,
   );
 };

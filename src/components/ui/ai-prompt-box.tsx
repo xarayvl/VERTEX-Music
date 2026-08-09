@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowUp, BrainCog, Globe, Sparkles, Square, Trash2 } from 'lucide-react';
 
@@ -43,11 +43,13 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
   const hasContent = value.trim().length > 0;
   const controlsDisabled = disabled || isLoading;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+    textarea.style.height = '0px';
+    const contentHeight = textarea.scrollHeight;
+    textarea.style.height = `${Math.max(40, Math.min(contentHeight, 180))}px`;
+    textarea.style.overflowY = contentHeight > 180 ? 'auto' : 'hidden';
   }, [value]);
 
   const submit = () => {
@@ -85,7 +87,7 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
         disabled={controlsDisabled}
         placeholder={isLoading ? 'AI DJ is responding...' : activePlaceholder}
         aria-label="Message AI DJ"
-        className="custom-scrollbar min-h-11 max-h-[180px] w-full resize-none overflow-y-auto border-0 bg-transparent px-3 py-2.5 text-[15px] leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600 disabled:cursor-not-allowed disabled:opacity-55"
+        className="custom-scrollbar block min-h-10 max-h-[180px] w-full resize-none overflow-y-hidden border-0 bg-transparent px-3 py-2 text-[16px] leading-6 text-zinc-100 outline-none placeholder:text-zinc-600 disabled:cursor-not-allowed disabled:opacity-55 sm:text-[15px]"
       />
 
       <div className="flex items-center justify-between gap-2 pt-1">
