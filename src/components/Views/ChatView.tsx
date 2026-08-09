@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Bot, Send, Sparkles, Play, Trash2, Music, Globe, Search, ChevronDown, BrainCircuit } from 'lucide-react';
 import { Track, ChatMessage } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
+import { AgentPlanning, type PlanStep } from '../ui/ai-planning';
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -16,14 +17,14 @@ interface ChatViewProps {
 // Pending-state labels mirror the request flow. Web-assisted requests search
 // first, then the model reasons over the returned source snippets.
 const THINKING_PHASES = [
-  { text: 'Thinking...', Icon: BrainCircuit },
-  { text: 'Preparing a response...', Icon: Sparkles },
+  { text: 'Understand your request', detail: 'Analyzing the conversation and deciding how to respond.', Icon: BrainCircuit },
+  { text: 'Prepare the answer', detail: 'Writing a clear response for the chat.', Icon: Sparkles },
 ];
 
 const WEB_SEARCH_PHASES = [
-  { text: 'Searching the web...', Icon: Globe },
-  { text: 'Thinking with sources...', Icon: BrainCircuit },
-  { text: 'Preparing a response...', Icon: Sparkles },
+  { text: 'Search the web', detail: 'Finding current sources relevant to your request.', Icon: Globe },
+  { text: 'Review the sources', detail: 'Comparing the retrieved results before answering.', Icon: BrainCircuit },
+  { text: 'Prepare the answer', detail: 'Writing a grounded response with source references.', Icon: Sparkles },
 ];
 
 const AI_HIGH_DEMAND_MESSAGE = 'AI is in high demand right now. Please try again later.';
@@ -268,7 +269,30 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   const activePhases = isWebSearchPending ? WEB_SEARCH_PHASES : THINKING_PHASES;
-  const ActivePhase = activePhases[Math.min(thinkingPhaseIdx, activePhases.length - 1)];
+  const activePhaseIndex = Math.min(thinkingPhaseIdx, activePhases.length - 1);
+  const reasoningSteps: PlanStep[] = activePhases.map((phase, index) => {
+    const status: PlanStep['status'] = index < activePhaseIndex
+      ? 'success'
+      : index === activePhaseIndex
+        ? 'active'
+        : 'pending';
+    const PhaseIcon = phase.Icon;
+
+    return {
+      id: `${isWebSearchPending ? 'web' : 'chat'}-${index}`,
+      title: phase.text,
+      status,
+      duration: status === 'success' ? 'Done' : status === 'active' ? 'Now' : undefined,
+      icon: <PhaseIcon className="h-3.5 w-3.5" />,
+      defaultExpanded: status === 'active',
+      content: status === 'active' ? (
+        <div className="flex items-start gap-2 rounded-xl border border-[#A855F7]/15 bg-[#A855F7]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+          <PhaseIcon className="mt-0.5 h-3.5 w-3.5 flex-none animate-pulse text-[#E879F9]" />
+          <span>{phase.detail}</span>
+        </div>
+      ) : undefined,
+    };
+  });
 
   return (
     <section className="workspace-screen flex h-full min-h-0 w-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_38%),#121212] text-white select-none md:bg-[#121212]">
@@ -462,25 +486,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   <Bot className="h-4 w-4" />
                   <span className="absolute -inset-1 animate-ping rounded-2xl border border-[#D946EF]/35" />
                 </div>
-                <div className="relative flex min-w-0 max-w-[calc(100%_-_40px)] flex-1 items-center gap-2 overflow-hidden rounded-2xl rounded-tl-md border border-white/[0.08] bg-[#202020] px-4 py-3 sm:max-w-sm sm:flex-none sm:gap-3 sm:rounded-3xl sm:px-5 sm:py-3.5 md:min-w-[220px]">
-                  <span className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite] bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={thinkingPhaseIdx}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -5 }}
-                      className="relative z-10 flex items-center gap-2"
-                    >
-                      <ActivePhase.Icon className="h-4 w-4 animate-pulse text-[#E879F9]" />
-                      <span className="text-xs font-bold text-zinc-300">{ActivePhase.text}</span>
-                    </motion.div>
-                  </AnimatePresence>
-                  <span className="relative z-10 ml-auto flex gap-1">
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#D946EF]" />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#D946EF] [animation-delay:0.15s]" />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#D946EF] [animation-delay:0.3s]" />
-                  </span>
+                <div className="min-w-0 max-w-[calc(100%_-_40px)] flex-1 sm:max-w-lg sm:flex-none">
+                  <AgentPlanning
+                    title={isWebSearchPending ? 'Searching and reasoning' : 'Thinking'}
+                    steps={reasoningSteps}
+                  />
                 </div>
               </motion.div>
             )}
