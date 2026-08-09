@@ -14,6 +14,18 @@ A server-backed React/Express music application with authenticated users, artist
 3. Start development mode with `npm run dev`.
 4. Open `http://localhost:3000`.
 
+## AI DJ and Web Search
+
+The AI DJ uses NVIDIA's OpenAI-compatible API with `openai/gpt-oss-120b` by
+default. Set `NVIDIA_API_KEY` to enable chat. `NVIDIA_CHAT_MODEL` and
+`NVIDIA_API_BASE_URL` can override the model or endpoint.
+
+To let the AI DJ answer from current web results, set `TAVILY_API_KEY`. Existing
+Google Custom Search JSON API customers can instead set both
+`GOOGLE_SEARCH_API_KEY` and `GOOGLE_SEARCH_ENGINE_ID`; Google is preferred when
+both are present. Search runs automatically for current-information questions,
+or users can enable it for a message with the globe button.
+
 ## Persistence
 
 - Without Upstash, canonical application data is stored in `data/db.json`.

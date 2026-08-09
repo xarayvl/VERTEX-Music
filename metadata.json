@@ -2,5 +2,5 @@
   "name": "VERTEX Music",
   "description": "Server-backed music library with authenticated profiles, artist ownership, playlists, uploads, playback, EQ, search, and optional AI features.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

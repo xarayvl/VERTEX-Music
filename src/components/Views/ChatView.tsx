@@ -81,6 +81,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [quotaNotice, setQuotaNotice] = useState('');
   const [thinkingPhaseIdx, setThinkingPhaseIdx] = useState(0);
   const [isWebSearchPending, setIsWebSearchPending] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -137,7 +138,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
     onUpdateMessages((prev) => [...prev, userMsg]);
     if (!customText) setInput('');
-    const webSearchRequested = shouldRequestWebSearch(textToSend);
+    const webSearchRequested = webSearchEnabled || shouldRequestWebSearch(textToSend);
+    setWebSearchEnabled(false);
     setIsWebSearchPending(webSearchRequested);
     setIsLoading(true);
 
@@ -147,7 +149,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         .filter((message) => !(message.sender === 'ai' && /^(?:⚠️|⏳)/.test(message.text)))
         .slice(-20)
         .map((message) => ({
-          role: message.sender === 'user' ? 'user' : 'model',
+          role: message.sender === 'user' ? 'user' : 'assistant',
           text: message.text.slice(0, 8_000),
         }));
 
@@ -172,6 +174,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         const err = new Error(data.error || 'Failed to communicate with AI');
         (err as any).rateLimited = !!data.rateLimited;
         (err as any).quotaExhausted = !!data.quotaExhausted;
+        (err as any).configurationError = !!data.configurationError;
         (err as any).retryAfterSeconds = Number(data.retryAfterSeconds || res.headers.get('Retry-After') || 0);
         throw err;
       }
@@ -187,6 +190,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         text: aiReplyText,
         timestamp: new Date().toISOString(),
         webSearchUsed: !!data.webSearchUsed,
+        searchProvider: data.searchProvider === 'google' ? 'google' : data.searchProvider === 'web' ? 'web' : undefined,
         searchQueries: Array.isArray(data.searchQueries) ? data.searchQueries : undefined,
         sources: Array.isArray(data.sources) ? data.sources : undefined,
       };
@@ -204,7 +208,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
       const errorMsg: ChatMessage = {
         id: createMessageId('err'),
         sender: 'ai',
-        text: AI_HIGH_DEMAND_MESSAGE,
+        text: err?.configurationError && typeof err?.message === 'string'
+          ? `⚠️ ${err.message}`
+          : AI_HIGH_DEMAND_MESSAGE,
         timestamp: new Date().toISOString(),
       };
       onUpdateMessages((prev) => [...prev, errorMsg]);
@@ -275,7 +281,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
           <div className="min-w-0">
             <div className="mb-1 hidden items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE] sm:flex">
-              <Sparkles className="h-3.5 w-3.5" /> GEMINI 3.6 FLASH
+              <Sparkles className="h-3.5 w-3.5" /> NVIDIA GPT-OSS 120B
             </div>
             <h1 className="truncate text-lg font-black tracking-tight sm:text-2xl">AI DJ Chat</h1>
             <div className="mt-0.5 hidden flex-wrap items-center gap-2 text-xs text-zinc-400 sm:flex">
@@ -361,7 +367,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         className="control-press flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-300 hover:bg-emerald-500/15"
                       >
                         <Globe className="h-3 w-3" />
-                        Web search{msg.sources?.length ? ` · ${msg.sources.length} sources` : ''}
+                        {msg.searchProvider === 'google' ? 'Google Search' : 'Web search'}{msg.sources?.length ? ` · ${msg.sources.length} sources` : ''}
                         <ChevronDown className={`h-3 w-3 transition-transform ${expandedSources[msg.id] ? 'rotate-180' : ''}`} />
                       </button>
 
@@ -522,10 +528,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
               type="text"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder={rateLimitSeconds > 0 ? `Gemini paused · retry in ${rateLimitSeconds}s` : 'Ask about music, artists, genres or your next playlist...'}
+              placeholder={rateLimitSeconds > 0 ? `NVIDIA AI paused · retry in ${rateLimitSeconds}s` : 'Ask about music, artists, genres or your next playlist...'}
               disabled={isLoading || rateLimitSeconds > 0}
               className="min-w-0 flex-1 bg-transparent px-2.5 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 disabled:opacity-50 sm:px-3"
             />
+            <button
+              type="button"
+              onClick={() => setWebSearchEnabled((enabled) => !enabled)}
+              disabled={isLoading || rateLimitSeconds > 0}
+              aria-label="Search the web for this message"
+              aria-pressed={webSearchEnabled}
+              title={webSearchEnabled ? 'Web search enabled' : 'Search the web for this message'}
+              className={`control-press flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                webSearchEnabled
+                  ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-300'
+                  : 'border-transparent text-zinc-500 hover:border-white/10 hover:bg-white/5 hover:text-zinc-200'
+              }`}
+            >
+              <Globe className="h-4 w-4" />
+            </button>
             <button
               type="submit"
               disabled={!input.trim() || isLoading || rateLimitSeconds > 0}
