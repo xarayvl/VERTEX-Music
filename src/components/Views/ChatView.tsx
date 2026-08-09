@@ -5,6 +5,7 @@ import { Track, ChatMessage } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import { AgentPlanning, type PlanStep } from '../ui/ai-planning';
 import { AiPromptBox } from '../ui/ai-prompt-box';
+import { Hero } from '../ui/tailwind-css-background-snippet';
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -393,7 +394,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
   return (
     <section className="workspace-screen flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#121212] text-white select-none">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-4 overscroll-contain sm:px-5 sm:py-4 lg:px-6">
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          <Hero />
+          <div className="custom-scrollbar relative z-10 h-full min-h-0 space-y-4 overflow-y-auto px-3 py-4 overscroll-contain sm:px-5 sm:py-4 lg:px-6">
           {messages.length === 0 && !isLoading && (
             <div className="flex min-h-full items-center justify-center py-5 sm:py-8">
               <div className="max-w-lg text-center">
@@ -573,7 +576,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
             )}
           </AnimatePresence>
 
-          <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} />
+          </div>
         </div>
 
         {messages.length === 0 && (
