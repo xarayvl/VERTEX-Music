@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, X, Play, Pause, Heart, ShieldCheck, User as UserIcon, Disc, ArrowRight } from 'lucide-react';
 import { Track, Playlist, Artist, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
+import { groupTracksByRelease } from '../../utils/artistUtils';
 
 interface SearchViewProps {
   tracks: Track[];
@@ -10,7 +11,7 @@ interface SearchViewProps {
   userProfile?: UserProfile | null;
   currentTrackId?: string;
   isPlaying?: boolean;
-  onPlayTrack: (track: Track) => void;
+  onPlayTrack: (track: Track, playbackContext?: Track[]) => void;
   onSelectPlaylist: (playlist: Playlist) => void;
   onSelectArtist?: (artist: Artist | UserProfile | string) => void;
   onSelectAlbum?: (track: Track) => void;
@@ -48,7 +49,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
   onSearchChange,
 }) => {
   const [internalQuery, setInternalQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'songs' | 'artists' | 'playlists'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'songs' | 'albums' | 'artists' | 'playlists'>('all');
   const query = externalQuery !== undefined ? externalQuery : internalQuery;
 
   const handleQueryChange = (val: string) => {
@@ -56,9 +57,13 @@ export const SearchView: React.FC<SearchViewProps> = ({
     setInternalQuery(val);
   };
 
+  const releaseGroups = groupTracksByRelease(initialTracks);
+  const searchableAlbums = releaseGroups.filter((group) => group.releaseType !== 'Single' || group.isMultiTrack);
+
   const trendingSearches = Array.from(
     new Set([
       ...initialTracks.flatMap((track) => [track.title, track.artist, track.genre]),
+      ...searchableAlbums.map((album) => album.title),
       ...initialArtists.map((artist) => artist.name),
       ...initialPlaylists.map((playlist) => playlist.title),
     ].map((value) => value?.trim()).filter((value): value is string => Boolean(value)))
@@ -73,11 +78,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
     (t) =>
       t.title.toLowerCase().includes(qLower) ||
       t.artist.toLowerCase().includes(qLower) ||
-      t.album.toLowerCase().includes(qLower) ||
       t.genre.toLowerCase().includes(qLower)
   );
 
   const matchedTracks: Track[] = localMatchedTracks;
+  const matchedAlbums = searchableAlbums.filter((album) => album.title.toLowerCase().includes(qLower));
 
   // Local user profile check for Artists/Users search
   const localMatchedUsers: SearchArtistItem[] = [];
@@ -133,17 +138,28 @@ export const SearchView: React.FC<SearchViewProps> = ({
   const matchedPlaylists: Playlist[] = localMatchedPlaylists;
 
   // Top Result determination
+  const exactAlbumMatch = matchedAlbums.find((album) => album.title.toLowerCase() === qLower);
   const topResult =
-    matchedTracks.length > 0
+    exactAlbumMatch
+      ? { type: 'album' as const, item: exactAlbumMatch }
+      : matchedTracks.length > 0
       ? { type: 'track' as const, item: matchedTracks[0] }
+      : matchedAlbums.length > 0
+      ? { type: 'album' as const, item: matchedAlbums[0] }
       : matchedArtists.length > 0
       ? { type: 'artist' as const, item: matchedArtists[0] }
       : matchedPlaylists.length > 0
       ? { type: 'playlist' as const, item: matchedPlaylists[0] }
       : null;
   const isTopResultPlaying = Boolean(
-    topResult?.type === 'track' && topResult.item?.id === currentTrackId && isPlaying
+    topResult && isPlaying && (
+      (topResult.type === 'track' && topResult.item.id === currentTrackId) ||
+      (topResult.type === 'album' && topResult.item.tracks.some((track) => track.id === currentTrackId))
+    )
   );
+  const albumsForGrid = filterType === 'all' && topResult?.type === 'album'
+    ? matchedAlbums.filter((album) => album.key !== topResult.item.key)
+    : matchedAlbums;
 
   const handleArtistClick = (art: SearchArtistItem) => {
     if (!onSelectArtist) return;
@@ -178,7 +194,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
             type="text"
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
-            placeholder="Search tracks, artists, or playlists..."
+            placeholder="Search tracks, albums, artists, or playlists..."
             className="w-full pl-12 pr-10 py-3 rounded-full bg-[#242424] border border-white/5 text-sm text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#A855F7] shadow-inner transition-all"
           />
           {query && (
@@ -198,6 +214,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
           {[
             { id: 'all', label: 'All Results' },
             { id: 'songs', label: `Songs (${matchedTracks.length})` },
+            { id: 'albums', label: `Albums (${matchedAlbums.length})` },
             { id: 'artists', label: `Artists & Users (${matchedArtists.length})` },
             { id: 'playlists', label: `Playlists (${matchedPlaylists.length})` },
           ].map((tab) => (
@@ -273,11 +290,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
               {/* TOP RESULT CARD (5 columns) */}
               {topResult && filterType === 'all' && (
                 <div
-                  data-track-id={topResult.type === 'track' ? topResult.item.id : undefined}
+                  data-track-id={topResult.type === 'track' ? topResult.item.id : topResult.type === 'album' ? topResult.item.representative.id : undefined}
                   data-artist-id={topResult.type === 'artist' ? topResult.item.id : undefined}
                   data-playlist-id={topResult.type === 'playlist' ? topResult.item.id : undefined}
                   data-context-type={topResult.type}
-                  className={`group relative self-start rounded-2xl border border-white/10 bg-[#18181a] p-5 shadow-xl transition-all hover:border-[#D946EF]/40 md:col-span-5 ${topResult.type === 'track' ? 'pb-20' : ''}`}
+                  className={`group relative self-start rounded-2xl border border-white/10 bg-[#18181a] p-5 shadow-xl transition-all hover:border-[#D946EF]/40 md:col-span-5 ${topResult.type === 'track' || topResult.type === 'album' ? 'pb-20' : ''}`}
                 >
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -314,6 +331,23 @@ export const SearchView: React.FC<SearchViewProps> = ({
                           >
                             {topResult.item.artist}
                           </span>
+                        </p>
+                      </div>
+                    )}
+
+                    {topResult.type === 'album' && (
+                      <div onClick={() => onSelectAlbum?.(topResult.item.representative)}>
+                        <img
+                          src={topResult.item.coverUrl}
+                          alt={topResult.item.title}
+                          referrerPolicy="no-referrer"
+                          className="mb-4 h-28 w-28 rounded-xl border border-white/10 object-cover shadow-2xl"
+                        />
+                        <h2 className="block w-full max-w-full truncate text-2xl font-extrabold tracking-tight text-white transition-colors group-hover:text-[#D946EF]">
+                          {topResult.item.title}
+                        </h2>
+                        <p className="mt-1 text-xs font-medium text-zinc-400">
+                          {topResult.item.releaseType} • <span className="font-bold text-white">{topResult.item.representative.artist}</span> • {topResult.item.tracks.length} songs
                         </p>
                       </div>
                     )}
@@ -382,6 +416,25 @@ export const SearchView: React.FC<SearchViewProps> = ({
                     </div>
                   )}
 
+                  {topResult.type === 'album' && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onPlayTrack(
+                          topResult.item.tracks.find((track) => track.id === currentTrackId) || topResult.item.representative,
+                          topResult.item.tracks
+                        );
+                      }}
+                      className={`mobile-card-action absolute bottom-5 right-5 flex h-12 w-12 items-center justify-center rounded-full text-white shadow-2xl transition-all duration-200 ${
+                        isTopResultPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                      }`}
+                      aria-label={isTopResultPlaying ? `Pause ${topResult.item.title}` : `Play ${topResult.item.title}`}
+                    >
+                      {isTopResultPlaying ? <Pause className="h-6 w-6 fill-white" /> : <Play className="ml-0.5 h-6 w-6 fill-white" />}
+                    </button>
+                  )}
+
                   {topResult.type === 'artist' && (
                     <button
                       onClick={() => handleArtistClick(topResult.item)}
@@ -403,7 +456,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
               )}
 
               {/* SONGS SECTION */}
-              <div className={filterType === 'all' && topResult ? 'md:col-span-7' : 'col-span-12'}>
+              {(filterType === 'songs' || matchedTracks.length > 0) && <div className={filterType === 'all' && topResult ? 'md:col-span-7' : 'col-span-12'}>
                 <h3 className="text-lg font-extrabold text-white tracking-tight mb-3 flex items-center space-x-2">
                   <Disc className="w-4 h-4 text-[#D946EF]" />
                   <span>Songs</span>
@@ -493,7 +546,66 @@ export const SearchView: React.FC<SearchViewProps> = ({
                     })}
                   </div>
                 )}
-              </div>
+              </div>}
+            </div>
+          )}
+
+          {/* ALBUMS & EPS SECTION */}
+          {(filterType === 'albums' || (filterType === 'all' && albumsForGrid.length > 0)) && (
+            <div>
+              <h3 className="mb-4 flex items-center space-x-2 text-lg font-extrabold tracking-tight text-white">
+                <Disc className="h-4 w-4 text-[#D946EF]" />
+                <span>Albums & EPs</span>
+              </h3>
+
+              {matchedAlbums.length === 0 ? (
+                <p className="py-2 text-xs italic text-zinc-400">No matching albums or EPs found.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
+                  {albumsForGrid.map((album) => {
+                    const isAlbumPlaying = isPlaying && album.tracks.some((track) => track.id === currentTrackId);
+                    return (
+                      <article
+                        key={album.key}
+                        data-track-id={album.representative.id}
+                        data-context-type="album"
+                        onClick={() => onSelectAlbum?.(album.representative)}
+                        className="group flex cursor-pointer flex-col justify-between rounded-2xl border border-white/5 bg-[#18181a] p-3 shadow-md transition-all hover:border-[#D946EF]/40 hover:bg-[#222226] hover:shadow-xl sm:p-4"
+                      >
+                        <div className="relative mb-3 aspect-square overflow-hidden rounded-xl shadow-md">
+                          <img
+                            src={album.coverUrl}
+                            alt={album.title}
+                            referrerPolicy="no-referrer"
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onPlayTrack(
+                                album.tracks.find((track) => track.id === currentTrackId) || album.representative,
+                                album.tracks
+                              );
+                            }}
+                            className={`mobile-card-action absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-full text-white shadow-2xl transition-all duration-200 ${
+                              isAlbumPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            }`}
+                            aria-label={isAlbumPlaying ? `Pause ${album.title}` : `Play ${album.title}`}
+                          >
+                            {isAlbumPlaying ? <Pause className="h-5 w-5 fill-white" /> : <Play className="ml-0.5 h-5 w-5 fill-white" />}
+                          </button>
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="truncate text-sm font-extrabold text-white transition-colors group-hover:text-[#D946EF]">{album.title}</h4>
+                          <p className="mt-1 truncate text-xs text-zinc-400">{album.representative.artist}</p>
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-zinc-600">{album.releaseType} · {album.tracks.length} songs</p>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
