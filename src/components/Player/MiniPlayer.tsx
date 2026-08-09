@@ -56,7 +56,12 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
             />
             {isPlaying && (
               <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                <AudioVisualizer isPlaying={isPlaying} variant="minimal" height={16} />
+                <AudioVisualizer
+                  isPlaying={isPlaying}
+                  accentColor="#D946EF"
+                  variant="minimal"
+                  height={16}
+                />
               </div>
             )}
           </div>

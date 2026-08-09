@@ -142,10 +142,13 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
         // Minimal equalizer bars for mini player
         const barW = 3;
         const barG = 2;
-        for (let i = 0; i < 4; i++) {
+        const minimalBarCount = 4;
+        const totalBarsWidth = (minimalBarCount * barW) + ((minimalBarCount - 1) * barG);
+        const startX = Math.max(0, (width - totalBarsWidth) / 2);
+        for (let i = 0; i < minimalBarCount; i++) {
           const val = freqData[i * 2] || 10;
           const bh = Math.max(3, (val / 255) * h);
-          const x = i * (barW + barG);
+          const x = startX + (i * (barW + barG));
           const y = (h - bh) / 2;
 
           ctx.fillStyle = accentColor;
