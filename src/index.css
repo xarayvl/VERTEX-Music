@@ -34,6 +34,38 @@ button,
 [role='button'] {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
+
+/* Buttons use flat fills throughout the app. Tailwind's gradient utilities
+   only define gradient stops, so give those controls one solid brand color
+   after removing their background image. This also covers decorative icon
+   tiles that are part of a button. */
+button[class*='bg-gradient'],
+[role='button'][class*='bg-gradient'],
+button > [class*='bg-gradient'],
+[role='button'] > [class*='bg-gradient'] {
+  background-color: #d946ef !important;
+  background-image: none !important;
+}
+
+button:disabled[class*='bg-gradient'],
+[role='button'][aria-disabled='true'][class*='bg-gradient'] {
+  background-color: #27272a !important;
+}
+
+button::before,
+button::after,
+[role='button']::before,
+[role='button']::after,
+button svg,
+[role='button'] svg {
+  box-shadow: none !important;
+  filter: none !important;
+  text-shadow: none !important;
 }
 
 
