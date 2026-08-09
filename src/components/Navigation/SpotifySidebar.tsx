@@ -82,12 +82,12 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
       className="w-full flex-shrink-0 flex flex-col gap-2 select-none h-full text-zinc-300"
     >
       {/* Navigation Block (Home & Search) */}
-      <div className={`bg-[#121212] rounded-xl flex flex-col border border-white/[0.04] transition-[padding,gap] ${isCompact ? 'p-2 gap-2' : 'p-4 gap-4'}`}>
+      <div className={`bg-[#121212] rounded-xl flex flex-col border border-white/[0.04] transition-[padding,gap] ${isCompact ? 'p-2 gap-2' : 'p-3 gap-3'}`}>
         {/* VERTEX Music Branding */}
-        <div className={`flex items-center py-1 ${isCompact ? 'justify-center px-0' : 'space-x-3 px-2'}`} title="VERTEX Music">
+        <div className={`flex min-w-0 items-center py-1 ${isCompact ? 'justify-center px-0' : 'gap-2 px-1'}`} title="VERTEX Music">
           <VertexLogo alt={isCompact ? 'VERTEX Music' : ''} className="h-8 w-8 flex-shrink-0" />
-          <div className={isCompact ? 'hidden' : 'flex flex-col min-w-0'}>
-            <span className="text-white font-extrabold text-lg tracking-tight">
+          <div className={isCompact ? 'hidden' : 'flex min-w-0 flex-col'}>
+            <span className="truncate whitespace-nowrap text-lg font-extrabold tracking-tight text-white">
               VERTEX Music
             </span>
           </div>
@@ -98,68 +98,68 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
           <button
             onClick={() => onSelectTab('home')}
             title="Home"
-            className={`flex items-center rounded-lg font-bold text-sm transition-all duration-200 group ${isCompact ? 'justify-center px-2 py-2.5' : 'space-x-4 px-3 py-2.5'} ${
+            className={`group flex min-w-0 items-center overflow-hidden rounded-lg text-sm font-bold transition-all duration-200 ${isCompact ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'} ${
               activeTab === 'home'
                 ? 'text-white bg-white/10'
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <Home className={`w-6 h-6 transition-transform group-hover:scale-110 ${activeTab === 'home' ? 'text-white' : 'text-zinc-400'}`} />
-            <span className={isCompact ? 'hidden' : ''}>Home</span>
+            <Home className={`h-6 w-6 shrink-0 transition-transform group-hover:scale-110 ${activeTab === 'home' ? 'text-white' : 'text-zinc-400'}`} />
+            <span className={isCompact ? 'hidden' : 'min-w-0 truncate whitespace-nowrap'}>Home</span>
           </button>
 
           <button
             onClick={() => onSelectTab('search')}
             title="Search"
-            className={`flex items-center rounded-lg font-bold text-sm transition-all duration-200 group ${isCompact ? 'justify-center px-2 py-2.5' : 'space-x-4 px-3 py-2.5'} ${
+            className={`group flex min-w-0 items-center overflow-hidden rounded-lg text-sm font-bold transition-all duration-200 ${isCompact ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'} ${
               activeTab === 'search'
                 ? 'text-white bg-white/10'
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <Search className={`w-6 h-6 transition-transform group-hover:scale-110 ${activeTab === 'search' ? 'text-white' : 'text-zinc-400'}`} />
-            <span className={isCompact ? 'hidden' : ''}>Search</span>
+            <Search className={`h-6 w-6 shrink-0 transition-transform group-hover:scale-110 ${activeTab === 'search' ? 'text-white' : 'text-zinc-400'}`} />
+            <span className={isCompact ? 'hidden' : 'min-w-0 truncate whitespace-nowrap'}>Search</span>
           </button>
 
           <button
             onClick={() => onSelectTab('browse')}
             title="Explore Genres"
-            className={`flex items-center rounded-lg font-bold text-sm transition-all duration-200 group ${isCompact ? 'justify-center px-2 py-2.5' : 'space-x-4 px-3 py-2.5'} ${
+            className={`group flex min-w-0 items-center overflow-hidden rounded-lg text-sm font-bold transition-all duration-200 ${isCompact ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'} ${
               activeTab === 'browse'
                 ? 'text-white bg-white/10'
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <Sparkles className={`w-6 h-6 transition-transform group-hover:scale-110 ${activeTab === 'browse' ? 'text-[#D946EF]' : 'text-zinc-400'}`} />
-            <span className={isCompact ? 'hidden' : ''}>Explore Genres</span>
+            <Sparkles className={`h-6 w-6 shrink-0 transition-transform group-hover:scale-110 ${activeTab === 'browse' ? 'text-[#D946EF]' : 'text-zinc-400'}`} />
+            <span className={isCompact ? 'hidden' : 'min-w-0 truncate whitespace-nowrap'}>Explore Genres</span>
           </button>
 
           <button
             onClick={() => onSelectTab('chat')}
             title="AI DJ Chat"
-            className={`flex items-center rounded-lg font-bold text-sm transition-all duration-200 group ${isCompact ? 'justify-center px-2 py-2.5' : 'space-x-4 px-3 py-2.5'} ${
+            className={`group flex min-w-0 items-center overflow-hidden rounded-lg text-sm font-bold transition-all duration-200 ${isCompact ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'} ${
               activeTab === 'chat'
                 ? 'text-white bg-white/10'
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <Bot className={`w-6 h-6 ${activeTab === 'chat' ? 'text-[#D946EF]' : 'text-zinc-400'}`} />
-            <span className={isCompact ? 'hidden' : 'flex items-center gap-1.5'}>
-              <span>AI DJ Chat</span>
+            <Bot className={`h-6 w-6 shrink-0 ${activeTab === 'chat' ? 'text-[#D946EF]' : 'text-zinc-400'}`} />
+            <span className={isCompact ? 'hidden' : 'flex min-w-0 items-center gap-1.5'}>
+              <span className="truncate whitespace-nowrap">AI DJ Chat</span>
             </span>
           </button>
 
           <button
             onClick={() => onSelectTab('profile')}
             title="Profile & Account"
-            className={`flex items-center rounded-lg font-bold text-sm transition-all duration-200 group ${isCompact ? 'justify-center px-2 py-2.5' : 'space-x-4 px-3 py-2.5'} ${
+            className={`group flex min-w-0 items-center overflow-hidden rounded-lg text-sm font-bold transition-all duration-200 ${isCompact ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'} ${
               activeTab === 'profile'
                 ? 'text-white bg-white/10'
                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <User className="w-6 h-6 transition-transform group-hover:scale-110 text-zinc-400 group-hover:text-white" />
-            <span className={isCompact ? 'hidden' : ''}>Profile & Account</span>
+            <User className="h-6 w-6 shrink-0 text-zinc-400 transition-transform group-hover:scale-110 group-hover:text-white" />
+            <span className={isCompact ? 'hidden' : 'min-w-0 truncate whitespace-nowrap'}>Profile & Account</span>
           </button>
         </nav>
       </div>
@@ -174,7 +174,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
             className={`flex items-center text-zinc-400 hover:text-white font-bold text-sm transition-colors group ${isCompact ? 'justify-center' : 'space-x-3'}`}
           >
             <Library className="w-6 h-6 group-hover:text-white transition-colors" />
-            <span className={isCompact ? 'hidden' : 'tracking-tight'}>Your Library</span>
+            <span className={isCompact ? 'hidden' : 'truncate whitespace-nowrap tracking-tight'}>Your Library</span>
           </button>
 
           <div className={isCompact ? 'hidden' : 'flex items-center space-x-1'}>

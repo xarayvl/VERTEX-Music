@@ -35,7 +35,7 @@ import { getReleaseTracksInPlaybackOrder } from './utils/artistUtils';
 
 const LEFT_SIDEBAR_MIN_WIDTH = 96;
 const LEFT_SIDEBAR_MAX_WIDTH = 520;
-const LEFT_SIDEBAR_COMPACT_THRESHOLD = 196;
+const LEFT_SIDEBAR_COMPACT_THRESHOLD = 200;
 
 const normalizePublicArtist = (raw: any): Artist => ({
   id: String(raw?.id || ''),
