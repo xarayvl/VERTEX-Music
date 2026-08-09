@@ -286,7 +286,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden pb-24 select-none touch-pan-y animate-in fade-in duration-300 sm:space-y-8">
+    <div className="no-button-lift w-full min-w-0 max-w-full space-y-6 overflow-x-hidden pb-24 select-none touch-pan-y animate-in fade-in duration-300 sm:space-y-8">
       {loadError && (
         <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
           {loadError}
@@ -352,7 +352,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         {/* Play Button */}
         <button
           onClick={handlePlayArtist}
-          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white flex items-center justify-center shadow-[0_8px_24px_rgba(217,70,239,0.4)] hover:scale-105 active:scale-95 transition-all"
+          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white flex items-center justify-center shadow-[0_8px_24px_rgba(217,70,239,0.4)] active:scale-95 transition-all"
           title={`Play ${artistName}`}
         >
           {isPlaying && displayTracks.some((t) => t.id === currentTrackId) ? (
@@ -368,7 +368,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
             onClick={() => {
               if (onToggleFollow && artist) onToggleFollow(artist);
             }}
-            className={`px-6 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider transition-all hover:scale-105 active:scale-95 ${
+            className={`px-6 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider transition-all active:scale-95 ${
               isFollowing
                 ? 'bg-transparent border border-white/40 text-white hover:border-white'
                 : 'bg-transparent border border-[#D946EF] text-[#D946EF] hover:bg-[#D946EF]/10'
@@ -382,7 +382,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         {isOwner && (
           <button
             onClick={() => setIsEditModalOpen(true)}
-            className="flex items-center space-x-2 px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-extrabold uppercase tracking-wider transition-all hover:scale-105 active:scale-95 shadow-lg"
+            className="flex items-center space-x-2 px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-extrabold uppercase tracking-wider transition-all active:scale-95 shadow-lg"
             title="Edit Artist Profile"
           >
             <Sparkles className="w-4 h-4 text-[#D946EF]" />
@@ -680,10 +680,10 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                         e.stopPropagation();
                         onPlayTrack(group.representative);
                       }}
-                      className={`mobile-card-action absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl transition-all transform ${
+                      className={`mobile-card-action absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#D946EF] text-white flex items-center justify-center shadow-2xl transition-opacity ${
                         isThisGroupPlaying
-                          ? 'opacity-100 translate-y-0'
-                          : 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0'
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100'
                       }`}
                     >
                       {isThisGroupPlaying ? (
@@ -738,10 +738,6 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                   Verified Artist
                 </span>
               )}
-              <span className="px-3 py-1 rounded-full bg-[#D946EF]/20 text-[#D946EF] text-xs font-bold border border-[#D946EF]/30">
-                Studio FLAC Audio
-              </span>
-
               {instagramUrl && (
                 <a
                   href={instagramUrl.startsWith('http') ? instagramUrl : `https://instagram.com/${instagramUrl.replace('@', '')}`}

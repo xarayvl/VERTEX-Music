@@ -325,6 +325,14 @@ button, a {
   transform: translateY(0) scale(0.97);
 }
 
+.no-button-lift .control-press:hover {
+  transform: none;
+}
+
+.no-button-lift .control-press:active {
+  transform: scale(0.97);
+}
+
 .eq-grid {
   background-image: linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px);

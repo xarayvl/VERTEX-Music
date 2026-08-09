@@ -312,8 +312,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   const handleClearHistory = async () => {
+    const previousMessages = messages;
+    onUpdateMessages([]);
+    setExpandedSources({});
+
     if (!userId) {
-      onUpdateMessages([]);
       return;
     }
 
@@ -326,9 +329,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error || `History clear failed (${response.status})`);
       }
-      onUpdateMessages([]);
     } catch (err) {
       console.error('Error clearing remote chat history:', err);
+      onUpdateMessages((currentMessages) => (
+        currentMessages.length === 0 ? previousMessages : currentMessages
+      ));
     }
   };
 

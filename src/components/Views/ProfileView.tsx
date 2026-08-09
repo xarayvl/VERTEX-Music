@@ -318,7 +318,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full overflow-x-hidden pb-20 select-none touch-pan-y animate-in fade-in duration-300">
+    <div className="no-button-lift w-full min-w-0 max-w-full overflow-x-hidden pb-20 select-none touch-pan-y animate-in fade-in duration-300">
       {/* SPOTIFY PROFILE HERO BANNER */}
       <div className="relative mb-6 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#A855F7]/30 via-[#181818] to-[#121212] p-4 shadow-2xl sm:p-8">
         <div className="flex flex-col items-center gap-4 sm:gap-8 md:flex-row md:items-end">
@@ -375,7 +375,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               data-artist-id={userProfile.id}
               data-context-type="artist"
               onClick={() => onSelectArtist(userProfile)}
-              className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-4 py-2.5 text-xs font-extrabold text-white shadow-lg transition-all hover:scale-105 hover:opacity-90 active:scale-95 sm:flex-none sm:px-5"
+              className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-4 py-2.5 text-xs font-extrabold text-white shadow-lg transition-all hover:opacity-90 active:scale-95 sm:flex-none sm:px-5"
             >
               <ShieldCheck className="w-4 h-4 text-white" />
               <span>View Artist Page</span>
@@ -384,7 +384,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
           <button
             onClick={openProfileEditor}
-            className="min-w-0 flex-1 rounded-full border border-zinc-500 px-4 py-2.5 text-xs font-bold text-white transition-all hover:scale-105 hover:border-white active:scale-95 sm:flex-none sm:px-5"
+            className="min-w-0 flex-1 rounded-full border border-zinc-500 px-4 py-2.5 text-xs font-bold text-white transition-all hover:border-white active:scale-95 sm:flex-none sm:px-5"
           >
             {isEditing ? 'Continue Editing' : 'Edit Profile'}
           </button>
@@ -467,9 +467,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <div className="min-w-0">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <h2 className="min-w-0 text-lg font-black tracking-tight text-white sm:text-xl">My Uploaded Songs & Releases</h2>
-                  <span className="rounded-full border border-[#D946EF]/30 bg-[#D946EF]/20 px-2.5 py-0.5 font-mono text-[9px] font-bold text-[#D946EF] sm:text-[10px]">
-                    Disk Folder Storage
-                  </span>
                 </div>
                 <p className="text-xs text-zinc-400">Songs uploaded to your user folder persist across session reloads.</p>
               </div>
@@ -477,7 +474,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               {onOpenAddTrackModal && (
                 <button
                   onClick={onOpenAddTrackModal}
-                  className="flex w-full shrink-0 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-4 py-2 text-xs font-black text-white shadow-lg transition-all hover:scale-105 hover:opacity-90 active:scale-95 sm:w-auto"
+                  className="flex w-full shrink-0 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-4 py-2 text-xs font-black text-white shadow-lg transition-all hover:opacity-90 active:scale-95 sm:w-auto"
                 >
                   <Plus className="w-4 h-4 stroke-[3]" />
                   <span>Upload Track</span>
