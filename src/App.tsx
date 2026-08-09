@@ -363,6 +363,15 @@ export default function App() {
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+
+    // Long-press gestures fire `contextmenu` on phones and tablets. Keep the
+    // custom menu exclusive to pointer devices where it is opened by a real
+    // desktop right-click.
+    if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) {
+      setContextMenuTarget(null);
+      return;
+    }
+
     const targetElement = e.target as HTMLElement | null;
     if (!targetElement) return;
 
@@ -2014,7 +2023,7 @@ export default function App() {
   return (
     <div
       onContextMenu={handleContextMenu}
-      className="relative flex h-[100dvh] w-full max-w-full flex-col gap-0 overflow-hidden bg-black p-0 font-sans text-zinc-100 select-none md:h-screen md:gap-2 md:p-2"
+      className="vertex-app-shell relative flex h-[100dvh] w-full max-w-full flex-col gap-0 overflow-hidden bg-black p-0 font-sans text-zinc-100 select-none md:h-screen md:gap-2 md:p-2"
     >
       {/* Interactive Radial Spotlight following mouse cursor & current track accent color */}
       <div

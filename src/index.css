@@ -30,6 +30,12 @@ body {
   overflow: hidden;
 }
 
+@media (hover: none) and (pointer: coarse) {
+  .vertex-app-shell {
+    -webkit-touch-callout: none;
+  }
+}
+
 button,
 [role='button'] {
   touch-action: manipulation;
