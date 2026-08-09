@@ -39,7 +39,6 @@ import {
   UserCog,
   Users,
   ImagePlus,
-  Tag,
 } from 'lucide-react';
 import { UserProfile, Track, Playlist, Artist } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
@@ -155,8 +154,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [username, setUsername] = useState(userProfile?.username || '');
   const [bio, setBio] = useState(userProfile?.bio || '');
   const [avatarUrl, setAvatarUrl] = useState(userProfile?.avatarUrl || '');
-  const [favoriteGenres, setFavoriteGenres] = useState<string[]>(userProfile?.favoriteGenres || []);
-  const [newGenre, setNewGenre] = useState('');
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const [isReadingAvatarFile, setIsReadingAvatarFile] = useState(false);
 
@@ -166,14 +163,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     setUsername(userProfile.username || '');
     setBio(userProfile.bio || '');
     setAvatarUrl(userProfile.avatarUrl || '');
-    setFavoriteGenres(userProfile.favoriteGenres || []);
-    setNewGenre('');
   };
 
   useEffect(() => {
     if (!userProfile || isEditing) return;
     resetProfileDraft();
-  }, [userProfile?.id, userProfile?.displayName, userProfile?.username, userProfile?.bio, userProfile?.avatarUrl, userProfile?.favoriteGenres, isEditing]);
+  }, [userProfile?.id, userProfile?.displayName, userProfile?.username, userProfile?.bio, userProfile?.avatarUrl, isEditing]);
 
   const openProfileEditor = () => {
     if (!isEditing) resetProfileDraft();
@@ -214,23 +209,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       username: username.trim() || userProfile.username,
       bio: bio.trim(),
       avatarUrl,
-      favoriteGenres,
     });
     setIsEditing(false);
   };
 
-
-  const handleAddGenre = () => {
-    const cleanGenre = newGenre.trim();
-    if (!cleanGenre || cleanGenre.length > 80 || favoriteGenres.length >= 20) return;
-    if (favoriteGenres.some((genre) => genre.toLowerCase() === cleanGenre.toLowerCase())) return;
-    setFavoriteGenres([...favoriteGenres, cleanGenre]);
-    setNewGenre('');
-  };
-
-  const handleRemoveGenre = (genre: string) => {
-    setFavoriteGenres(favoriteGenres.filter((g) => g !== genre));
-  };
 
   const handleChangePassword = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -923,37 +905,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     <textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={500} rows={4} placeholder="Tell listeners a little about yourself..." className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-3.5 text-sm leading-6 text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10" />
                   </label>
 
-                  <div className="mt-5 min-w-0 rounded-3xl border border-white/[0.08] bg-white/[0.025] p-3 sm:p-4">
-                    <div className="flex min-w-0 items-center justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-2"><Tag className="h-4 w-4 shrink-0 text-[#D946EF]" /><span className="min-w-0 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400 sm:text-[11px] sm:tracking-[0.16em]">Favorite genres</span></div>
-                      <span className="text-[9px] font-bold text-zinc-600">{favoriteGenres.length}/20</span>
-                    </div>
-
-                    {favoriteGenres.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {favoriteGenres.map((genre) => (
-                          <span key={genre} className="flex items-center gap-1.5 rounded-full border border-[#D946EF]/20 bg-[#D946EF]/10 py-1.5 pl-3 pr-1.5 text-[10px] font-black text-[#F0ABFC]">
-                            {genre}
-                            <button type="button" onClick={() => handleRemoveGenre(genre)} className="rounded-full p-1 text-[#F0ABFC]/70 hover:bg-white/10 hover:text-white" aria-label={`Remove ${genre}`}><X className="h-3 w-3" /></button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="mt-3 flex gap-2">
-                      <input
-                        type="text"
-                        value={newGenre}
-                        onChange={(event) => setNewGenre(event.target.value)}
-                        onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); handleAddGenre(); } }}
-                        maxLength={80}
-                        placeholder="Add a genre"
-                        className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/60"
-                      />
-                      <button type="button" onClick={handleAddGenre} disabled={!newGenre.trim() || favoriteGenres.length >= 20} className="control-press flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-[#E879F9] hover:bg-[#D946EF]/15 disabled:cursor-not-allowed disabled:opacity-35" aria-label="Add favorite genre"><Plus className="h-4 w-4" /></button>
-                    </div>
-                  </div>
-
                   <div className="mt-6 flex flex-col-reverse gap-3 border-t border-white/10 pt-5 sm:flex-row sm:justify-end">
                     <button type="button" onClick={closeProfileEditor} className="control-press rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-zinc-300 hover:bg-white/10 hover:text-white">Cancel</button>
                     <button type="submit" disabled={!displayName.trim() || !username.trim()} className="control-press flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-6 py-3 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"><Save className="h-4 w-4" /> Save profile</button>
@@ -974,7 +925,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     <p className="truncate text-xs text-zinc-500">@{userProfile.username}</p>
                   </div>
                 </div>
-                <p className="mt-5 text-xs leading-5 text-zinc-400">Change your photo, display name, username, bio and favorite genres from the profile editor.</p>
+                <p className="mt-5 text-xs leading-5 text-zinc-400">Change your photo, display name, username and bio from the profile editor.</p>
                 <button
                   onClick={openProfileEditor}
                   className="control-press mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#D946EF]/25 bg-[#D946EF]/10 px-4 py-3 text-xs font-black text-[#F0ABFC] hover:bg-[#D946EF]/15"

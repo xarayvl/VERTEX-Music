@@ -326,6 +326,11 @@ button, a {
 /* ---------------------------------------------------------------------
    Mobile shell and touch-first controls
 --------------------------------------------------------------------- */
+.mobile-card-action {
+  background-color: #d946ef !important;
+  background-image: none !important;
+}
+
 .mobile-bottom-nav {
   bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
@@ -405,8 +410,11 @@ button, a {
   /* Hover does not exist on touch screens. Keep the primary card action
      visible and tappable instead of hiding it behind a desktop-only state. */
   .mobile-card-action {
+    --tw-translate-x: 0px !important;
+    --tw-translate-y: 0px !important;
     opacity: 1 !important;
-    transform: translateY(0) !important;
+    translate: 0 0 !important;
+    transform: none !important;
   }
 
   .mobile-row-action {

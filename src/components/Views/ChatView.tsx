@@ -301,11 +301,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </header>
 
       <div className="workspace-card flex min-h-0 flex-1 flex-col overflow-hidden border-white/10 bg-[#171717] shadow-2xl sm:mt-3 sm:rounded-3xl sm:border">
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/[0.08] px-4 py-2.5 sm:px-5">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Conversation</span>
-          </div>
+        <div className="flex flex-shrink-0 items-center justify-end border-b border-white/[0.08] px-4 py-2.5 sm:px-5">
           <span className="rounded-full bg-white/5 px-2.5 py-1 text-[10px] font-bold text-zinc-500">
             {messages.length} {messages.length === 1 ? 'message' : 'messages'}
           </span>

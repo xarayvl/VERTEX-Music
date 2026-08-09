@@ -65,14 +65,23 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       </header>
 
-      <div className="workspace-card section-reveal flex flex-col gap-3 rounded-3xl border border-white/10 bg-[#181818] p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="scrollbar-none flex min-w-0 items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+      <div className="workspace-card section-reveal flex min-w-0 max-w-full flex-col gap-3 overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid w-full min-w-0 grid-cols-3 gap-1.5 sm:flex sm:w-auto sm:items-center sm:gap-2">
           {([
-            { id: 'liked', label: `Liked Songs (${likedTracks.length})`, icon: Heart },
-            { id: 'playlists', label: `Playlists (${playlists.length})`, icon: List },
-            { id: 'artists', label: `Artists (${artists.length})`, icon: Mic2 },
-          ] as const).map(({ id, label, icon: Icon }) => (
-            <button key={id} type="button" onClick={() => setLibraryFilter(id)} className={`control-press flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-black transition-all ${libraryFilter === id ? 'border-[#D946EF]/45 bg-[#D946EF]/15 text-[#F0ABFC]' : 'border-white/[0.08] bg-white/[0.04] text-zinc-400 hover:bg-white/[0.08] hover:text-white'}`}><Icon className={`h-4 w-4 ${id === 'liked' && libraryFilter === id ? 'fill-current' : ''}`} /> {label}</button>
+            { id: 'liked', label: `Liked Songs (${likedTracks.length})`, mobileLabel: 'Liked', icon: Heart },
+            { id: 'playlists', label: `Playlists (${playlists.length})`, mobileLabel: 'Playlists', icon: List },
+            { id: 'artists', label: `Artists (${artists.length})`, mobileLabel: 'Artists', icon: Mic2 },
+          ] as const).map(({ id, label, mobileLabel, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setLibraryFilter(id)}
+              className={`control-press flex min-w-0 items-center justify-center gap-1.5 rounded-2xl border px-2 py-2.5 text-[10px] font-black transition-all sm:shrink-0 sm:gap-2 sm:px-4 sm:text-xs ${libraryFilter === id ? 'border-[#D946EF]/45 bg-[#D946EF]/15 text-[#F0ABFC]' : 'border-white/[0.08] bg-white/[0.04] text-zinc-400 hover:bg-white/[0.08] hover:text-white'}`}
+            >
+              <Icon className={`h-4 w-4 shrink-0 ${id === 'liked' && libraryFilter === id ? 'fill-current' : ''}`} />
+              <span className="min-w-0 truncate sm:hidden">{mobileLabel}</span>
+              <span className="hidden sm:inline">{label}</span>
+            </button>
           ))}
         </div>
 

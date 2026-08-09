@@ -115,7 +115,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   if (!isOpen || !track) return null;
 
   const fieldClass = 'w-full rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-3.5 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10';
-  const compactFieldClass = 'w-full rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2.5 text-xs font-bold text-white outline-none placeholder:text-zinc-600 focus:border-[#C084FC]/70';
+  const compactFieldClass = 'min-w-0 w-full max-w-full rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2.5 text-xs font-bold text-white outline-none placeholder:text-zinc-600 focus:border-[#C084FC]/70';
   const labelClass = 'mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400';
   const totalDuration = releaseTracks.reduce((total, item) => total + (Number(item.duration) || 0), 0);
   const formatDuration = (seconds: number) => `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
@@ -268,8 +268,8 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center overflow-hidden bg-black/90 p-2 text-white animate-in fade-in duration-200 sm:p-4">
-      <div className="mx-auto flex h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#121212] shadow-2xl animate-in zoom-in-95 duration-300 sm:h-[calc(100dvh-2rem)]">
+    <div className="fixed inset-0 z-50 flex max-w-full items-center overflow-hidden bg-black/90 p-2 text-white animate-in fade-in duration-200 sm:p-4">
+      <div className="mx-auto flex h-[calc(100dvh-1rem)] min-w-0 w-full max-w-6xl flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#121212] shadow-2xl animate-in zoom-in-95 duration-300 sm:h-[calc(100dvh-2rem)]">
         <header className="z-20 flex shrink-0 items-start justify-between gap-3 rounded-t-[1.75rem] border-b border-white/10 bg-[#121212] px-4 py-4 sm:gap-4 sm:px-7 sm:py-5">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-12 sm:w-12">
@@ -288,7 +288,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div className="min-h-0 w-full max-w-full flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain">
           {!isOwner ? (
             <div className="p-10 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 text-red-300"><ShieldAlert className="h-7 w-7" /></div>
@@ -296,14 +296,14 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
             <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">Only the original uploader can edit this track or release.</p>
           </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-7">
+            <form onSubmit={handleSubmit} className="w-full min-w-0 max-w-full space-y-5 p-3 sm:space-y-6 sm:p-7">
             {error && (
               <div className="section-reveal flex items-start gap-3 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3.5 text-sm text-red-200">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
               </div>
             )}
 
-            <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
+            <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-6">
               <div className="mb-5">
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Release format</p>
                 <h2 className="mt-1 text-xl font-black">What are you editing?</h2>
@@ -321,10 +321,10 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
               </div>
             </section>
 
-            <div className="grid items-start gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-              <div className="space-y-6">
-                <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-5 sm:p-7">
-                  <div className="mb-5 flex items-end justify-between gap-3">
+            <div className="grid min-w-0 max-w-full items-start gap-5 sm:gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+              <div className="min-w-0 space-y-5 sm:space-y-6">
+                <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-4 sm:p-7">
+                  <div className="mb-5 flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
                     <div><p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{isCollection ? 'Tracklist' : 'Song details'}</p><h2 className="mt-1 text-xl font-black">{isCollection ? 'Edit every track' : 'Track metadata'}</h2></div>
                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-400">{trackDrafts.length} track{trackDrafts.length === 1 ? '' : 's'} · {formatDuration(totalDuration)}</span>
                   </div>
@@ -332,7 +332,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                   <div className="space-y-2.5">
                     {trackDrafts.map((draft, index) => (
                       <div key={draft.id} className="stagger-item rounded-2xl border border-white/[0.08] bg-white/[0.035] p-3" style={{ '--stagger-index': index } as React.CSSProperties}>
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex min-w-0 items-center gap-2">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/25 font-mono text-xs font-black text-zinc-400">{index + 1}</span>
                           <input value={draft.title} onChange={(event) => updateDraft(draft.id, { title: event.target.value })} placeholder="Track title" className={`${compactFieldClass} min-w-0 flex-1`} />
                           {isCollection && (
@@ -342,7 +342,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                             </div>
                           )}
                         </div>
-                        <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
+                        <div className="mt-2 grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                           <select value={draft.genre} onChange={(event) => updateDraft(draft.id, { genre: event.target.value })} className={compactFieldClass}>
                             {genreOptions.map((option) => <option key={option || 'none'} value={option}>{option || 'No genre selected'}</option>)}
                           </select>
@@ -354,7 +354,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
 
                   {!isCollection && (
                     <div className="mt-5 rounded-3xl border border-dashed border-white/15 bg-black/20 p-4">
-                      <div className="flex items-center gap-3">
+                      <div className="flex min-w-0 flex-wrap items-center gap-3">
                         <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${audioUrl ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/5 text-zinc-500'}`}>{audioUrl ? <Check className="h-5 w-5" /> : <Music2 className="h-5 w-5" />}</div>
                         <div className="min-w-0 flex-1"><p className="truncate text-xs font-black">{newFileName || 'Keep current audio file'}</p><p className="mt-1 text-[10px] text-zinc-600">{newFileName ? `${newFileSize} · replacement ready` : 'Optional — choose a file only if the audio must change.'}</p></div>
                         <label className="control-press cursor-pointer rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black text-zinc-300 hover:bg-white/10">
@@ -367,8 +367,8 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                 </section>
               </div>
 
-              <aside className="space-y-6 lg:sticky lg:top-24">
-                <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-5">
+              <aside className="min-w-0 space-y-5 sm:space-y-6 lg:sticky lg:top-24">
+                <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
                   <div className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#101010] shadow-2xl">
                     {coverUrl ? <img src={coverUrl} alt="Release cover preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827]"><Image className="h-16 w-16 text-white/30" /></div>}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
@@ -376,15 +376,15 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                   </div>
                 </section>
 
-                <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
+                <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-6">
                   <div className="mb-5"><p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Release details</p><h2 className="mt-1 text-xl font-black">Metadata and artwork</h2></div>
                   {releaseType !== 'Single' && <div><label className={labelClass}>Album / EP title *</label><input value={releaseTitle} onChange={(event) => setReleaseTitle(event.target.value)} placeholder="Release title" className={fieldClass} /></div>}
                   <div className={releaseType !== 'Single' ? 'mt-5' : ''}><label className={labelClass}>Release year</label><input type="number" min="1900" max={new Date().getFullYear() + 1} value={releaseYear} onChange={(event) => setReleaseYear(parseInt(event.target.value, 10) || new Date().getFullYear())} className={fieldClass} /></div>
-                  <div className="mt-5"><label className={labelClass}>Copyright / label</label><div className="flex overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] focus-within:border-[#C084FC]/70 focus-within:ring-4 focus-within:ring-[#A855F7]/10"><span className="flex shrink-0 select-none items-center border-r border-white/10 px-4 text-sm font-black">© {releaseYear}</span><input value={copyright} onChange={(event) => setCopyright(stripCopyrightPrefix(event.target.value))} placeholder="Your Label" className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-sm text-white outline-none placeholder:text-zinc-600" /></div></div>
+                  <div className="mt-5"><label className={labelClass}>Copyright / label</label><div className="flex min-w-0 max-w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] focus-within:border-[#C084FC]/70 focus-within:ring-4 focus-within:ring-[#A855F7]/10"><span className="flex shrink-0 select-none items-center border-r border-white/10 px-3 text-xs font-black sm:px-4 sm:text-sm">© {releaseYear}</span><input value={copyright} onChange={(event) => setCopyright(stripCopyrightPrefix(event.target.value))} placeholder="Your Label" className="min-w-0 flex-1 bg-transparent px-3 py-3.5 text-sm text-white outline-none placeholder:text-zinc-600 sm:px-4" /></div></div>
                   <div className="mt-5"><label className={labelClass}>Cover artwork</label><div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row"><input value={coverUrl} onChange={(event) => setCoverUrl(event.target.value)} placeholder="Image URL or upload a file" className={`${fieldClass} min-w-0 flex-1`} /><label className="control-press flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-xs font-black text-zinc-300 hover:bg-white/10"><Upload className="h-4 w-4" /> Upload<input type="file" accept="image/*" onChange={handleCoverFileUpload} className="hidden" /></label></div></div>
                 </section>
 
-                <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-5">
+                <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-5">
                   {loading && <div className="mb-4"><div className="mb-2 flex justify-between text-[10px] font-black uppercase tracking-wider text-zinc-500"><span>Saving release</span><span>{saveProgress}/{trackDrafts.length}</span></div><div className="h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] transition-[width]" style={{ width: `${(saveProgress / Math.max(1, trackDrafts.length)) * 100}%` }} /></div></div>}
                   <div className="flex flex-col-reverse gap-3 sm:flex-row lg:flex-col-reverse xl:flex-row"><button type="button" onClick={onClose} disabled={loading} className="control-press rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-zinc-300 hover:bg-white/10 disabled:opacity-50">Cancel</button><button type="submit" disabled={loading || isReadingFile} className="control-press flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Saving {saveProgress}/{trackDrafts.length}</> : <><Save className="h-4 w-4" /> Save {isCollection ? 'release' : 'changes'}</>}</button></div>
                 </section>
