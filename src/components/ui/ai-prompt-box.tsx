@@ -1,12 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowUp, BrainCog, Globe, Sparkles, Square } from 'lucide-react';
+import { ArrowUp, BrainCog, Globe, Sparkles, Square, Trash2 } from 'lucide-react';
 
 interface AiPromptBoxProps {
   value: string;
   onValueChange: (value: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
+  onClear: () => void | Promise<void>;
+  canClear?: boolean;
   isLoading?: boolean;
   disabled?: boolean;
   placeholder?: string;
@@ -25,6 +27,8 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
   onValueChange,
   onSubmit,
   onCancel,
+  onClear,
+  canClear = false,
   isLoading = false,
   disabled = false,
   placeholder = 'Ask about music, artists, genres or your next playlist...',
@@ -159,20 +163,33 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={isLoading ? onCancel : submit}
-          disabled={!isLoading && (!hasContent || disabled)}
-          aria-label={isLoading ? 'Cancel AI request' : 'Send message'}
-          title={isLoading ? 'Cancel request' : 'Send message'}
-          className={`flex h-9 w-9 flex-none items-center justify-center rounded-full transition-colors ${
-            isLoading || hasContent
-              ? 'bg-[#D946EF] text-white hover:bg-[#C026D3]'
-              : 'bg-white/5 text-zinc-600'
-          } disabled:cursor-not-allowed disabled:opacity-50`}
-        >
-          {isLoading ? <Square className="h-3.5 w-3.5 fill-current" /> : <ArrowUp className="h-4 w-4" />}
-        </button>
+        <div className="flex flex-none items-center gap-1">
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={!canClear || isLoading}
+            aria-label="Clear chat history"
+            title="Clear chat history"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-600 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={isLoading ? onCancel : submit}
+            disabled={!isLoading && (!hasContent || disabled)}
+            aria-label={isLoading ? 'Cancel AI request' : 'Send message'}
+            title={isLoading ? 'Cancel request' : 'Send message'}
+            className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+              isLoading || hasContent
+                ? 'bg-[#D946EF] text-white hover:bg-[#C026D3]'
+                : 'bg-white/5 text-zinc-600'
+            } disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            {isLoading ? <Square className="h-3.5 w-3.5 fill-current" /> : <ArrowUp className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
     </div>
   );

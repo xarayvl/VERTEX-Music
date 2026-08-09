@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bot, Sparkles, Play, Trash2, Music, Globe, Search, ChevronDown, BrainCircuit } from 'lucide-react';
+import { Bot, Sparkles, Play, Music, Globe, Search, ChevronDown, BrainCircuit } from 'lucide-react';
 import { Track, ChatMessage } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import { AgentPlanning, type PlanStep } from '../ui/ai-planning';
@@ -387,36 +387,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   return (
     <section className="workspace-screen flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#121212] text-white select-none">
-      <header className="workspace-header flex flex-shrink-0 items-center justify-between gap-2 border-b border-white/10 px-3 py-3 sm:gap-3 sm:px-0 sm:pb-3 sm:pt-0">
-        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-          <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] bg-[#D946EF] shadow-[0_12px_34px_rgba(217,70,239,0.22)] sm:h-11 sm:w-11 sm:rounded-2xl">
-            <Bot className="h-5 w-5" />
-            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#121212] bg-emerald-400" />
-          </div>
-          <div className="min-w-0">
-            <div className="mb-1 hidden items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE] sm:flex">
-              <Sparkles className="h-3.5 w-3.5" /> NVIDIA GPT-OSS 120B
-            </div>
-            <h1 className="truncate text-lg font-black tracking-tight sm:text-2xl">AI DJ Chat</h1>
-            <div className="mt-0.5 hidden flex-wrap items-center gap-2 text-xs text-zinc-400 sm:flex">
-              <span>Recommendations, discovery and music knowledge.</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
-          <button
-            onClick={handleClearHistory}
-            disabled={messages.length === 0}
-            className="control-press flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-zinc-400 hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-35 sm:h-10 sm:w-10 sm:rounded-full"
-            title="Clear chat history"
-            aria-label="Clear chat history"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
-      </header>
-
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-4 overscroll-contain sm:px-5 sm:py-4 lg:px-6">
           {messages.length === 0 && !isLoading && (
@@ -632,6 +602,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
             onValueChange={setInput}
             onSubmit={() => handleSendMessage()}
             onCancel={handleCancelRequest}
+            onClear={handleClearHistory}
+            canClear={messages.length > 0}
             isLoading={isLoading}
             disabled={rateLimitSeconds > 0}
             placeholder={rateLimitSeconds > 0
