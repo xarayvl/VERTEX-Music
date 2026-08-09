@@ -21,6 +21,9 @@ import LogoLoop from '../LogoLoop/LogoLoop';
 const AUTH_TERMINAL_GRID = [2, 1];
 const FaultyTerminal = React.lazy(() => import('../Backgrounds/FaultyTerminal'));
 
+const isMobileAuthViewport = () =>
+  typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+
 const NvidiaLogo = () => (
   <span className="flex items-center gap-2 font-bold">
     <img
@@ -119,8 +122,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [googleRetryKey, setGoogleRetryKey] = useState(0);
   const [authSuccess, setAuthSuccess] = useState<AuthSuccessKind | null>(null);
+  const [isMobileViewport, setIsMobileViewport] = useState(isMobileAuthViewport);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const authSuccessTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const mobileQuery = window.matchMedia('(max-width: 767px)');
+    const updateViewport = () => setIsMobileViewport(mobileQuery.matches);
+
+    updateViewport();
+    if (typeof mobileQuery.addEventListener === 'function') {
+      mobileQuery.addEventListener('change', updateViewport);
+      return () => mobileQuery.removeEventListener('change', updateViewport);
+    }
+
+    mobileQuery.addListener(updateViewport);
+    return () => mobileQuery.removeListener(updateViewport);
+  }, []);
 
   const completeAuthentication = (
     user: UserProfile,
@@ -360,35 +378,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const inputClass = 'w-full rounded-2xl border border-white/10 bg-white/[0.045] py-3.5 pl-11 pr-4 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10';
+  const inputClass = 'w-full rounded-2xl border border-white/10 bg-white/[0.045] py-3.5 pl-11 pr-4 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10';
   const labelClass = 'mb-2 block text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400';
 
   return (
     <div className={`fixed inset-0 z-50 flex min-h-0 flex-col overflow-y-auto overscroll-contain bg-black px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] text-white animate-in fade-in duration-200 sm:p-5 ${mode === 'register' ? 'max-sm:overflow-hidden' : ''}`}>
-      <div className="pointer-events-none fixed inset-0" aria-hidden="true">
-        <React.Suspense fallback={<div className="h-full w-full bg-[#050307]" />}>
-          <FaultyTerminal
-            scale={1.35}
-            gridMul={AUTH_TERMINAL_GRID}
-            digitSize={1.25}
-            timeScale={0.45}
-            pause={false}
-            scanlineIntensity={0.55}
-            glitchAmount={0.75}
-            flickerAmount={0.65}
-            noiseAmp={0.45}
-            chromaticAberration={0.55}
-            dither={0.25}
-            curvature={0.12}
-            tint="#c084fc"
-            mouseReact={true}
-            mouseStrength={0.3}
-            pageLoadAnimation={true}
-            brightness={1}
-          />
-        </React.Suspense>
-      </div>
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.06),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.18),rgba(0,0,0,0.5))]" aria-hidden="true" />
+      {!isMobileViewport && (
+        <>
+          <div className="pointer-events-none fixed inset-0" aria-hidden="true">
+            <React.Suspense fallback={<div className="h-full w-full bg-[#050307]" />}>
+              <FaultyTerminal
+                scale={1.35}
+                gridMul={AUTH_TERMINAL_GRID}
+                digitSize={1.25}
+                timeScale={0.45}
+                pause={false}
+                scanlineIntensity={0.55}
+                glitchAmount={0.75}
+                flickerAmount={0.65}
+                noiseAmp={0.45}
+                chromaticAberration={0.55}
+                dither={0.25}
+                curvature={0.12}
+                tint="#c084fc"
+                mouseReact={true}
+                mouseStrength={0.3}
+                pageLoadAnimation={true}
+                brightness={1}
+              />
+            </React.Suspense>
+          </div>
+          <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.06),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.18),rgba(0,0,0,0.5))]" aria-hidden="true" />
+        </>
+      )}
 
       <div className={`relative z-10 mx-auto mb-14 flex w-full max-w-5xl flex-1 items-center justify-center sm:mb-16 ${mode === 'register' ? 'max-sm:min-h-0 max-sm:items-start max-sm:overflow-y-auto max-sm:overscroll-contain' : ''}`}>
         <section className="relative grid w-full md:grid-cols-[0.92fr_1.08fr] md:items-center md:gap-4">
@@ -415,6 +437,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <aside className="hidden h-[640px] self-center md:block">
             <GlassSurface
+              disabled={isMobileViewport}
               width="100%"
               height="100%"
               borderRadius={32}
@@ -461,6 +484,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </aside>
 
           <GlassSurface
+            disabled={isMobileViewport}
             width="100%"
             height="auto"
             borderRadius={32}

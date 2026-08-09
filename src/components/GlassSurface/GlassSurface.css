@@ -64,6 +64,12 @@
   padding: 0;
 }
 
+.glass-surface--disabled.auth-glass-surface {
+  border: 1px solid rgb(255 255 255 / 12%);
+  background: #121012;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
 @media (prefers-color-scheme: dark) {
   .glass-surface--fallback {
     border: 1px solid rgb(255 255 255 / 20%);

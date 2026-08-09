@@ -268,7 +268,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex max-w-full items-center overflow-hidden bg-black/90 p-2 text-white animate-in fade-in duration-200 sm:p-4">
+    <div className="no-button-lift fixed inset-0 z-50 flex max-w-full items-center overflow-hidden bg-black/90 p-2 text-white animate-in fade-in duration-200 sm:p-4">
       <div className="mx-auto flex h-[calc(100dvh-1rem)] min-w-0 w-full max-w-6xl flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#121212] shadow-2xl animate-in zoom-in-95 duration-300 sm:h-[calc(100dvh-2rem)]">
         <header className="z-20 flex shrink-0 items-start justify-between gap-3 rounded-t-[1.75rem] border-b border-white/10 bg-[#121212] px-4 py-4 sm:gap-4 sm:px-7 sm:py-5">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
@@ -312,9 +312,14 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                 {(isCollection ? ['EP', 'Album'] : ['Single', 'EP', 'Album']).map((type) => {
                   const active = releaseType === type;
                   return (
-                    <button key={type} type="button" onClick={() => setReleaseType(type as 'Single' | 'EP' | 'Album')} className={`control-press flex min-h-16 items-center justify-between rounded-2xl border px-4 text-left ${active ? 'border-[#C084FC]/70 bg-gradient-to-r from-[#A855F7]/30 to-[#D946EF]/20 text-white' : 'border-white/[0.08] bg-white/[0.035] text-zinc-400 hover:bg-white/[0.07]'}`}>
-                      <div><p className="text-sm font-black">{type}</p><p className="mt-1 text-[10px] text-zinc-500">{type === 'Single' ? 'One song' : type === 'EP' ? 'Short release' : 'Full release'}</p></div>
-                      {type === 'Single' ? <FileAudio className="h-5 w-5" /> : <Disc3 className="h-5 w-5" />}
+                    <button key={type} type="button" onClick={() => setReleaseType(type as 'Single' | 'EP' | 'Album')} className={`control-press flex min-h-16 items-center justify-between gap-3 rounded-2xl border px-4 text-left transition-colors ${active ? 'border-[#D946EF]/65 bg-[#D946EF]/12 text-white shadow-[0_10px_30px_rgba(217,70,239,0.12)]' : 'border-white/[0.08] bg-white/[0.035] text-zinc-400 hover:bg-white/[0.07]'}`}>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm font-black ${active ? 'text-white' : 'text-zinc-300'}`}>{type}</p>
+                        <p className={`mt-1 break-words text-[10px] font-semibold leading-4 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>{type === 'Single' ? 'One song' : type === 'EP' ? 'Short release' : 'Full release'}</p>
+                      </div>
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-[#D946EF] text-white' : 'bg-white/5 text-zinc-500'}`}>
+                        {type === 'Single' ? <FileAudio className="h-4 w-4" /> : <Disc3 className="h-4 w-4" />}
+                      </div>
                     </button>
                   );
                 })}

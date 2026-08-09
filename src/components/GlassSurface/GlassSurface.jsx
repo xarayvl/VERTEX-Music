@@ -21,6 +21,7 @@ const GlassSurface = ({
   xChannel = 'R',
   yChannel = 'G',
   mixBlendMode = 'difference',
+  disabled = false,
   className = '',
   style = {},
 }) => {
@@ -71,6 +72,8 @@ const GlassSurface = ({
   };
 
   useEffect(() => {
+    if (disabled) return undefined;
+
     updateDisplacementMap();
     [
       { ref: redChannelRef, offset: redOffset },
@@ -101,10 +104,11 @@ const GlassSurface = ({
     xChannel,
     yChannel,
     mixBlendMode,
+    disabled,
   ]);
 
   useEffect(() => {
-    if (!containerRef.current || typeof ResizeObserver === 'undefined') return undefined;
+    if (disabled || !containerRef.current || typeof ResizeObserver === 'undefined') return undefined;
 
     const resizeObserver = new ResizeObserver(() => {
       window.requestAnimationFrame(updateDisplacementMap);
@@ -112,16 +116,21 @@ const GlassSurface = ({
 
     resizeObserver.observe(containerRef.current);
     return () => resizeObserver.disconnect();
-  }, []);
+  }, [disabled]);
 
   useEffect(() => {
+    if (disabled) return undefined;
     const frameId = window.requestAnimationFrame(updateDisplacementMap);
     return () => window.cancelAnimationFrame(frameId);
-  }, [width, height]);
+  }, [width, height, disabled]);
 
   useEffect(() => {
+    if (disabled) {
+      setSvgSupported(false);
+      return;
+    }
     setSvgSupported(supportsSVGFilters());
-  }, []);
+  }, [disabled]);
 
   const supportsSVGFilters = () => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return false;
@@ -144,6 +153,14 @@ const GlassSurface = ({
     '--glass-saturation': saturation,
     '--filter-id': `url(#${filterId})`,
   };
+
+  if (disabled) {
+    return (
+      <div className={`glass-surface glass-surface--disabled ${className}`} style={containerStyle}>
+        <div className="glass-surface__content">{children}</div>
+      </div>
+    );
+  }
 
   return (
     <div

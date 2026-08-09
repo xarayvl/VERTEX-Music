@@ -38,6 +38,7 @@ export interface GlassSurfaceProps {
   xChannel?: DisplacementChannel;
   yChannel?: DisplacementChannel;
   mixBlendMode?: BlendMode;
+  disabled?: boolean;
   className?: string;
   style?: CSSProperties;
 }
