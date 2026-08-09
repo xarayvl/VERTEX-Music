@@ -521,6 +521,7 @@ async function startServer() {
   const authLimiter = createRateLimiter({ windowMs: 15 * 60_000, max: 20, name: 'auth' });
   const usernameAvailabilityLimiter = createRateLimiter({ windowMs: 60_000, max: 60, name: 'username-availability' });
   const chatLimiter = createRateLimiter({ windowMs: 60_000, max: 12, name: 'chat' });
+  const trackPlayLimiter = createRateLimiter({ windowMs: 60_000, max: 30, name: 'track-play' });
   app.use('/api', generalApiLimiter);
   app.use('/api', (req, res, next) => {
     if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') {
@@ -1778,7 +1779,7 @@ async function startServer() {
   });
 
   // Record a real track play and persist the authenticated listener's history.
-  app.post("/api/tracks/:id/play", async (req, res) => {
+  app.post("/api/tracks/:id/play", trackPlayLimiter, async (req, res) => {
     try {
       const { id } = req.params;
       const db = await readDBAsync(req.method !== "GET");

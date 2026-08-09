@@ -501,7 +501,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
         )}
 
-        <div className="flex-shrink-0 border-t border-white/[0.06] bg-[#141414] p-2.5 sm:p-3 md:border-t-0">
+        <div className="flex-shrink-0 border-t border-white/[0.06] p-2.5 sm:p-3 md:border-t-0">
           {quotaNotice && (
             <div className="mb-2 flex items-start gap-2 rounded-2xl border border-amber-400/20 bg-amber-400/[0.08] px-3 py-2.5 text-[11px] leading-relaxed text-amber-100">
               <span className="mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-amber-400" />

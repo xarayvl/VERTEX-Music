@@ -90,6 +90,10 @@ export default function App() {
   const lastBackgroundRefreshAtRef = useRef(0);
   const chatHydratedUserIdRef = useRef<string | null>(null);
   const lastSavedChatHistoryRef = useRef('');
+  const pendingPlayTimerRef = useRef<number | null>(null);
+  const playRequestsInFlightRef = useRef(new Set<string>());
+  const lastPlayRequestAtRef = useRef(new Map<string, number>());
+  const preloadedNextTrackIdRef = useRef<string | null>(null);
 
   // Followed Artists State (User-Scoped)
   const [followedArtistIds, setFollowedArtistIds] = useState<string[]>([]);
@@ -483,10 +487,17 @@ export default function App() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  // Clear account-scoped state while the server fetches the newly active account.
+  // Clear account-scoped state while the server fetches a newly active account.
+  // When /api/data has already hydrated this exact account, keep the freshly
+  // restored history instead of clearing it in the user-id effect that follows.
   useEffect(() => {
-    setFollowedArtistIds([]);
-    setRecentlyPlayed([]);
+    const activeUserWasHydrated = Boolean(
+      userProfile?.id && chatHydratedUserIdRef.current === userProfile.id
+    );
+    if (!activeUserWasHydrated) {
+      setFollowedArtistIds([]);
+      setRecentlyPlayed([]);
+    }
     setSelectedArtist(null);
     setIsArtistLoading(false);
     setArtistLoadError(null);
@@ -629,6 +640,12 @@ export default function App() {
       fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
     }
     audioEngine.pause();
+    if (pendingPlayTimerRef.current !== null) {
+      window.clearTimeout(pendingPlayTimerRef.current);
+      pendingPlayTimerRef.current = null;
+    }
+    playRequestsInFlightRef.current.clear();
+    lastPlayRequestAtRef.current.clear();
     setIsPlaying(false);
     setCurrentTrack(null);
     chatHydratedUserIdRef.current = null;
@@ -920,13 +937,27 @@ export default function App() {
     audioEngine.setVolume(volume);
   }, [volume]);
 
-  // Record only a server-confirmed play. A stale/missing track returns 404 and
-  // is removed from the client catalog instead of being kept alive as fallback data.
+  // Persist only the last track selected during a burst of quick skips. A
+  // per-listener cooldown also prevents duplicate effects from sending the
+  // same play repeatedly while the server retains its own rate limit.
   const recordTrackPlay = (track: Track) => {
-    fetch(`/api/tracks/${track.id}/play`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    })
+    if (pendingPlayTimerRef.current !== null) {
+      window.clearTimeout(pendingPlayTimerRef.current);
+    }
+
+    const listenerKey = `${userProfile?.id || 'anonymous'}:${track.id}`;
+    pendingPlayTimerRef.current = window.setTimeout(() => {
+      pendingPlayTimerRef.current = null;
+      const now = Date.now();
+      const previousRequestAt = lastPlayRequestAtRef.current.get(listenerKey) || 0;
+      if (playRequestsInFlightRef.current.has(listenerKey) || now - previousRequestAt < 30_000) return;
+
+      playRequestsInFlightRef.current.add(listenerKey);
+      lastPlayRequestAtRef.current.set(listenerKey, now);
+      fetch(`/api/tracks/${track.id}/play`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      })
       .then(async (response) => {
         if (response.status === 404) {
           setTracks((items) => items.filter((item) => item.id !== track.id));
@@ -945,22 +976,39 @@ export default function App() {
         if (!response.ok) throw new Error(`Play request failed (${response.status})`);
         const data = await response.json();
         setTracks((items) => items.map((item) => item.id === track.id ? { ...item, plays: String(data.plays || item.plays || '0') } : item));
-        setUserProfile((profile) => profile ? {
-          ...profile,
-          stats: {
-            ...(profile.stats || {
-              hoursListened: 0,
-              secondsListened: 0,
-              tracksPlayed: 0,
-              topGenre: 'N/A',
-              playlistsCreated: 0,
-            }),
-            tracksPlayed: (profile.stats?.tracksPlayed || 0) + 1,
-          },
-        } : null);
+        if (!data.deduplicated) {
+          setUserProfile((profile) => profile ? {
+            ...profile,
+            stats: {
+              ...(profile.stats || {
+                hoursListened: 0,
+                secondsListened: 0,
+                tracksPlayed: 0,
+                topGenre: 'N/A',
+                playlistsCreated: 0,
+              }),
+              tracksPlayed: (profile.stats?.tracksPlayed || 0) + 1,
+            },
+          } : null);
+        }
       })
-      .catch((error) => console.error('Failed to persist track play:', error));
+      .catch((error) => {
+        if (lastPlayRequestAtRef.current.get(listenerKey) === now) {
+          lastPlayRequestAtRef.current.delete(listenerKey);
+        }
+        console.error('Failed to persist track play:', error);
+      })
+      .finally(() => {
+        playRequestsInFlightRef.current.delete(listenerKey);
+      });
+    }, 900);
   };
+
+  useEffect(() => () => {
+    if (pendingPlayTimerRef.current !== null) {
+      window.clearTimeout(pendingPlayTimerRef.current);
+    }
+  }, []);
 
   // Periodically persist cumulative listening-time stats (seconds/hours
   // listened) to the backend while a track is actually playing, so this
@@ -1051,13 +1099,60 @@ export default function App() {
     };
   };
 
+  // Keep the exact next song warm while the current one is playing. The audio
+  // engine retains the prepared HTMLAudioElement (and its native byte-range
+  // buffer), so the transition does not need to assign and reload the URL.
+  // For shuffle, remember the selected candidate so Next consumes the same
+  // track that was prebuffered instead of rolling a second random choice.
+  useEffect(() => {
+    if (!isPlaying || !currentTrack || repeatMode === 'one') {
+      preloadedNextTrackIdRef.current = null;
+      return;
+    }
+
+    const { activeList, currentIndex } = resolveActivePlaybackContext();
+    if (activeList.length === 0) {
+      preloadedNextTrackIdRef.current = null;
+      return;
+    }
+
+    let nextTrack: Track | undefined;
+    if (isShuffle) {
+      const candidates = activeList.filter((track) => track.id !== currentTrack.id);
+      const preparedCandidate = candidates.find((track) => track.id === preloadedNextTrackIdRef.current);
+      nextTrack = preparedCandidate || candidates[Math.floor(Math.random() * candidates.length)];
+      if (!nextTrack && repeatMode === 'all') nextTrack = currentTrack;
+    } else {
+      let nextIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
+      if (nextIndex >= activeList.length) {
+        nextIndex = repeatMode === 'all' ? 0 : -1;
+      }
+      if (nextIndex >= 0) nextTrack = activeList[nextIndex];
+    }
+
+    preloadedNextTrackIdRef.current = nextTrack?.id || null;
+    if (nextTrack && nextTrack.id !== currentTrack.id) {
+      audioEngine.preloadTrack(nextTrack);
+    }
+  }, [isPlaying, currentTrack?.id, currentTrack?.audioUrl, queue, tracks, isShuffle, repeatMode]);
+
   const handleNextTrack = () => {
     const { activeList, currentIndex } = resolveActivePlaybackContext();
     if (activeList.length === 0) return;
 
     let nextIdx = currentIndex >= 0 ? currentIndex + 1 : 0;
     if (isShuffle) {
-      nextIdx = Math.floor(Math.random() * activeList.length);
+      const preparedIndex = activeList.findIndex((track) => track.id === preloadedNextTrackIdRef.current);
+      if (preparedIndex >= 0 && (preparedIndex !== currentIndex || activeList.length === 1)) {
+        nextIdx = preparedIndex;
+      } else {
+        const candidateIndexes = activeList
+          .map((_, index) => index)
+          .filter((index) => index !== currentIndex);
+        nextIdx = candidateIndexes.length > 0
+          ? candidateIndexes[Math.floor(Math.random() * candidateIndexes.length)]
+          : currentIndex;
+      }
     }
     if (nextIdx >= activeList.length || nextIdx < 0) {
       if (repeatMode === 'all') {
