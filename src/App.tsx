@@ -2085,10 +2085,18 @@ export default function App() {
                 onClose={() => setIsSongScreenOpen(false)}
                 currentTrack={currentTrack}
                 isPlaying={isPlaying}
+                isShuffle={isShuffle}
+                repeatMode={repeatMode}
                 currentTimeSeconds={currentTimeSeconds}
                 onTogglePlay={handleTogglePlay}
                 onNext={handleNextTrack}
                 onPrev={handlePrevTrack}
+                onToggleShuffle={() => setIsShuffle((current) => !current)}
+                onToggleRepeat={() =>
+                  setRepeatMode((currentMode) =>
+                    currentMode === 'off' ? 'all' : currentMode === 'all' ? 'one' : 'off'
+                  )
+                }
                 onSeek={handleSeek}
                 onToggleLike={handleToggleLike}
                 onOpenEQ={() => openWorkspacePanel('eq')}

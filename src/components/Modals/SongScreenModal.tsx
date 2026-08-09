@@ -5,6 +5,9 @@ import {
   Pause,
   Play,
   Radio,
+  Repeat,
+  Repeat1,
+  Shuffle,
   SkipBack,
   SkipForward,
   SlidersHorizontal,
@@ -20,10 +23,14 @@ interface SongScreenModalProps {
   onClose: () => void;
   currentTrack: Track | null;
   isPlaying: boolean;
+  isShuffle: boolean;
+  repeatMode: 'off' | 'all' | 'one';
   currentTimeSeconds: number;
   onTogglePlay: () => void;
   onNext: () => void;
   onPrev: () => void;
+  onToggleShuffle: () => void;
+  onToggleRepeat: () => void;
   onSeek: (fraction: number) => void;
   onToggleLike: (trackId: string) => void;
   onOpenEQ?: () => void;
@@ -43,10 +50,14 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
   onClose,
   currentTrack,
   isPlaying,
+  isShuffle,
+  repeatMode,
   currentTimeSeconds,
   onTogglePlay,
   onNext,
   onPrev,
+  onToggleShuffle,
+  onToggleRepeat,
   onSeek,
   onToggleLike,
   onOpenEQ,
@@ -149,7 +160,19 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
             </div>
 
             <div className="mt-3 flex-shrink-0 rounded-2xl border border-white/[0.08] bg-black/20 p-3 md:hidden">
-              <div className="flex items-center justify-center gap-6 md:gap-5">
+              <div className="flex items-center justify-between gap-1">
+                <button
+                  onClick={onToggleShuffle}
+                  className={`control-press relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+                    isShuffle ? 'bg-[#D946EF]/15 text-[#F0ABFC]' : 'text-zinc-500 hover:bg-white/[0.07] hover:text-white'
+                  }`}
+                  title={isShuffle ? 'Turn shuffle off' : 'Turn shuffle on'}
+                  aria-label={isShuffle ? 'Turn shuffle off' : 'Turn shuffle on'}
+                  aria-pressed={isShuffle}
+                >
+                  <Shuffle className="h-4 w-4" />
+                  {isShuffle && <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-[#D946EF]" />}
+                </button>
                 <button
                   onClick={onPrev}
                   className="control-press flex h-11 w-11 items-center justify-center rounded-full text-zinc-300 hover:bg-white/[0.07] hover:text-white md:h-auto md:w-auto md:p-3"
@@ -175,6 +198,17 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                   title="Next track"
                 >
                   <SkipForward className="h-5 w-5 fill-current" />
+                </button>
+                <button
+                  onClick={onToggleRepeat}
+                  className={`control-press relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+                    repeatMode !== 'off' ? 'bg-[#D946EF]/15 text-[#F0ABFC]' : 'text-zinc-500 hover:bg-white/[0.07] hover:text-white'
+                  }`}
+                  title={repeatMode === 'off' ? 'Turn repeat on' : repeatMode === 'all' ? 'Repeat all' : 'Repeat one'}
+                  aria-label={repeatMode === 'off' ? 'Repeat off. Turn repeat on' : repeatMode === 'all' ? 'Repeat all. Switch to repeat one' : 'Repeat one. Turn repeat off'}
+                >
+                  {repeatMode === 'one' ? <Repeat1 className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
+                  {repeatMode !== 'off' && <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-[#D946EF]" />}
                 </button>
               </div>
 
