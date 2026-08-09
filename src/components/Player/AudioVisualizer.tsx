@@ -6,6 +6,7 @@ interface AudioVisualizerProps {
   accentColor?: string;
   secondaryColor?: string;
   height?: number;
+  fillContainer?: boolean;
   barCount?: number;
   variant?: 'bars' | 'wave' | 'minimal';
   maxHeightRatio?: number;
@@ -16,6 +17,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
   accentColor = '#30D158',
   secondaryColor = '#5E5CE6',
   height = 80,
+  fillContainer = false,
   barCount = 28,
   variant = 'bars',
   maxHeightRatio = 0.9,
@@ -46,7 +48,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
       const rect = canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       width = Math.max(1, rect.width);
-      h = height;
+      h = fillContainer ? Math.max(1, rect.height) : height;
       const targetWidth = Math.max(1, Math.round(width * dpr));
       const targetHeight = Math.max(1, Math.round(h * dpr));
       if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
@@ -160,13 +162,13 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
       cancelAnimationFrame(animId);
       resizeObserver.disconnect();
     };
-  }, [isPlaying, accentColor, secondaryColor, barCount, variant, height, maxHeightRatio]);
+  }, [isPlaying, accentColor, secondaryColor, barCount, variant, height, fillContainer, maxHeightRatio]);
 
   return (
     <canvas
       ref={canvasRef}
-      className="w-full max-w-full pointer-events-none"
-      style={{ height, width: variant === 'minimal' ? 24 : '100%' }}
+      className="block w-full max-w-full pointer-events-none"
+      style={{ height: fillContainer ? '100%' : height, width: variant === 'minimal' ? 24 : '100%' }}
     />
   );
 };

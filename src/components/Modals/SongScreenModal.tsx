@@ -79,7 +79,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
 
   return (
     <section className="workspace-screen h-full min-h-0 w-full overflow-hidden bg-[#121212] text-white select-none">
-      <div className="song-screen-shell mx-auto flex h-full w-full max-w-6xl flex-col px-3 py-2 md:px-6 md:py-3 lg:px-8">
+      <div className="song-screen-shell mx-auto flex h-full w-full max-w-6xl flex-col px-3 py-2 md:max-w-[90rem] md:px-6 md:py-3 md:pb-[5.75rem] lg:px-8">
         <header className="song-screen-header workspace-header flex flex-shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-2.5 md:gap-4 md:pb-3">
           <div className="flex min-w-0 items-center gap-3 md:gap-4">
             <div
@@ -105,12 +105,12 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
           </button>
         </header>
 
-        <div className="song-screen-grid mt-2.5 grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] gap-3 md:grid-rows-none md:grid-cols-[0.92fr_1.08fr] md:gap-4">
+        <div className="song-screen-grid mt-2.5 grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] gap-3 md:my-auto md:grid-rows-none md:grid-cols-[minmax(0,1.04fr)_minmax(0,0.96fr)] md:content-center md:items-stretch md:gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(26rem,0.92fr)] xl:gap-6">
           <article
             data-track-id={currentTrack.id}
             data-context-type="track"
             onClick={() => onSelectAlbum?.(currentTrack)}
-            className="song-screen-art workspace-card relative mx-auto aspect-square w-[min(100%,58dvh)] max-h-full min-h-0 cursor-pointer self-center overflow-hidden rounded-[1.35rem] shadow-[0_28px_70px_rgba(0,0,0,0.55)] md:w-full md:self-start md:rounded-[1.75rem]"
+            className="song-screen-art workspace-card relative mx-auto aspect-square w-[min(100%,58dvh)] max-h-full min-h-0 cursor-pointer self-center overflow-hidden rounded-[1.35rem] shadow-[0_28px_70px_rgba(0,0,0,0.55)] md:mr-0 md:w-[min(100%,calc(100dvh-11rem))] md:max-h-none md:rounded-[1.75rem]"
           >
             <img
               key={currentTrack.coverUrl}
@@ -121,7 +121,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
             />
           </article>
 
-          <article className="song-screen-controls workspace-card flex min-h-0 flex-shrink-0 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-[#211827] to-[#181818] p-3 shadow-2xl md:self-start md:rounded-3xl md:p-5">
+          <article className="song-screen-controls workspace-card flex min-h-0 flex-shrink-0 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-[#211827] to-[#181818] p-3 shadow-2xl md:self-stretch md:rounded-3xl md:p-5">
             <div className="flex items-center justify-between gap-3 md:items-start md:gap-4">
               <div className="min-w-0">
                 <p className="hidden text-[10px] font-black uppercase tracking-[0.22em] text-[#D8B4FE] md:block">Listening session</p>
@@ -209,7 +209,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               </div>
             </div>
 
-            <div className="mt-3 hidden flex-none flex-col rounded-3xl border border-white/[0.08] bg-[#101010]/60 p-4 md:flex">
+            <div className="mt-3 hidden flex-none flex-col rounded-3xl border border-white/[0.08] bg-[#101010]/60 p-4 md:flex md:min-h-0 md:flex-1">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
@@ -226,12 +226,13 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                   </button>
                 )}
               </div>
-              <div className="mt-3 flex h-[clamp(190px,24dvh,240px)] flex-none items-end justify-center overflow-hidden rounded-2xl border border-white/[0.06] bg-black/30 px-4">
+              <div className="mt-3 flex h-[clamp(190px,24dvh,240px)] flex-none items-end justify-center overflow-hidden rounded-2xl border border-white/[0.06] bg-black/30 px-4 md:h-auto md:min-h-[10rem] md:flex-1">
                 <AudioVisualizer
                   isPlaying={isPlaying}
                   accentColor={palette.accent}
                   secondaryColor={palette.secondary}
                   height={190}
+                  fillContainer
                   maxHeightRatio={0.82}
                 />
               </div>
