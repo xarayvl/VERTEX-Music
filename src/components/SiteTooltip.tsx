@@ -12,7 +12,7 @@ type TooltipPosition = {
   top: number;
 };
 
-const TOOLTIP_DELAY_MS = 180;
+const TOOLTIP_DELAY_MS = 900;
 const TOOLTIP_GAP = 10;
 const VIEWPORT_PADDING = 8;
 
@@ -77,7 +77,10 @@ export const SiteTooltip: React.FC = () => {
   };
 
   useEffect(() => {
+    const hoverQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+
     const handlePointerOver = (event: PointerEvent) => {
+      if (!hoverQuery.matches || event.pointerType === 'touch') return;
       const target = findTooltipTarget(event.target);
       if (target) queueTooltip(target);
     };
@@ -90,6 +93,7 @@ export const SiteTooltip: React.FC = () => {
     };
 
     const handleFocusIn = (event: FocusEvent) => {
+      if (!hoverQuery.matches) return;
       const target = findTooltipTarget(event.target);
       if (target) queueTooltip(target);
     };
@@ -99,6 +103,7 @@ export const SiteTooltip: React.FC = () => {
     };
 
     const handleViewportChange = () => hideTooltip();
+    const handleHoverCapabilityChange = () => hideTooltip();
 
     document.addEventListener('pointerover', handlePointerOver, true);
     document.addEventListener('pointerout', handlePointerOut, true);
@@ -106,6 +111,7 @@ export const SiteTooltip: React.FC = () => {
     document.addEventListener('focusout', handleFocusOut, true);
     window.addEventListener('resize', handleViewportChange);
     window.addEventListener('scroll', handleViewportChange, true);
+    hoverQuery.addEventListener('change', handleHoverCapabilityChange);
 
     return () => {
       cancelTimer();
@@ -116,6 +122,7 @@ export const SiteTooltip: React.FC = () => {
       document.removeEventListener('focusout', handleFocusOut, true);
       window.removeEventListener('resize', handleViewportChange);
       window.removeEventListener('scroll', handleViewportChange, true);
+      hoverQuery.removeEventListener('change', handleHoverCapabilityChange);
     };
   }, []);
 

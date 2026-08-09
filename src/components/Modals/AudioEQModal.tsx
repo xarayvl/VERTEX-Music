@@ -68,7 +68,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
   };
 
   return (
-    <section className="workspace-screen min-h-full w-full bg-[#121212] text-white select-none">
+    <section className="workspace-screen min-h-full w-full min-w-0 max-w-full overflow-x-hidden bg-[#121212] text-white select-none">
       <div className="mx-auto w-full min-w-0 max-w-6xl px-3 py-5 sm:px-7 sm:py-7 lg:px-10 lg:py-9">
         <header className="workspace-header flex min-w-0 items-start justify-between gap-3 border-b border-white/10 pb-5 sm:gap-5 sm:pb-6">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
@@ -92,8 +92,8 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
           </button>
         </header>
 
-        <div className="mt-7 grid gap-6 lg:grid-cols-[0.78fr_1.22fr]">
-          <aside className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
+        <div className="mt-7 grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
+          <aside className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
             <div className="mb-5 flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Presets</p>
@@ -107,7 +107,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-2">
+            <div className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-2">
               {presets.map((preset, index) => {
                 const isActive = eq.preset === preset;
                 return (
@@ -115,21 +115,21 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
                     key={preset}
                     onClick={() => handleSelectPreset(preset)}
                     style={{ '--stagger-index': index } as React.CSSProperties}
-                    className={`stagger-item control-press flex min-h-14 items-center justify-between rounded-2xl border px-4 text-left text-xs font-extrabold transition-all ${
+                    className={`stagger-item control-press flex min-h-14 min-w-0 items-center justify-between gap-2 rounded-2xl border px-4 text-left text-xs font-extrabold transition-all ${
                       isActive
                         ? 'border-[#C084FC]/70 bg-gradient-to-r from-[#A855F7]/30 to-[#D946EF]/20 text-white shadow-[0_10px_30px_rgba(168,85,247,0.16)]'
                         : 'border-white/[0.08] bg-white/[0.035] text-zinc-300 hover:border-white/[0.15] hover:bg-white/[0.07]'
                     }`}
                   >
-                    <span>{preset}</span>
-                    {isActive && <Check className="h-4 w-4 text-[#E879F9]" />}
+                    <span className="min-w-0 truncate">{preset}</span>
+                    {isActive && <Check className="h-4 w-4 shrink-0 text-[#E879F9]" />}
                   </button>
                 );
               })}
             </div>
           </aside>
 
-          <div className="workspace-card section-reveal rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-5 sm:p-7">
+          <div className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-5 sm:p-7">
             <div className="mb-7 flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-end min-[360px]:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Custom curve</p>
@@ -140,7 +140,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-[repeat(3,minmax(0,1fr))]">
               {bands.map((band, index) => {
                 const value = eq[band.key];
                 const percentage = Math.min(100, Math.max(0, ((value + 10) / 20) * 100));
@@ -148,14 +148,14 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
                   <div
                     key={band.key}
                     style={{ '--stagger-index': index } as React.CSSProperties}
-                    className="stagger-item rounded-2xl border border-white/[0.08] bg-black/20 p-4"
+                    className="stagger-item min-w-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-black/20 p-4"
                   >
-                    <div className="mb-4 flex items-start justify-between">
-                      <div>
+                    <div className="mb-4 flex min-w-0 items-start justify-between gap-2">
+                      <div className="min-w-0">
                         <p className="text-sm font-black text-white">{band.label}</p>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{band.frequency}</p>
                       </div>
-                      <span className="rounded-lg bg-white/5 px-2 py-1 font-mono text-xs font-bold text-[#E879F9]">
+                      <span className="shrink-0 rounded-lg bg-white/5 px-2 py-1 font-mono text-xs font-bold text-[#E879F9]">
                         {value > 0 ? '+' : ''}{value} dB
                       </span>
                     </div>

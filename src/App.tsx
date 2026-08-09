@@ -2153,7 +2153,7 @@ export default function App() {
 
           {/* Scrollable View Content */}
           <div
-            className={`relative flex-1 overflow-x-hidden custom-scrollbar ${
+            className={`relative min-w-0 max-w-full flex-1 overflow-x-hidden custom-scrollbar ${
               isWorkspacePanelOpen
                 ? 'overflow-y-auto p-0 pb-40 md:pb-24'
                 : isSongScreenOpen

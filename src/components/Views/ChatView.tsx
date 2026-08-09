@@ -453,6 +453,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     <AgentPlanning
                       title="How this answer was prepared"
                       steps={createCompletedReasoningSteps(msg.webSearchUsed === true, msg.reasoningEffort === 'high')}
+                      defaultExpanded={false}
                       className="mb-3"
                     />
                   )}
