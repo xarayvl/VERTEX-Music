@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   Sparkles,
   User,
-  X,
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import VertexLogo from '../Brand/VertexLogo';
@@ -374,15 +373,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       </div>
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.06),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.18),rgba(0,0,0,0.5))]" aria-hidden="true" />
 
-      <button
-        type="button"
-        onClick={onClose}
-        className="fixed right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-40 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-black/55 text-zinc-300 shadow-xl backdrop-blur-md transition-colors hover:bg-white/10 hover:text-white sm:right-5 sm:top-5"
-        aria-label="Close authentication"
-      >
-        <X className="h-5 w-5" />
-      </button>
-
       <div className={`relative z-10 mx-auto mb-14 flex w-full max-w-5xl flex-1 items-center justify-center sm:mb-16 ${mode === 'register' ? 'max-sm:min-h-0 max-sm:items-start max-sm:overflow-y-auto max-sm:overscroll-contain' : ''}`}>
         <section className="relative grid w-full md:grid-cols-[0.92fr_1.08fr] md:items-center md:gap-4">
           {authSuccess && (
@@ -437,7 +427,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <main className={`relative flex min-h-0 flex-col justify-center overflow-hidden rounded-[1.5rem] border border-white/[0.14] bg-[#09070b]/55 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-md animate-in zoom-in-95 duration-300 sm:min-h-[560px] sm:rounded-[2rem] sm:p-8 md:min-h-[640px] ${mode === 'register' ? 'md:p-8' : 'md:p-10'}`}>
             <div className="mx-auto w-full max-w-md">
-              <div className="mb-5 flex items-center gap-3 pr-12 md:hidden sm:mb-7">
+              <div className="mb-5 flex items-center gap-3 md:hidden sm:mb-7">
                 <VertexLogo alt="" className="h-11 w-11 shrink-0" />
                 <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D946EF]">Welcome to</p><p className="mt-0.5 text-lg font-black">VERTEX Music</p></div>
               </div>

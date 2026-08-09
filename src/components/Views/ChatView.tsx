@@ -266,7 +266,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const ActivePhase = activePhases[Math.min(thinkingPhaseIdx, activePhases.length - 1)];
 
   return (
-    <section className="workspace-screen mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_38%),#121212] text-white select-none md:bg-[#121212]">
+    <section className="workspace-screen flex h-full min-h-0 w-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_38%),#121212] text-white select-none md:bg-[#121212]">
       <header className="workspace-header flex flex-shrink-0 items-center justify-between gap-2 border-b border-white/10 px-3 py-3 sm:gap-3 sm:px-0 sm:pb-3 sm:pt-0">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#A855F7] to-[#D946EF] shadow-[0_12px_34px_rgba(168,85,247,0.28)] sm:h-11 sm:w-11 sm:rounded-2xl">
@@ -275,14 +275,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
           <div className="min-w-0">
             <div className="mb-1 hidden items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE] sm:flex">
-              <Sparkles className="h-3.5 w-3.5" /> Intelligent listening
+              <Sparkles className="h-3.5 w-3.5" /> GEMINI 3.6 FLASH
             </div>
             <h1 className="truncate text-lg font-black tracking-tight sm:text-2xl">AI DJ Chat</h1>
             <div className="mt-0.5 hidden flex-wrap items-center gap-2 text-xs text-zinc-400 sm:flex">
               <span>Recommendations, discovery and music knowledge.</span>
-              <span className="hidden items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-300 sm:flex">
-                <Globe className="h-2.5 w-2.5" /> Web search ready
-              </span>
             </div>
           </div>
         </div>
@@ -300,13 +297,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
       </header>
 
-      <div className="workspace-card flex min-h-0 flex-1 flex-col overflow-hidden border-white/10 bg-[#171717] shadow-2xl sm:mt-3 sm:rounded-3xl sm:border">
-        <div className="flex flex-shrink-0 items-center justify-end border-b border-white/[0.08] px-4 py-2.5 sm:px-5">
-          <span className="rounded-full bg-white/5 px-2.5 py-1 text-[10px] font-bold text-zinc-500">
-            {messages.length} {messages.length === 1 ? 'message' : 'messages'}
-          </span>
-        </div>
-
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-4 overscroll-contain sm:px-5 sm:py-4 lg:px-6">
           {messages.length === 0 && !isLoading && (
             <div className="flex min-h-full items-center justify-center py-5 sm:py-8">
