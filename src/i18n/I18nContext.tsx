@@ -382,7 +382,7 @@ const turkishTranslations: Record<string, string> = {
   'Ask with high reasoning...': 'Derinlemesine düşünerek sor...',
   'Audio Equalizer': 'Ses ekolayzırı',
   'Browse Music Categories': 'Müzik kategorilerine göz at',
-  'Chill': 'Sakin',
+  'Chill': 'Chill',
   'Chiptune Retro': 'Retro chiptune',
   'Clear Filter': 'Filtreyi temizle',
   'Clear chat history': 'Sohbet geçmişini temizle',
