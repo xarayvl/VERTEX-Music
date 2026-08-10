@@ -629,7 +629,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </div>
                 <div className="min-w-0 max-w-[calc(100%_-_40px)] flex-1 sm:max-w-lg sm:flex-none">
                   {liveReasoningSteps.length > 0 ? (
-                    <AgentPlanning title="Live activity" steps={liveReasoningSteps} />
+                    <AgentPlanning title="Reasoning" steps={liveReasoningSteps} />
                   ) : (
                     <div className="rounded-2xl border border-white/[0.08] bg-[#202020] px-4 py-3 text-[13px] font-black text-zinc-300">
                       Connecting

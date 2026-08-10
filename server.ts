@@ -9,6 +9,8 @@ import { createServer as createViteServer } from "vite";
 import { OAuth2Client } from "google-auth-library";
 import { readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
 import { getPublicOrigin, injectTrackSocialMeta } from "./server/socialMeta.js";
+import { searchLiveWeb } from "./server/liveWebSearch.js";
+import type { WebSearchSource } from "./server/webSearchParsers.js";
 
 dotenv.config();
 
@@ -2270,12 +2272,6 @@ type NvidiaChatMessage = {
   reasoning_content?: string;
 };
 
-type WebSearchSource = {
-  title: string;
-  uri: string;
-  snippet: string;
-};
-
 // Chronological trace of what happened while preparing a reply: reasoning
 // text produced by the model between tool calls, and the tool calls
 // themselves. Sent to the client so the chat UI can render a Claude-style
@@ -2353,269 +2349,6 @@ function withTimeoutSignal(parentSignal: AbortSignal | undefined, timeoutMs: num
   return parentSignal ? AbortSignal.any([parentSignal, timeoutSignal]) : timeoutSignal;
 }
 
-function decodeSearchHtml(value: string): string {
-  const namedEntities: Record<string, string> = {
-    amp: "&",
-    apos: "'",
-    gt: ">",
-    hellip: "…",
-    ldquo: "“",
-    lsquo: "‘",
-    lt: "<",
-    mdash: "—",
-    nbsp: " ",
-    ndash: "–",
-    quot: '"',
-    rdquo: "”",
-    rsquo: "’",
-  };
-
-  return value
-    .replace(/&#(x[0-9a-f]+|\d+);/gi, (entity, code: string) => {
-      const codePoint = code.toLowerCase().startsWith("x")
-        ? Number.parseInt(code.slice(1), 16)
-        : Number.parseInt(code, 10);
-      if (!Number.isFinite(codePoint) || codePoint < 0 || codePoint > 0x10ffff) return entity;
-      try {
-        return String.fromCodePoint(codePoint);
-      } catch {
-        return entity;
-      }
-    })
-    .replace(/&([a-z]+);/gi, (entity, name: string) => namedEntities[name.toLowerCase()] ?? entity);
-}
-
-function searchHtmlToText(value: string): string {
-  return decodeSearchHtml(
-    value
-      .replace(/<br\s*\/?\s*>/gi, " ")
-      .replace(/<[^>]*>/g, " "),
-  ).replace(/\s+/g, " ").trim();
-}
-
-function resolveDuckDuckGoResultUrl(rawHref: string): string | null {
-  const decodedHref = decodeSearchHtml(rawHref).trim();
-  if (!decodedHref) return null;
-
-  try {
-    const redirectUrl = new URL(
-      decodedHref.startsWith("//") ? `https:${decodedHref}` : decodedHref,
-      "https://duckduckgo.com",
-    );
-    const targetUrl = redirectUrl.searchParams.get("uddg")?.trim() || redirectUrl.toString();
-    if (!isHttpUrl(targetUrl)) return null;
-    const parsedTarget = new URL(targetUrl);
-    if (!redirectUrl.searchParams.has("uddg") && /(^|\.)duckduckgo\.com$/i.test(parsedTarget.hostname)) return null;
-    return parsedTarget.toString();
-  } catch {
-    return null;
-  }
-}
-
-function parseDuckDuckGoResults(html: string): WebSearchSource[] {
-  const resultLinkPattern = /<a\b([^>]*\bclass=["'][^"']*\bresult__a\b[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi;
-  const linkMatches = Array.from(html.matchAll(resultLinkPattern));
-  const seen = new Set<string>();
-
-  return linkMatches.flatMap((match, index) => {
-    const attributes = match[1] || "";
-    const hrefMatch = attributes.match(/\bhref=["']([^"']+)["']/i);
-    const uri = hrefMatch ? resolveDuckDuckGoResultUrl(hrefMatch[1]) : null;
-    const title = searchHtmlToText(match[2] || "");
-    if (!uri || !title || seen.has(uri)) return [];
-
-    const resultEnd = index + 1 < linkMatches.length
-      ? linkMatches[index + 1].index
-      : Math.min(html.length, (match.index ?? 0) + 8_000);
-    const followingHtml = html.slice((match.index ?? 0) + match[0].length, resultEnd);
-    const snippetMatch = followingHtml.match(
-      /<(?:a|div)\b[^>]*\bclass=["'][^"']*\bresult__snippet\b[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|div)>/i,
-    );
-    const snippet = snippetMatch ? searchHtmlToText(snippetMatch[1]) : "";
-
-    seen.add(uri);
-    return [{ title: title.slice(0, 300), uri, snippet: snippet.slice(0, 1_000) }];
-  }).slice(0, 5);
-}
-
-function parseDuckDuckGoLiteResults(html: string): WebSearchSource[] {
-  const resultLinkPattern = /<a\b([^>]*\bclass=["'][^"']*\bresult-link\b[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi;
-  const linkMatches = Array.from(html.matchAll(resultLinkPattern));
-  const seen = new Set<string>();
-
-  return linkMatches.flatMap((match, index) => {
-    const hrefMatch = (match[1] || "").match(/\bhref=["']([^"']+)["']/i);
-    const uri = hrefMatch ? resolveDuckDuckGoResultUrl(hrefMatch[1]) : null;
-    const title = searchHtmlToText(match[2] || "");
-    if (!uri || !title || seen.has(uri)) return [];
-
-    const resultEnd = index + 1 < linkMatches.length ? linkMatches[index + 1].index : html.length;
-    const followingHtml = html.slice((match.index ?? 0) + match[0].length, resultEnd);
-    const snippetMatch = followingHtml.match(
-      /<td\b[^>]*\bclass=["'][^"']*\bresult-snippet\b[^"']*["'][^>]*>([\s\S]*?)<\/td>/i,
-    );
-    const snippet = snippetMatch ? searchHtmlToText(snippetMatch[1]) : "";
-
-    seen.add(uri);
-    return [{ title: title.slice(0, 300), uri, snippet: snippet.slice(0, 1_000) }];
-  }).slice(0, 5);
-}
-
-function parseBraveSearchResults(html: string): WebSearchSource[] {
-  const resultPattern = /<div\b(?=[^>]*\bclass=["'][^"']*\bsnippet\b[^"']*["'])(?=[^>]*\bdata-type=["']web["'])[^>]*>/gi;
-  const resultMatches = Array.from(html.matchAll(resultPattern));
-  const seen = new Set<string>();
-
-  return resultMatches.flatMap((match, index) => {
-    const resultEnd = index + 1 < resultMatches.length ? resultMatches[index + 1].index : html.length;
-    const resultHtml = html.slice(match.index ?? 0, resultEnd);
-    const linkMatch = resultHtml.match(
-      /<a\b(?=[^>]*\bclass=["'][^"']*\bl1\b[^"']*["'])[^>]*\bhref=["']([^"']+)["'][^>]*>/i,
-    );
-    const uri = linkMatch ? decodeSearchHtml(linkMatch[1]).trim() : "";
-    const titleMatch = resultHtml.match(
-      /<div\b[^>]*\bclass=["'][^"']*\bsearch-snippet-title\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-    );
-    const snippetMatch = resultHtml.match(
-      /<div\b[^>]*\bclass=["'][^"']*\bline-clamp-dynamic\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-    );
-    const title = titleMatch ? searchHtmlToText(titleMatch[1]) : "";
-    if (!isHttpUrl(uri) || !title || seen.has(uri)) return [];
-
-    seen.add(uri);
-    return [{
-      title: title.slice(0, 300),
-      uri: new URL(uri).toString(),
-      snippet: snippetMatch ? searchHtmlToText(snippetMatch[1]).slice(0, 1_000) : "",
-    }];
-  }).slice(0, 5);
-}
-
-async function fetchDuckDuckGoHtml(
-  url: string,
-  init: RequestInit,
-  signal?: AbortSignal,
-  timeoutMs = 12_000,
-): Promise<string> {
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      Accept: "text/html,application/xhtml+xml",
-      "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
-      "User-Agent": "Mozilla/5.0 (compatible; VERTEXMusic/1.0)",
-      ...init.headers,
-    },
-    redirect: "follow",
-    signal: withTimeoutSignal(signal, timeoutMs),
-  });
-  const html = await response.text();
-  if (!response.ok) {
-    const error: any = new Error(`DuckDuckGo Search request failed (${response.status}).`);
-    error.status = response.status;
-    const retryAfter = Number(response.headers.get("retry-after") || 0);
-    if (retryAfter > 0) error.retryAfterSeconds = retryAfter;
-    throw error;
-  }
-  if (html.length > 2_000_000) throw new Error("DuckDuckGo Search returned an unexpectedly large response.");
-  if (/unfortunately, bots use duckduckgo too|anomaly-modal/i.test(html)) {
-    const error: any = new Error("DuckDuckGo Search rate limit reached.");
-    error.status = 429;
-    error.retryAfterSeconds = 30;
-    throw error;
-  }
-  return html;
-}
-
-async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<WebSearchSource[]> {
-  const trimmedQuery = query.trim().slice(0, 2_000);
-  const searchParams = new URLSearchParams({ q: trimmedQuery, kl: "wt-wt", kp: "1" });
-  let firstError: unknown;
-  let receivedSearchPage = false;
-
-  // DuckDuckGo's POST endpoint can take longer than the normal search-tool
-  // timeout even when it eventually returns a valid page. Its HTML GET route
-  // serves the same results much faster, so use that as the primary path.
-  try {
-    const htmlUrl = new URL("https://html.duckduckgo.com/html/");
-    htmlUrl.search = searchParams.toString();
-    const html = await fetchDuckDuckGoHtml(htmlUrl.toString(), { method: "GET" }, signal);
-    receivedSearchPage = true;
-    const results = parseDuckDuckGoResults(html);
-    if (results.length > 0) return results;
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    firstError = error;
-  }
-
-  try {
-    const liteUrl = new URL("https://lite.duckduckgo.com/lite/");
-    liteUrl.search = searchParams.toString();
-    const liteHtml = await fetchDuckDuckGoHtml(liteUrl.toString(), { method: "GET" }, signal);
-    receivedSearchPage = true;
-    const results = parseDuckDuckGoLiteResults(liteHtml);
-    if (results.length > 0) return results;
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    firstError ||= error;
-  }
-
-  // An empty, valid results page is not a service failure. Let the model
-  // explain that nothing was found instead of surfacing an availability error.
-  if (receivedSearchPage) return [];
-  throw firstError || new Error("DuckDuckGo Search is unavailable.");
-}
-
-async function searchBrave(query: string, signal?: AbortSignal): Promise<WebSearchSource[]> {
-  const searchUrl = new URL("https://search.brave.com/search");
-  searchUrl.search = new URLSearchParams({ q: query.trim().slice(0, 2_000), source: "web" }).toString();
-  const response = await fetch(searchUrl, {
-    method: "GET",
-    headers: {
-      Accept: "text/html,application/xhtml+xml",
-      "Accept-Language": "en-US,en;q=0.9",
-      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
-    },
-    redirect: "follow",
-    signal: withTimeoutSignal(signal, 10_000),
-  });
-  const html = await response.text();
-  if (!response.ok) throw new Error(`Brave Search request failed (${response.status}).`);
-  if (html.length > 2_000_000) throw new Error("Brave Search returned an unexpectedly large response.");
-  if (/captcha|challenge-form|verify you are human/i.test(html)) {
-    throw new Error("Brave Search returned a verification challenge.");
-  }
-  return parseBraveSearchResults(html);
-}
-
-async function searchLiveWeb(
-  query: string,
-  signal?: AbortSignal,
-): Promise<{ sources: WebSearchSource[]; provider: "duckduckgo" | "web" }> {
-  const attempts: Array<{
-    provider: "duckduckgo" | "web";
-    search: () => Promise<WebSearchSource[]>;
-  }> = [
-    { provider: "web", search: () => searchBrave(query, signal) },
-    { provider: "duckduckgo", search: () => searchDuckDuckGo(query, signal) },
-  ];
-
-  let firstError: unknown;
-  let emptyResultProvider: "duckduckgo" | "web" | undefined;
-  for (const attempt of attempts) {
-    try {
-      const sources = await attempt.search();
-      if (sources.length > 0) return { sources, provider: attempt.provider };
-      emptyResultProvider ||= attempt.provider;
-    } catch (error) {
-      if (signal?.aborted) throw error;
-      firstError ||= error;
-    }
-  }
-
-  if (emptyResultProvider) return { sources: [], provider: emptyResultProvider };
-  throw firstError || new Error("Live web search is unavailable.");
-}
-
 function buildNvidiaMessages(
   systemInstruction: string,
   history: Array<{ role: "user" | "assistant"; content: string }>,
@@ -2666,6 +2399,7 @@ function buildNvidiaMessages(
       webSearchRequested: false,
       webSearchCalls: 0,
       searchProvider: "none",
+      searchEngine: "none",
       reasoningEffort: "medium",
       stage: "validation",
     };
@@ -2800,6 +2534,7 @@ function buildNvidiaMessages(
         });
         const liveSearch = await searchLiveWeb(query, clientAbortController.signal);
         requestDiagnostics.searchProvider = liveSearch.provider;
+        requestDiagnostics.searchEngine = liveSearch.engine;
         searchQueries.push(query);
         const labeledSources = liveSearch.sources.map((source) => {
           searchSources.push(source);
@@ -3010,6 +2745,7 @@ function buildNvidiaMessages(
           });
           const liveSearch = await searchLiveWeb(query, clientAbortController.signal);
           requestDiagnostics.searchProvider = liveSearch.provider;
+          requestDiagnostics.searchEngine = liveSearch.engine;
           if (!searchQueries.includes(query)) searchQueries.push(query);
 
           const labeledSources = liveSearch.sources.map((source) => {
