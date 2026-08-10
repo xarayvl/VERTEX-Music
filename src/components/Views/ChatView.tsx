@@ -637,7 +637,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     <AgentPlanning title="Reasoning" steps={liveReasoningSteps} />
                   ) : (
                     <div className="rounded-2xl border border-white/[0.08] bg-[#202020] px-4 py-3 text-[13px] font-black text-zinc-300">
-                      Connecting
+                      Reasoning
                     </div>
                   )}
                 </div>
