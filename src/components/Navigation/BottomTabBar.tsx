@@ -1,6 +1,7 @@
 import React from 'react';
 import { Home, Compass, Search, Library, Bot } from 'lucide-react';
 import { TabType } from '../../types';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface BottomTabBarProps {
   activeTab: TabType;
@@ -13,18 +14,19 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
   onTabChange,
   hasMiniPlayer = true,
 }) => {
+  const { t } = useI18n();
   const tabs = [
-    { id: 'home' as TabType, label: 'Home', icon: Home },
-    { id: 'browse' as TabType, label: 'Browse', icon: Compass },
-    { id: 'search' as TabType, label: 'Search', icon: Search },
-    { id: 'library' as TabType, label: 'Library', icon: Library },
+    { id: 'home' as TabType, label: t('Home'), icon: Home },
+    { id: 'browse' as TabType, label: t('Browse'), icon: Compass },
+    { id: 'search' as TabType, label: t('Search'), icon: Search },
+    { id: 'library' as TabType, label: t('Library'), icon: Library },
     { id: 'chat' as TabType, label: 'AI DJ', icon: Bot },
   ];
 
   return (
     <nav
       className="mobile-bottom-nav fixed inset-x-2 z-40 mx-auto max-w-md transition-all duration-300"
-      aria-label="Main navigation"
+      aria-label={t('Main navigation')}
       data-has-player={hasMiniPlayer ? 'true' : 'false'}
     >
       <div className="relative flex items-center justify-around rounded-[24px] border border-white/[0.12] bg-zinc-950/88 p-1.5 shadow-[0_14px_44px_rgba(0,0,0,0.82)] backdrop-blur-2xl">

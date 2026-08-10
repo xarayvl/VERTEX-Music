@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Search, Crown, User, ExternalLink, LogOut, C
 import { TabType, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import VertexLogo from '../Brand/VertexLogo';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface SpotifyTopHeaderProps {
   activeTab: TabType;
@@ -43,6 +44,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
   onLogout,
   onOpenAuthModal,
 }) => {
+  const { t } = useI18n();
   const categories = ['All', 'Music', 'Podcasts', 'Chill', 'Synthwave'];
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -70,7 +72,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
           <VertexLogo className="h-9 w-9 flex-shrink-0" />
           <button
             onClick={() => onSelectTab('search')}
-            title="Search"
+            title={t('Search')}
             className="-ml-0.5 flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/[0.06] bg-white/[0.035] text-zinc-300 transition-all hover:text-white active:scale-95"
           >
             <Search className="w-4 h-4" />
@@ -83,7 +85,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
             onClick={onGoBack}
             disabled={!canGoBack}
             className="w-8 h-8 rounded-full bg-black/60 hover:bg-black/90 flex items-center justify-center text-zinc-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95 flex-shrink-0"
-            title="Go Back"
+            title={t('Go Back')}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -91,7 +93,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
             onClick={onGoForward}
             disabled={!canGoForward}
             className="w-8 h-8 rounded-full bg-black/60 hover:bg-black/90 flex items-center justify-center text-zinc-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95 flex-shrink-0"
-            title="Go Forward"
+            title={t('Go Forward')}
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -112,7 +114,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                 onSelectTab('search');
               }
             }}
-            placeholder="What do you want to play?"
+            placeholder={t('What do you want to play?')}
             className="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#2a2a2a] pl-10 pr-4 py-2 rounded-full text-xs font-medium text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#A855F7]/50 transition-all shadow-inner"
           />
         </div>
@@ -130,7 +132,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                 : 'bg-white/10 text-zinc-200 hover:bg-white/20'
             }`}
           >
-            {cat}
+            {t(cat)}
           </button>
         ))}
       </div>
@@ -143,12 +145,12 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
         {onOpenAddTrackModal && (
           <button
             onClick={onOpenAddTrackModal}
-            title="Upload"
-            aria-label="Upload audio"
+            title={t('Upload')}
+            aria-label={t('Upload audio')}
             className="flex h-10 w-10 flex-shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-white/[0.06] bg-white/[0.035] text-xs font-extrabold text-white/80 transition-colors hover:text-white hover:drop-shadow-[0_0_8px_rgba(217,70,239,0.85)] sm:h-9 sm:w-auto sm:rounded-none sm:border-0 sm:bg-transparent sm:px-1.5"
           >
             <Upload className="h-4 w-4 text-[#D946EF]" />
-            <span className="spotify-upload-label hidden lg:inline">Upload</span>
+            <span className="spotify-upload-label hidden lg:inline">{t('Upload')}</span>
           </button>
         )}
 
@@ -158,14 +160,14 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="flex h-10 items-center space-x-2 rounded-[15px] border border-white/10 bg-black/70 p-1 pl-1 pr-2 transition-all shadow hover:border-white/20 hover:bg-black/90 active:scale-95 sm:h-auto sm:rounded-full sm:pr-2.5"
-              title="Account & Profile Menu"
+              title={t('Account & Profile Menu')}
             >
               <div className="w-7 h-7 rounded-full overflow-hidden border border-[#D946EF]/60 relative flex-shrink-0">
                 <img
                   src={
                     userProfile.avatarUrl || DEFAULT_AVATAR_URL
                   }
-                  alt={userProfile.displayName || 'User Avatar'}
+                  alt={userProfile.displayName || t('User Avatar')}
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"
                 />
@@ -184,7 +186,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                   <p className="text-[11px] text-zinc-400 truncate">{userProfile.email}</p>
                   <div className="mt-1.5 flex items-center gap-1.5">
                     <span className="px-2 py-0.5 rounded-full bg-[#D946EF]/20 text-[#D946EF] text-[10px] font-extrabold uppercase">
-                      {userProfile.isArtist ? 'Artist account' : 'Listener account'}
+                      {t(userProfile.isArtist ? 'Artist account' : 'Listener account')}
                     </span>
                   </div>
                 </div>
@@ -198,7 +200,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                 >
                   <div className="flex items-center space-x-2.5">
                     <User className="w-4 h-4 text-zinc-400" />
-                    <span>Profile Overview</span>
+                    <span>{t('Profile Overview')}</span>
                   </div>
                 </button>
 
@@ -212,7 +214,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                   className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10 rounded-md transition-colors"
                 >
                   <User className="w-4 h-4 text-zinc-400" />
-                  <span>Switch Account / Sign In</span>
+                  <span>{t('Switch Account / Sign In')}</span>
                 </button>
 
                 <button
@@ -223,7 +225,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                   className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded-md transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>Log out</span>
+                  <span>{t('Log out')}</span>
                 </button>
               </div>
             )}
@@ -234,14 +236,14 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
               onClick={onOpenAuthModal}
               className="flex h-10 items-center rounded-[14px] border border-white/[0.06] bg-white/[0.035] px-3 text-xs font-bold text-zinc-200 transition-all hover:bg-white/10 hover:text-white sm:h-auto sm:rounded-full sm:border-0 sm:bg-transparent sm:px-4 sm:py-1.5"
             >
-              <span className="sm:hidden">Sign in</span>
-              <span className="hidden sm:inline">Log In</span>
+              <span className="sm:hidden">{t('Sign in')}</span>
+              <span className="hidden sm:inline">{t('Log In')}</span>
             </button>
             <button
               onClick={onOpenAuthModal}
               className="hidden rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-4 py-1.5 text-xs font-extrabold text-white shadow-md transition-all hover:opacity-90 active:scale-95 sm:block"
             >
-              Register
+              {t('Register')}
             </button>
           </div>
         )}

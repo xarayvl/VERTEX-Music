@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Track } from '../../types';
 import { formatCopyright, stripCopyrightPrefix } from '../../utils/copyright';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface EditTrackModalProps {
   isOpen: boolean;
@@ -57,6 +58,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   onTrackUpdated,
   onTracksUpdated,
 }) => {
+  const { t } = useI18n();
   const releaseTracks = useMemo(() => {
     if (!track) return [];
     const catalog = tracks.length > 0 ? tracks : [track];
@@ -283,7 +285,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
               <p className="mt-1 hidden text-xs text-zinc-400 sm:block">{isCollection ? 'Update the album and every song in its tracklist from one place.' : 'Refresh the song metadata, artwork, or audio source.'}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} disabled={loading} className="control-press rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40" aria-label="Close editor">
+          <button type="button" onClick={onClose} disabled={loading} className="control-press rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40" aria-label={t('Close editor')}>
             <X className="h-5 w-5" />
           </button>
         </header>
@@ -292,8 +294,8 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
           {!isOwner ? (
             <div className="p-10 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 text-red-300"><ShieldAlert className="h-7 w-7" /></div>
-            <h2 className="mt-4 text-lg font-black">Ownership required</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">Only the original uploader can edit this track or release.</p>
+            <h2 className="mt-4 text-lg font-black">{t('Ownership required')}</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">{t('Only the original uploader can edit this track or release.')}</p>
           </div>
           ) : (
             <form onSubmit={handleSubmit} className="w-full min-w-0 max-w-full space-y-5 p-3 sm:space-y-6 sm:p-7">
@@ -305,8 +307,8 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
 
             <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-6">
               <div className="mb-5">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Release format</p>
-                <h2 className="mt-1 text-xl font-black">What are you editing?</h2>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Release format')}</p>
+                <h2 className="mt-1 text-xl font-black">{t('What are you editing?')}</h2>
               </div>
               <div className={`grid gap-3 ${isCollection ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
                 {(isCollection ? ['EP', 'Album'] : ['Single', 'EP', 'Album']).map((type) => {
@@ -339,11 +341,11 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                       <div key={draft.id} className="stagger-item rounded-2xl border border-white/[0.08] bg-white/[0.035] p-3" style={{ '--stagger-index': index } as React.CSSProperties}>
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/25 font-mono text-xs font-black text-zinc-400">{index + 1}</span>
-                          <input value={draft.title} onChange={(event) => updateDraft(draft.id, { title: event.target.value })} placeholder="Track title" className={`${compactFieldClass} min-w-0 flex-1`} />
+                          <input value={draft.title} onChange={(event) => updateDraft(draft.id, { title: event.target.value })} placeholder={t('Track title')} className={`${compactFieldClass} min-w-0 flex-1`} />
                           {isCollection && (
                             <div className="flex shrink-0">
-                              <button type="button" onClick={() => moveDraft(index, -1)} disabled={index === 0} className="control-press rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-20" aria-label="Move track up"><ArrowUp className="h-3.5 w-3.5" /></button>
-                              <button type="button" onClick={() => moveDraft(index, 1)} disabled={index === trackDrafts.length - 1} className="control-press rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-20" aria-label="Move track down"><ArrowDown className="h-3.5 w-3.5" /></button>
+                              <button type="button" onClick={() => moveDraft(index, -1)} disabled={index === 0} className="control-press rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-20" aria-label={t('Move track up')}><ArrowUp className="h-3.5 w-3.5" /></button>
+                              <button type="button" onClick={() => moveDraft(index, 1)} disabled={index === trackDrafts.length - 1} className="control-press rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-20" aria-label={t('Move track down')}><ArrowDown className="h-3.5 w-3.5" /></button>
                             </div>
                           )}
                         </div>
@@ -382,16 +384,16 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                 </section>
 
                 <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-6">
-                  <div className="mb-5"><p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Release details</p><h2 className="mt-1 text-xl font-black">Metadata and artwork</h2></div>
-                  {releaseType !== 'Single' && <div><label className={labelClass}>Album / EP title *</label><input value={releaseTitle} onChange={(event) => setReleaseTitle(event.target.value)} placeholder="Release title" className={fieldClass} /></div>}
-                  <div className={releaseType !== 'Single' ? 'mt-5' : ''}><label className={labelClass}>Release year</label><input type="number" min="1900" max={new Date().getFullYear() + 1} value={releaseYear} onChange={(event) => setReleaseYear(parseInt(event.target.value, 10) || new Date().getFullYear())} className={fieldClass} /></div>
-                  <div className="mt-5"><label className={labelClass}>Copyright / label</label><div className="flex min-w-0 max-w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] focus-within:border-[#C084FC]/70 focus-within:ring-4 focus-within:ring-[#A855F7]/10"><span className="flex shrink-0 select-none items-center border-r border-white/10 px-3 text-xs font-black sm:px-4 sm:text-sm">© {releaseYear}</span><input value={copyright} onChange={(event) => setCopyright(stripCopyrightPrefix(event.target.value))} placeholder="Your Label" className="min-w-0 flex-1 bg-transparent px-3 py-3.5 text-sm text-white outline-none placeholder:text-zinc-600 sm:px-4" /></div></div>
-                  <div className="mt-5"><label className={labelClass}>Cover artwork</label><div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row"><input value={coverUrl} onChange={(event) => setCoverUrl(event.target.value)} placeholder="Image URL or upload a file" className={`${fieldClass} min-w-0 flex-1`} /><label className="control-press flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-xs font-black text-zinc-300 hover:bg-white/10"><Upload className="h-4 w-4" /> Upload<input type="file" accept="image/*" onChange={handleCoverFileUpload} className="hidden" /></label></div></div>
+                  <div className="mb-5"><p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Release details')}</p><h2 className="mt-1 text-xl font-black">{t('Metadata and artwork')}</h2></div>
+                  {releaseType !== 'Single' && <div><label className={labelClass}>{t('Album / EP title *')}</label><input value={releaseTitle} onChange={(event) => setReleaseTitle(event.target.value)} placeholder={t('Release title')} className={fieldClass} /></div>}
+                  <div className={releaseType !== 'Single' ? 'mt-5' : ''}><label className={labelClass}>{t('Release year')}</label><input type="number" min="1900" max={new Date().getFullYear() + 1} value={releaseYear} onChange={(event) => setReleaseYear(parseInt(event.target.value, 10) || new Date().getFullYear())} className={fieldClass} /></div>
+                  <div className="mt-5"><label className={labelClass}>{t('Copyright / label')}</label><div className="flex min-w-0 max-w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] focus-within:border-[#C084FC]/70 focus-within:ring-4 focus-within:ring-[#A855F7]/10"><span className="flex shrink-0 select-none items-center border-r border-white/10 px-3 text-xs font-black sm:px-4 sm:text-sm">© {releaseYear}</span><input value={copyright} onChange={(event) => setCopyright(stripCopyrightPrefix(event.target.value))} placeholder={t('Your Label')} className="min-w-0 flex-1 bg-transparent px-3 py-3.5 text-sm text-white outline-none placeholder:text-zinc-600 sm:px-4" /></div></div>
+                  <div className="mt-5"><label className={labelClass}>{t('Cover artwork')}</label><div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row"><input value={coverUrl} onChange={(event) => setCoverUrl(event.target.value)} placeholder={t('Image URL or upload a file')} className={`${fieldClass} min-w-0 flex-1`} /><label className="control-press flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-xs font-black text-zinc-300 hover:bg-white/10"><Upload className="h-4 w-4" /> {t('Upload')}<input type="file" accept="image/*" onChange={handleCoverFileUpload} className="hidden" /></label></div></div>
                 </section>
 
                 <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-5">
-                  {loading && <div className="mb-4"><div className="mb-2 flex justify-between text-[10px] font-black uppercase tracking-wider text-zinc-500"><span>Saving release</span><span>{saveProgress}/{trackDrafts.length}</span></div><div className="h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] transition-[width]" style={{ width: `${(saveProgress / Math.max(1, trackDrafts.length)) * 100}%` }} /></div></div>}
-                  <div className="flex flex-col-reverse gap-3 sm:flex-row lg:flex-col-reverse xl:flex-row"><button type="button" onClick={onClose} disabled={loading} className="control-press rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-zinc-300 hover:bg-white/10 disabled:opacity-50">Cancel</button><button type="submit" disabled={loading || isReadingFile} className="control-press flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Saving {saveProgress}/{trackDrafts.length}</> : <><Save className="h-4 w-4" /> Save {isCollection ? 'release' : 'changes'}</>}</button></div>
+                  {loading && <div className="mb-4"><div className="mb-2 flex justify-between text-[10px] font-black uppercase tracking-wider text-zinc-500"><span>{t('Saving release')}</span><span>{saveProgress}/{trackDrafts.length}</span></div><div className="h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] transition-[width]" style={{ width: `${(saveProgress / Math.max(1, trackDrafts.length)) * 100}%` }} /></div></div>}
+                  <div className="flex flex-col-reverse gap-3 sm:flex-row lg:flex-col-reverse xl:flex-row"><button type="button" onClick={onClose} disabled={loading} className="control-press rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-zinc-300 hover:bg-white/10 disabled:opacity-50">{t('Cancel')}</button><button type="submit" disabled={loading || isReadingFile} className="control-press flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-3 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> {t('Saving')} {saveProgress}/{trackDrafts.length}</> : <><Save className="h-4 w-4" /> {t('Save')} {t(isCollection ? 'release' : 'changes')}</>}</button></div>
                 </section>
               </aside>
             </div>

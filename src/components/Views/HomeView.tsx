@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Play, Pause, Heart, Clock, ArrowLeft, ListMusic, History } from 'lucide-react';
 import { Track, Playlist, Album } from '../../types';
 import { groupTracksByRelease } from '../../utils/artistUtils';
+import { useI18n } from '../../i18n/I18nContext';
 import { LIKED_SONGS_COVER_URL } from '../../utils/profilePlaceholders';
 
 const DEFAULT_GREETING_ACCENT = '#A855F7';
@@ -103,6 +104,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenNewPlaylistModal,
   recentlyPlayed = [],
 }) => {
+  const { t } = useI18n();
   const [activeHomeSection, setActiveHomeSection] = useState<'overview' | 'playlists' | 'recent'>('overview');
   const [greetingAccent, setGreetingAccent] = useState(DEFAULT_GREETING_ACCENT);
   const [isGreetingAccentActive, setIsGreetingAccentActive] = useState(false);
@@ -146,9 +148,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   const getGreeting = () => {
     const hrs = new Date().getHours();
-    if (hrs < 12) return 'Good morning';
-    if (hrs < 18) return 'Good afternoon';
-    return 'Good evening';
+    if (hrs < 12) return t('Good morning');
+    if (hrs < 18) return t('Good afternoon');
+    return t('Good evening');
   };
 
   const filteredTracks = tracks.filter((track) => {
@@ -225,7 +227,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           onClick={() => setActiveHomeSection('overview')}
           className="control-press flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"
         >
-          <ArrowLeft className="h-4 w-4" /> Home
+          <ArrowLeft className="h-4 w-4" /> {t('Home')}
         </button>
 
         <header className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-[#2b1738] via-[#19131f] to-[#121212] p-4 shadow-2xl sm:p-8">
@@ -235,9 +237,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
               {isPlaylistScreen ? <ListMusic className="h-6 w-6 sm:h-7 sm:w-7" /> : <History className="h-6 w-6 sm:h-7 sm:w-7" />}
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">Home collection</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">{t('Home collection')}</p>
               <h1 className="mt-1 break-words text-2xl font-black leading-tight tracking-tight text-white sm:text-4xl">
-                {isPlaylistScreen ? 'All Playlists' : 'Recently Played'}
+                {t(isPlaylistScreen ? 'All Playlists' : 'Recently Played')}
               </h1>
               <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
                 {isPlaylistScreen
@@ -251,8 +253,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         {isPlaylistScreen ? (
           filteredPlaylists.length === 0 ? (
             <div className="rounded-2xl border border-white/5 bg-[#181818] p-8 text-center">
-              <p className="text-sm font-bold text-white">No playlists available</p>
-              <p className="mt-2 text-xs text-zinc-400">Create a playlist and it will appear here.</p>
+              <p className="text-sm font-bold text-white">{t('No playlists available')}</p>
+              <p className="mt-2 text-xs text-zinc-400">{t('Create a playlist and it will appear here.')}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
@@ -281,8 +283,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
           )
         ) : allRecentReleaseGroups.length === 0 ? (
           <div className="rounded-2xl border border-white/5 bg-[#181818] p-8 text-center">
-            <p className="text-sm font-bold text-white">Nothing played yet</p>
-            <p className="mt-2 text-xs text-zinc-400">Your listening history will appear here.</p>
+            <p className="text-sm font-bold text-white">{t('Nothing played yet')}</p>
+            <p className="mt-2 text-xs text-zinc-400">{t('Your listening history will appear here.')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
@@ -412,29 +414,29 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <div>
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-2xl font-extrabold text-white tracking-tight">Playlists</h2>
-            <p className="text-xs text-zinc-400">Playlists currently available in the catalog</p>
+            <h2 className="text-2xl font-extrabold text-white tracking-tight">{t('Playlists')}</h2>
+            <p className="text-xs text-zinc-400">{t('Playlists currently available in the catalog')}</p>
           </div>
           <button
             onClick={() => setActiveHomeSection('playlists')}
             className="shrink-0 text-xs font-bold uppercase tracking-wider text-zinc-400 transition-colors hover:text-white"
           >
-            Show all
+            {t('Show all')}
           </button>
         </div>
 
         {filteredPlaylists.length === 0 ? (
           <div className="p-6 rounded-2xl bg-[#181818] border border-white/5 text-center flex flex-col items-center justify-center space-y-3">
-            <p className="text-sm font-bold text-white">No Playlists Created Yet</p>
+            <p className="text-sm font-bold text-white">{t('No Playlists Created Yet')}</p>
             <p className="text-xs text-zinc-400 max-w-sm">
-              Create your first custom playlist and group your favorite songs together.
+              {t('Create your first custom playlist and group your favorite songs together.')}
             </p>
             {onOpenNewPlaylistModal && (
               <button
                 onClick={onOpenNewPlaylistModal}
                 className="px-4 py-2 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white text-xs font-extrabold shadow-md hover:opacity-90 transition-all"
               >
-                + Create Playlist
+                + {t('Create Playlist')}
               </button>
             )}
           </div>
@@ -478,12 +480,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* "Recently Played" Track Cards */}
       <div>
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="min-w-0 text-xl font-extrabold tracking-tight text-white sm:text-2xl">Recently Played</h2>
+          <h2 className="min-w-0 text-xl font-extrabold tracking-tight text-white sm:text-2xl">{t('Recently Played')}</h2>
           <button
             onClick={() => setActiveHomeSection('recent')}
             className="shrink-0 text-xs font-bold uppercase tracking-wider text-zinc-400 transition-colors hover:text-white"
           >
-            Show all
+            {t('Show all')}
           </button>
         </div>
 
@@ -560,21 +562,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* VERTEX Music Popular Tracks Chart List Table */}
       <div>
         <h2 className="text-2xl font-extrabold text-white tracking-tight mb-4">
-          Most Played on VERTEX
+          {t('Most Played on VERTEX')}
         </h2>
 
         {filteredTracks.length === 0 ? (
           <div className="p-8 rounded-2xl bg-[#181818] border border-white/5 text-center flex flex-col items-center justify-center space-y-3">
-            <p className="text-base font-bold text-white">Your Music Library is Empty</p>
+            <p className="text-base font-bold text-white">{t('Your Music Library is Empty')}</p>
             <p className="text-xs text-zinc-400 max-w-md">
-              No playable tracks have been uploaded yet. Upload a real audio file to start your library.
+              {t('No playable tracks have been uploaded yet. Upload a real audio file to start your library.')}
             </p>
             {onOpenAddTrackModal && (
               <button
                 onClick={onOpenAddTrackModal}
                 className="px-5 py-2.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white text-xs font-extrabold shadow-lg hover:opacity-90 active:scale-95 transition-all mt-2"
               >
-                + Add Your First Song
+                + {t('Add Your First Song')}
               </button>
             )}
           </div>
@@ -583,8 +585,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {/* Table Header */}
             <div className="grid grid-cols-12 gap-4 px-4 py-2.5 text-xs font-bold text-zinc-400 border-b border-white/10 uppercase tracking-wider">
               <div className="col-span-1 text-center">#</div>
-              <div className="col-span-5 sm:col-span-5">Title</div>
-              <div className="hidden sm:block sm:col-span-4">Album</div>
+              <div className="col-span-5 sm:col-span-5">{t('Title')}</div>
+              <div className="hidden sm:block sm:col-span-4">{t('Album')}</div>
               <div className="col-span-6 sm:col-span-2 flex items-center justify-end pr-2">
                 <Clock className="w-4 h-4" />
               </div>

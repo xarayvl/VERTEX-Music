@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Disc, Play, Pause, Heart } from 'lucide-react';
 import { Track, Playlist, Artist } from '../../types';
 import { BROWSE_CATEGORIES } from '../../data/browseCategories';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface BrowseViewProps {
   tracks: Track[];
@@ -28,6 +29,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   onToggleLike,
   onSelectArtist,
 }) => {
+  const { t } = useI18n();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const categoryGenres: Record<string, string[]> = {
@@ -51,13 +53,13 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     <div className="space-y-7 pb-12 select-none sm:space-y-8">
       {/* Header */}
       <div>
-        <h1 className="break-words text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Explore & Browse</h1>
-        <p className="text-xs text-zinc-400 mt-1">Discover new music by genre and artist</p>
+        <h1 className="break-words text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{t('Explore & Browse')}</h1>
+        <p className="text-xs text-zinc-400 mt-1">{t('Discover new music by genre and artist')}</p>
       </div>
 
       {/* VERTEX Music Colorful Genre Cards Grid */}
       <div>
-        <h2 className="text-2xl font-extrabold text-white tracking-tight mb-4">Browse All</h2>
+        <h2 className="text-2xl font-extrabold text-white tracking-tight mb-4">{t('Browse All')}</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
           {BROWSE_CATEGORIES.map((cat, idx) => (
             <div
@@ -72,7 +74,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
               } bg-gradient-to-br ${cat.gradient}`}
             >
               <h3 className="max-w-[72%] break-words text-base font-black leading-tight tracking-tight text-white sm:text-xl">
-                {cat.name}
+                {t(cat.name)}
               </h3>
 
               {/* Angled Album Artwork or Disc Badge */}
@@ -89,21 +91,21 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       <div>
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2 className="min-w-0 break-words text-lg font-extrabold tracking-tight text-white sm:text-xl">
-            {selectedCategory} Tracks
+            {t(selectedCategory)} {t('Tracks')}
           </h2>
           <button
             onClick={() => setSelectedCategory(null)}
             className="shrink-0 text-xs font-bold text-[#D946EF] hover:underline"
           >
-            Clear Filter
+            {t('Clear Filter')}
           </button>
         </div>
 
         {filteredTracks.length === 0 ? (
           <div className="p-8 rounded-2xl bg-[#181818]/70 border border-white/5 text-center text-zinc-400">
             <Disc className="w-10 h-10 mx-auto text-zinc-600 mb-2" />
-            <p className="text-sm font-bold text-white">No tracks in this genre yet</p>
-            <p className="text-xs text-zinc-500 mt-1">Try another category or check back later.</p>
+            <p className="text-sm font-bold text-white">{t('No tracks in this genre yet')}</p>
+            <p className="text-xs text-zinc-500 mt-1">{t('Try another category or check back later.')}</p>
           </div>
         ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -155,7 +157,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                     onPlayTrack(track);
                   }}
                   className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white shadow transition-transform hover:scale-105"
-                  title={isThisTrackPlaying ? 'Pause' : 'Play'}
+                  title={t(isThisTrackPlaying ? 'Pause' : 'Play')}
                 >
                   {isThisTrackPlaying ? (
                     <Pause className="w-4 h-4 fill-white" />
@@ -174,7 +176,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
       {/* Artists Section */}
       <div>
-        <h2 className="text-xl font-extrabold text-white tracking-tight mb-4">Artists</h2>
+        <h2 className="text-xl font-extrabold text-white tracking-tight mb-4">{t('Artists')}</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
           {artists.map((artist) => {
             const artistTrack = tracks.find((track) => track.userId === artist.id);
@@ -197,7 +199,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 <h4 className="text-sm font-bold text-white truncate w-full group-hover:text-[#D946EF]">
                   {artist.name}
                 </h4>
-                <p className="text-xs text-zinc-400 mt-1">Artist</p>
+                <p className="text-xs text-zinc-400 mt-1">{t('Artist')}</p>
               </div>
             );
           })}

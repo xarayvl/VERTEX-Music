@@ -16,6 +16,7 @@ import {
   PanelRight,
 } from 'lucide-react';
 import { Track } from '../../types';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface SpotifyPlayerBarProps {
   currentTrack: Track | null;
@@ -66,6 +67,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
   onToggleRightSidebar,
   isRightSidebarOpen = false,
 }) => {
+  const { t } = useI18n();
   const [isMuted, setIsMuted] = useState(false);
   const [prevVol, setPrevVol] = useState(volume);
 
@@ -98,7 +100,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
         <div
           onClick={onOpenSongScreen}
           className="relative w-14 h-14 rounded-md overflow-hidden flex-shrink-0 shadow-lg bg-zinc-800 cursor-pointer group"
-          title="Click to expand Song Screen"
+          title={t('Click to expand Song Screen')}
         >
           {currentTrack ? (
             <>
@@ -109,12 +111,12 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
               />
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
-                Expand
+                {t('Expand')}
               </div>
             </>
           ) : (
             <div className="w-full h-full flex items-center justify-center text-zinc-600 font-bold text-xs">
-              No Track
+              {t('No Track')}
             </div>
           )}
         </div>
@@ -122,10 +124,10 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
         <div
           onClick={onOpenSongScreen}
           className="min-w-0 flex-1 cursor-pointer flex flex-col justify-center"
-          title="Click to expand Song Screen"
+          title={t('Click to expand Song Screen')}
         >
           <h4 className="text-sm font-bold text-white truncate tracking-tight hover:text-[#C084FC] transition-colors leading-tight">
-            {currentTrack?.title || 'No Track Playing'}
+            {currentTrack?.title || t('No Track Playing')}
           </h4>
           <p
             data-artist-id={currentTrack?.userId || undefined}
@@ -138,7 +140,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
             }}
             className="text-xs text-zinc-400 truncate hover:text-[#C084FC] hover:underline transition-colors leading-tight mt-0.5 cursor-pointer"
           >
-            {currentTrack?.artist || 'Select or add a song'}
+            {currentTrack?.artist || t('Select or add a song')}
           </p>
         </div>
 
@@ -146,7 +148,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
           <button
             onClick={() => onToggleLike(currentTrack.id)}
             className="p-2 text-zinc-400 hover:text-white transition-colors flex-shrink-0 flex items-center justify-center rounded-full hover:bg-white/10 active:scale-90 ml-1"
-            title={currentTrack.isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+            title={t(currentTrack.isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs')}
           >
             <Heart
               className={`w-5 h-5 transition-all ${
@@ -169,7 +171,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
             className={`p-1.5 rounded-full transition-colors relative group ${
               isShuffle ? 'text-[#D946EF]' : 'text-zinc-400 hover:text-white'
             }`}
-            title="Shuffle"
+            title={t('Shuffle')}
           >
             <Shuffle className="w-4 h-4" />
             {isShuffle && (
@@ -181,7 +183,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
           <button
             onClick={onPrev}
             className="text-zinc-400 hover:text-white transition-colors active:scale-90"
-            title="Previous Track"
+            title={t('Previous Track')}
           >
             <SkipBack className="w-5 h-5 fill-current" />
           </button>
@@ -190,7 +192,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
           <button
             onClick={onTogglePlay}
             className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all"
-            title={isPlaying ? 'Pause' : 'Play'}
+            title={t(isPlaying ? 'Pause' : 'Play')}
           >
             {isPlaying ? (
               <Pause className="w-4 h-4 fill-black text-black" />
@@ -203,7 +205,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
           <button
             onClick={onNext}
             className="text-zinc-400 hover:text-white transition-colors active:scale-90"
-            title="Next Track"
+            title={t('Next Track')}
           >
             <SkipForward className="w-5 h-5 fill-current" />
           </button>
@@ -214,20 +216,20 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
             className={`p-1.5 rounded-full transition-colors relative group ${
               repeatMode !== 'off' ? 'text-[#D946EF]' : 'text-zinc-400 hover:text-white'
             }`}
-            title={
+            title={t(
               repeatMode === 'off'
                 ? 'Enable album or queue repeat'
                 : repeatMode === 'all'
                   ? 'Album or queue repeat is on · Click for song repeat'
                   : 'Song repeat is on · Click to turn repeat off'
-            }
-            aria-label={
+            )}
+            aria-label={t(
               repeatMode === 'off'
                 ? 'Repeat off. Enable album or queue repeat'
                 : repeatMode === 'all'
                   ? 'Album or queue repeat on. Enable song repeat'
                   : 'Song repeat on. Turn repeat off'
-            }
+            )}
           >
             {repeatMode === 'one' ? (
               <Repeat1 className="w-4 h-4" />
@@ -269,7 +271,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
               value={progress || 0}
               onChange={(e) => onSeek(parseFloat(e.target.value))}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-              title="Track progress scrubber"
+              title={t('Track progress scrubber')}
             />
           </div>
 
@@ -283,7 +285,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
         <button
           onClick={onOpenEQ}
           className="p-1.5 rounded-full hover:text-white transition-colors"
-          title="Audio Equalizer"
+          title={t('Audio Equalizer')}
         >
           <SlidersHorizontal className="w-4 h-4" />
         </button>
@@ -292,7 +294,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
         <button
           onClick={onOpenDeviceSelector}
           className="p-1.5 rounded-full hover:text-white transition-colors text-[#D946EF]"
-          title={`Active Device: ${activeDeviceName}`}
+          title={t('Active Device: {{device}}', { device: activeDeviceName })}
         >
           <Laptop2 className="w-4 h-4" />
         </button>
@@ -302,7 +304,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
           <button
             onClick={onToggleRightSidebar}
             className={`p-1.5 rounded-full transition-colors ${isRightSidebarOpen ? 'text-[#D946EF] bg-white/5' : 'hover:text-white'}`}
-            title="Now Playing View"
+            title={t('Now Playing View')}
           >
             <PanelRight className="w-4 h-4" />
           </button>
@@ -342,7 +344,7 @@ export const SpotifyPlayerBar: React.FC<SpotifyPlayerBarProps> = ({
                 onVolumeChange(parseFloat(e.target.value));
               }}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-              title="Volume control"
+              title={t('Volume control')}
             />
           </div>
         </div>

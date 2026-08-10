@@ -1,6 +1,7 @@
 import React from 'react';
 import { Check, RotateCcw, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { AudioEQ } from '../../types';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface AudioEQModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
   eq,
   onUpdateEQ,
 }) => {
+  const { t } = useI18n();
   if (!isOpen) return null;
 
   const presets: AudioEQ['preset'][] = [
@@ -75,16 +77,16 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
             <SlidersHorizontal className="h-7 w-7 shrink-0 text-[#D946EF]" />
             <div className="min-w-0">
               <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-[#D8B4FE] sm:gap-2 sm:text-[10px] sm:tracking-[0.24em]">
-                <Sparkles className="h-3.5 w-3.5" /> Audio engine
+                <Sparkles className="h-3.5 w-3.5" /> {t('Audio engine')}
               </div>
-              <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">Equalizer</h1>
-              <p className="mt-1 text-[11px] leading-4 text-zinc-400 sm:text-sm">Tune your sound without leaving the main player.</p>
+              <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">{t('Equalizer')}</h1>
+              <p className="mt-1 text-[11px] leading-4 text-zinc-400 sm:text-sm">{t('Tune your sound without leaving the main player.')}</p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="control-press shrink-0 rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white"
-            aria-label="Close equalizer"
+            aria-label={t('Close equalizer')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -94,14 +96,14 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
           <aside className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
             <div className="mb-5 flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Presets</p>
-                <p className="mt-1 text-sm text-zinc-500">Fast profiles for different listening styles.</p>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Presets')}</p>
+                <p className="mt-1 text-sm text-zinc-500">{t('Fast profiles for different listening styles.')}</p>
               </div>
               <button
                 onClick={() => handleSelectPreset('Flat')}
                 className="control-press flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-bold text-zinc-300 hover:bg-white/10 hover:text-white"
               >
-                <RotateCcw className="h-3.5 w-3.5" /> Reset
+                <RotateCcw className="h-3.5 w-3.5" /> {t('Reset')}
               </button>
             </div>
 
@@ -119,7 +121,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
                         : 'border-white/[0.08] bg-white/[0.035] text-zinc-300 hover:border-white/[0.15] hover:bg-white/[0.07]'
                     }`}
                   >
-                    <span className="min-w-0 truncate">{preset}</span>
+                    <span className="min-w-0 truncate">{t(preset)}</span>
                     {isActive && <Check className="h-4 w-4 shrink-0 text-[#E879F9]" />}
                   </button>
                 );
@@ -130,11 +132,11 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
           <div className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-5 sm:p-7">
             <div className="mb-7 flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-end min-[360px]:justify-between">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Custom curve</p>
-                <h2 className="mt-1 text-xl font-black tracking-tight">Frequency controls</h2>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Custom curve')}</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight">{t('Frequency controls')}</h2>
               </div>
               <span className="rounded-full border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#F0ABFC]">
-                Live processing
+                {t('Live processing')}
               </span>
             </div>
 
@@ -150,7 +152,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
                   >
                     <div className="mb-4 flex min-w-0 items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-black text-white">{band.label}</p>
+                        <p className="text-sm font-black text-white">{t(band.label)}</p>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{band.frequency}</p>
                       </div>
                       <span className="shrink-0 rounded-lg bg-white/5 px-2 py-1 font-mono text-xs font-bold text-[#E879F9]">
@@ -174,7 +176,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
                         value={value}
                         onChange={(event) => updateBand(band.key, Number(event.target.value))}
                         className="absolute inset-0 h-full w-full cursor-ns-resize opacity-0"
-                        aria-label={`${band.label} level`}
+                        aria-label={`${t(band.label)} ${t('level')}`}
                       />
                     </div>
                   </div>
@@ -186,7 +188,7 @@ export const AudioEQModal: React.FC<AudioEQModalProps> = ({
               onClick={onClose}
               className="control-press mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] py-3.5 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110"
             >
-              <Check className="h-4 w-4" /> Apply settings
+              <Check className="h-4 w-4" /> {t('Apply settings')}
             </button>
           </div>
         </div>

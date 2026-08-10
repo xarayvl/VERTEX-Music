@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Track, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onLogout,
   onOpenAuthModal,
 }) => {
+  const { locale, t } = useI18n();
   const [isEditing, setIsEditing] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
@@ -118,13 +120,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#D946EF]/25 bg-[#D946EF]/15 text-[#F0ABFC]">
               <UserRound className="h-6 w-6" />
             </div>
-            <button onClick={onClose} className="rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white" aria-label="Close profile panel">
+            <button onClick={onClose} className="rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white" aria-label={t('Close profile panel')}>
               <X className="h-5 w-5" />
             </button>
           </div>
-          <p className="mt-6 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">Your profile</p>
-          <h2 id="profile-auth-title" className="mt-2 text-2xl font-black tracking-tight text-white">Sign in to make it yours</h2>
-          <p className="mt-2 max-w-md text-sm leading-6 text-zinc-400">View your listening activity, update your photo and personalize how other people see you.</p>
+          <p className="mt-6 text-[10px] font-black uppercase tracking-[0.24em] text-[#D8B4FE]">{t('Your profile')}</p>
+          <h2 id="profile-auth-title" className="mt-2 text-2xl font-black tracking-tight text-white">{t('Sign in to make it yours')}</h2>
+          <p className="mt-2 max-w-md text-sm leading-6 text-zinc-400">{t('View your listening activity, update your photo and personalize how other people see you.')}</p>
           <button
             onClick={() => {
               onClose();
@@ -133,7 +135,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] py-3.5 text-sm font-black text-white shadow-lg shadow-[#A855F7]/20 transition-colors hover:brightness-110"
           >
             <Sparkles className="h-4 w-4" />
-            Sign In / Register
+            {t('Sign In / Register')}
           </button>
         </section>
       </div>
@@ -141,8 +143,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   }
 
   const recent = recentTracks.filter((track) => Boolean(track?.id)).slice(0, 5);
-  const accountType = userProfile.isArtist ? 'Artist' : 'Listener';
-  const joinedDate = userProfile.createdAt ? new Date(userProfile.createdAt).toLocaleDateString() : 'Unavailable';
+  const accountType = t(userProfile.isArtist ? 'Artist' : 'Listener');
+  const joinedDate = userProfile.createdAt ? new Date(userProfile.createdAt).toLocaleDateString(locale) : t('Unavailable');
   const stats = [
     { label: 'Hours', value: ((userProfile.stats?.secondsListened || 0) / 3600).toFixed(1), icon: Clock3 },
     { label: 'Plays', value: userProfile.stats?.tracksPlayed || 0, icon: Headphones },
@@ -165,10 +167,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/15 sm:hidden" />
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.26em] text-[#D8B4FE]">Personal space</p>
-              <h2 id="profile-panel-title" className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl">Profile & account</h2>
+              <p className="text-[9px] font-black uppercase tracking-[0.26em] text-[#D8B4FE]">{t('Personal space')}</p>
+              <h2 id="profile-panel-title" className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl">{t('Profile & account')}</h2>
             </div>
-            <button onClick={onClose} className="rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white" aria-label="Close profile panel">
+            <button onClick={onClose} className="rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white" aria-label={t('Close profile panel')}>
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -217,19 +219,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <form onSubmit={handleSave} className="rounded-[1.75rem] border border-[#D946EF]/25 bg-black/25 p-5 animate-in fade-in slide-in-from-top-2 duration-200 sm:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">Make it personal</p>
-                    <h3 className="mt-1 text-base font-black text-white">Edit profile details</h3>
+                    <p className="text-[9px] font-black uppercase tracking-[0.22em] text-[#D8B4FE]">{t('Make it personal')}</p>
+                    <h3 className="mt-1 text-base font-black text-white">{t('Edit profile details')}</h3>
                   </div>
-                  <span className="hidden rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold text-zinc-400 sm:inline">Changes save to your account</span>
+                  <span className="hidden rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold text-zinc-400 sm:inline">{t('Changes save to your account')}</span>
                 </div>
 
                 <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <label className="space-y-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Display name</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">{t('Display name')}</span>
                     <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={80} className="w-full rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm font-semibold text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-[#D946EF]/60 focus:bg-white/[0.08]" />
                   </label>
                   <label className="space-y-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Username</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">{t('Username')}</span>
                     <div className="relative">
                       <AtSign className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                       <input value={username} onChange={(event) => setUsername(event.target.value)} maxLength={32} className="w-full rounded-2xl border border-white/10 bg-white/[0.055] py-3 pl-10 pr-4 text-sm font-semibold text-white outline-none transition-colors focus:border-[#D946EF]/60 focus:bg-white/[0.08]" />
@@ -239,10 +241,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
                 <label className="mt-4 block space-y-2">
                   <span className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-zinc-400">
-                    <span>Bio</span>
+                    <span>{t('Bio')}</span>
                     <span className="font-semibold normal-case tracking-normal text-zinc-600">{bio.length}/500</span>
                   </span>
-                  <textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={500} rows={3} className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm leading-6 text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-[#D946EF]/60 focus:bg-white/[0.08]" placeholder="Tell people about yourself..." />
+                  <textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={500} rows={3} className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm leading-6 text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-[#D946EF]/60 focus:bg-white/[0.08]" placeholder={t('Tell people about yourself...')} />
                 </label>
 
                 <div className="mt-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -251,7 +253,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                       <Upload className="h-4 w-4" />
                       {isReadingAvatarFile ? 'Reading photo…' : 'Choose photo'}
                     </button>
-                    <button type="button" onClick={() => setAvatarUrl('')} className="rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-white">Remove photo</button>
+                    <button type="button" onClick={() => setAvatarUrl('')} className="rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-white">{t('Remove photo')}</button>
                     <input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarFileUpload} className="hidden" />
                   </div>
                   <button type="submit" className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-[#A855F7]/20 transition-colors hover:brightness-110">
@@ -275,16 +277,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <section className="rounded-[1.75rem] border border-white/[0.08] bg-white/[0.035] p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">Listening activity</p>
-                  <h3 className="mt-1 text-base font-black text-white">Recently played</h3>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">{t('Listening activity')}</p>
+                  <h3 className="mt-1 text-base font-black text-white">{t('Recently played')}</h3>
                 </div>
                 <Headphones className="h-5 w-5 text-zinc-600" />
               </div>
 
               {recent.length === 0 ? (
                 <div className="mt-4 rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center">
-                  <p className="text-sm font-bold text-zinc-400">Your listening history is quiet</p>
-                  <p className="mt-1 text-xs text-zinc-600">Played songs will appear here.</p>
+                  <p className="text-sm font-bold text-zinc-400">{t('Your listening history is quiet')}</p>
+                  <p className="mt-1 text-xs text-zinc-600">{t('Played songs will appear here.')}</p>
                 </div>
               ) : (
                 <div className="mt-3 grid gap-1 sm:grid-cols-2">
@@ -311,7 +313,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <LogOut className="h-4 w-4" />
             Log out
           </button>
-          <button onClick={onClose} className="rounded-xl border border-white/10 bg-white/[0.07] px-5 py-2.5 text-xs font-black text-white transition-colors hover:bg-white/15">Done</button>
+          <button onClick={onClose} className="rounded-xl border border-white/10 bg-white/[0.07] px-5 py-2.5 text-xs font-black text-white transition-colors hover:bg-white/15">{t('Done')}</button>
         </footer>
       </section>
     </div>

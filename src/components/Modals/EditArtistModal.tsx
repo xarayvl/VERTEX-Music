@@ -17,6 +17,7 @@ import {
 import { Artist, Track, UserProfile } from '../../types';
 import { getArtistStats } from '../../utils/artistUtils';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface EditArtistModalProps {
   isOpen: boolean;
@@ -49,6 +50,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
   onClose,
   onSave,
 }) => {
+  const { t } = useI18n();
   const bannerFileInputRef = useRef<HTMLInputElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const closeTimerRef = useRef<number | null>(null);
@@ -168,21 +170,21 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                 <Sparkles className="h-3.5 w-3.5" /> Artist workspace
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="break-words text-xl font-black tracking-tight sm:text-3xl">Edit artist profile</h1>
+                <h1 className="break-words text-xl font-black tracking-tight sm:text-3xl">{t('Edit artist profile')}</h1>
                 {artistVerified && (
                   <span className="flex items-center gap-1 rounded-full border border-blue-400/25 bg-blue-500/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-blue-300">
                     <ShieldCheck className="h-3.5 w-3.5" /> Verified
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-[11px] leading-4 text-zinc-400 sm:text-sm">Shape how listeners see your identity, story and featured release.</p>
+              <p className="mt-1 text-[11px] leading-4 text-zinc-400 sm:text-sm">{t('Shape how listeners see your identity, story and featured release.')}</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="control-press shrink-0 rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white"
-            aria-label="Close artist profile editor"
+            aria-label={t('Close artist profile editor')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -224,7 +226,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                     )}
                   </div>
                   <div className="min-w-0 pb-1">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E9D5FF]">Live preview</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E9D5FF]">{t('Live preview')}</p>
                     <h2 className="mt-1 truncate text-2xl font-black sm:text-3xl">{artistName}</h2>
                     <p className="mt-1 truncate text-xs font-semibold text-zinc-300">{genre.trim() || 'Add your primary genre'}</p>
                   </div>
@@ -235,14 +237,14 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                 <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-4">
                   <div className="flex items-center gap-2 text-zinc-400">
                     <Radio className="h-4 w-4 text-[#D946EF]" />
-                    <span className="text-[10px] font-black uppercase tracking-wider">Total streams</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider">{t('Total streams')}</span>
                   </div>
                   <p className="mt-2 text-xl font-black">{totalPlays.toLocaleString()}</p>
                 </div>
                 <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-4">
                   <div className="flex items-center gap-2 text-zinc-400">
                     <Music className="h-4 w-4 text-[#D946EF]" />
-                    <span className="text-[10px] font-black uppercase tracking-wider">Releases</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider">{t('Releases')}</span>
                   </div>
                   <p className="mt-2 text-xl font-black">{artistTracks.length.toLocaleString()}</p>
                 </div>
@@ -255,7 +257,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                   <Star className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Artist pick preview</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">{t('Artist pick preview')}</p>
                   <h3 className="mt-1 truncate text-sm font-black text-white">{selectedPick?.title || 'No featured track selected'}</h3>
                   <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
                     {artistPickComment.trim() || 'Choose a release and add a short note for your listeners.'}
@@ -268,8 +270,8 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
           <div className="space-y-6">
             <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-7">
               <div className="mb-6">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Visual identity</p>
-                <h2 className="mt-1 text-xl font-black tracking-tight">Profile artwork</h2>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Visual identity')}</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight">{t('Profile artwork')}</h2>
               </div>
 
               <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
@@ -279,18 +281,18 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                       <User className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Artist / stage name</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">{t('Artist / stage name')}</p>
                       <p className="truncate text-sm font-black text-white">{artistName}</p>
                     </div>
                   </div>
-                  <span className="w-fit rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-400">Synced to account</span>
+                  <span className="w-fit rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-400">{t('Synced to account')}</span>
                 </div>
               </div>
 
               <div className="mt-5 grid gap-5 sm:grid-cols-2">
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-3">
-                    <label className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400">Avatar image</label>
+                    <label className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400">{t('Avatar image')}</label>
                     <button
                       type="button"
                       onClick={() => avatarFileInputRef.current?.click()}
@@ -310,14 +312,14 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                     type="text"
                     value={avatarUrl}
                     onChange={(event) => setAvatarUrl(event.target.value)}
-                    placeholder="Paste avatar image URL"
+                    placeholder={t('Paste avatar image URL')}
                     className={fieldClass}
                   />
                 </div>
 
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-3">
-                    <label className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400">Header banner</label>
+                    <label className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-400">{t('Header banner')}</label>
                     <button
                       type="button"
                       onClick={() => bannerFileInputRef.current?.click()}
@@ -337,7 +339,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                     type="text"
                     value={bannerUrl}
                     onChange={(event) => setBannerUrl(event.target.value)}
-                    placeholder="Paste banner image URL"
+                    placeholder={t('Paste banner image URL')}
                     className={fieldClass}
                   />
                 </div>
@@ -346,28 +348,28 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
 
             <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-5 sm:p-7">
               <div className="mb-6">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Profile story</p>
-                <h2 className="mt-1 text-xl font-black tracking-tight">About your sound</h2>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Profile story')}</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight">{t('About your sound')}</h2>
               </div>
 
               <div>
-                <label className={labelClass}>Primary genre / style</label>
+                <label className={labelClass}>{t('Primary genre / style')}</label>
                 <input
                   type="text"
                   value={genre}
                   onChange={(event) => setGenre(event.target.value)}
-                  placeholder="e.g. Synthwave / Cyberpunk"
+                  placeholder={t('e.g. Synthwave / Cyberpunk')}
                   className={fieldClass}
                 />
               </div>
 
               <div className="mt-5">
-                <label className={labelClass}>Artist bio</label>
+                <label className={labelClass}>{t('Artist bio')}</label>
                 <textarea
                   rows={5}
                   value={artistBio}
                   onChange={(event) => setArtistBio(event.target.value)}
-                  placeholder="Tell listeners about your story, influences and releases..."
+                  placeholder={t('Tell listeners about your story, influences and releases...')}
                   className={`${fieldClass} resize-none`}
                 />
                 <div className="mt-2 flex justify-end text-[10px] font-semibold text-zinc-600">{artistBio.length} characters</div>
@@ -380,21 +382,21 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                   <Star className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Artist pick</p>
-                  <h2 className="mt-0.5 text-lg font-black">Feature a release</h2>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Artist pick')}</p>
+                  <h2 className="mt-0.5 text-lg font-black">{t('Feature a release')}</h2>
                 </div>
               </div>
 
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
-                  <label className={labelClass}>Featured track</label>
+                  <label className={labelClass}>{t('Featured track')}</label>
                   {artistTracks.length > 0 ? (
                     <select
                       value={artistPickTrackId}
                       onChange={(event) => setArtistPickTrackId(event.target.value)}
                       className={fieldClass}
                     >
-                      <option value="">No featured track</option>
+                      <option value="">{t('No featured track')}</option>
                       {artistTracks.map((track) => (
                         <option key={track.id} value={track.id}>
                           {track.title} ({track.releaseTitle || (track.album === 'Single' ? track.title : track.album) || 'Single'})
@@ -402,16 +404,16 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                       ))}
                     </select>
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.025] px-4 py-3.5 text-sm text-zinc-500">Upload a release before choosing an artist pick.</div>
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.025] px-4 py-3.5 text-sm text-zinc-500">{t('Upload a release before choosing an artist pick.')}</div>
                   )}
                 </div>
                 <div>
-                  <label className={labelClass}>Pick note</label>
+                  <label className={labelClass}>{t('Pick note')}</label>
                   <input
                     type="text"
                     value={artistPickComment}
                     onChange={(event) => setArtistPickComment(event.target.value)}
-                    placeholder="e.g. Listen to my latest single"
+                    placeholder={t('e.g. Listen to my latest single')}
                     className={fieldClass}
                   />
                 </div>
@@ -420,8 +422,8 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
 
             <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-7">
               <div className="mb-6">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Social presence</p>
-                <h2 className="mt-1 text-xl font-black tracking-tight">Links listeners can visit</h2>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Social presence')}</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight">{t('Links listeners can visit')}</h2>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
@@ -464,7 +466,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                 onClick={onClose}
                 className="control-press rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-zinc-300 hover:bg-white/10 hover:text-white"
               >
-                Cancel
+                {t('Cancel')}
               </button>
               <button
                 type="submit"
@@ -472,7 +474,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                 className="control-press flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-6 py-3 text-sm font-black shadow-[0_14px_36px_rgba(168,85,247,0.24)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {savedSuccess ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                {savedSuccess ? 'Profile saved' : 'Save profile'}
+                {t(savedSuccess ? 'Profile saved' : 'Save profile')}
               </button>
             </div>
           </div>

@@ -33,6 +33,7 @@ import { SiteTooltip } from './components/SiteTooltip';
 import { NowPlayingSidebar } from './components/Player/NowPlayingSidebar';
 import { DEFAULT_AVATAR_URL } from './utils/profilePlaceholders';
 import { getReleaseTracksInPlaybackOrder } from './utils/artistUtils';
+import { useI18n } from './i18n/I18nContext';
 
 const LEFT_SIDEBAR_MIN_WIDTH = 96;
 const LEFT_SIDEBAR_MAX_WIDTH = 520;
@@ -90,6 +91,7 @@ const normalizePublicArtist = (raw: any): Artist => ({
 });
 
 export default function App() {
+  const { t } = useI18n();
   // Navigation State with History Stack
   const [navHistory, setNavHistory] = useState<TabType[]>(['home']);
   const [historyIndex, setHistoryIndex] = useState<number>(0);
@@ -993,7 +995,7 @@ export default function App() {
             }
             return current;
           });
-          showToast('This track no longer exists.');
+          showToast(t('This track no longer exists.'));
           return;
         }
         if (!response.ok) throw new Error(`Play request failed (${response.status})`);
@@ -1262,7 +1264,7 @@ export default function App() {
   const handleToggleLike = async (trackId: string) => {
     const target = tracks.find((track) => track.id === trackId);
     if (!target) return showToast('404 — Track not found.');
-    if (!userProfile) return showToast('Sign in to save tracks.');
+    if (!userProfile) return showToast(t('Sign in to save tracks.'));
 
     const previousTracks = tracks;
     const previousCurrentTrack = currentTrack;
@@ -1287,13 +1289,13 @@ export default function App() {
       if (!response.ok) {
         setTracks(previousTracks);
         setCurrentTrack(previousCurrentTrack);
-        showToast(data?.error || 'Could not update liked tracks.');
+        showToast(data?.error || t('Could not update liked tracks.'));
       }
     } catch (error) {
       console.error('Error syncing liked tracks:', error);
       setTracks(previousTracks);
       setCurrentTrack(previousCurrentTrack);
-      showToast('Could not update liked tracks.');
+      showToast(t('Could not update liked tracks.'));
     }
   };
 
@@ -1304,7 +1306,7 @@ export default function App() {
       return false;
     }
     if (!userProfile) {
-      showToast('Sign in to save tracks.');
+      showToast(t('Sign in to save tracks.'));
       return false;
     }
 
@@ -1329,7 +1331,7 @@ export default function App() {
       if (!response.ok) {
         setTracks(previousTracks);
         setCurrentTrack(previousCurrentTrack);
-        showToast(data?.error || 'Could not update liked tracks.');
+        showToast(data?.error || t('Could not update liked tracks.'));
         return false;
       }
       return true;
@@ -1337,7 +1339,7 @@ export default function App() {
       console.error('Error syncing release liked tracks:', error);
       setTracks(previousTracks);
       setCurrentTrack(previousCurrentTrack);
-      showToast('Could not update liked tracks.');
+      showToast(t('Could not update liked tracks.'));
       return false;
     }
   };
@@ -1482,7 +1484,7 @@ export default function App() {
       return false;
     }
     if (!userProfile || existing.userId !== userProfile.id) {
-      showToast('Only the playlist owner can edit it.');
+      showToast(t('Only the playlist owner can edit it.'));
       return false;
     }
 
@@ -1500,15 +1502,15 @@ export default function App() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.playlist) {
-        showToast(data?.error || 'Playlist update failed.');
+        showToast(data?.error || t('Playlist update failed.'));
         return false;
       }
       setPlaylists((previous) => previous.map((playlist) => (playlist.id === data.playlist.id ? data.playlist : playlist)));
-      showToast('Playlist updated.');
+      showToast(t('Playlist updated.'));
       return true;
     } catch (error) {
       console.error('Error updating playlist:', error);
-      showToast('Playlist update failed.');
+      showToast(t('Playlist update failed.'));
       return false;
     } finally {
       activePlaylistMutationsRef.current = Math.max(0, activePlaylistMutationsRef.current - 1);
@@ -1519,13 +1521,13 @@ export default function App() {
   const handleDeletePlaylist = async (playlistId: string) => {
     const target = playlists.find((playlist) => playlist.id === playlistId);
     if (!target) return showToast('404 — Playlist not found.');
-    if (!userProfile || target.userId !== userProfile.id) return showToast('Only the playlist owner can delete it.');
+    if (!userProfile || target.userId !== userProfile.id) return showToast(t('Only the playlist owner can delete it.'));
 
     activePlaylistMutationsRef.current += 1;
     try {
       const response = await fetch(`/api/playlists/${playlistId}`, { method: 'DELETE', headers: getAuthHeaders() });
       const data = await response.json().catch(() => null);
-      if (!response.ok) return showToast(data?.error || 'Playlist delete failed.');
+      if (!response.ok) return showToast(data?.error || t('Playlist delete failed.'));
       setPlaylists((previous) => previous.filter((playlist) => playlist.id !== playlistId));
       if (selectedPlaylistId === playlistId) {
         setSelectedPlaylistId(null);
@@ -1533,7 +1535,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error deleting playlist:', error);
-      showToast('Playlist delete failed.');
+      showToast(t('Playlist delete failed.'));
     } finally {
       activePlaylistMutationsRef.current = Math.max(0, activePlaylistMutationsRef.current - 1);
       playlistMutationVersionRef.current += 1;
@@ -1547,7 +1549,7 @@ export default function App() {
       return null;
     }
     if (!userProfile || target.userId !== userProfile.id) {
-      showToast('Only the playlist owner can change its tracks.');
+      showToast(t('Only the playlist owner can change its tracks.'));
       return null;
     }
 
@@ -1560,14 +1562,14 @@ export default function App() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.playlist) {
-        showToast(data?.error || 'Playlist update failed.');
+        showToast(data?.error || t('Playlist update failed.'));
         return null;
       }
       setPlaylists((previous) => previous.map((playlist) => (playlist.id === playlistId ? data.playlist : playlist)));
       return data.playlist;
     } catch (error) {
       console.error('Error changing playlist tracks:', error);
-      showToast('Playlist update failed.');
+      showToast(t('Playlist update failed.'));
       return null;
     } finally {
       activePlaylistMutationsRef.current = Math.max(0, activePlaylistMutationsRef.current - 1);
@@ -1603,7 +1605,7 @@ export default function App() {
   };
 
   const handleCreatePlaylist = async (draft: NewPlaylistDraft) => {
-    if (!userProfile) return showToast('Sign in to create a playlist.');
+    if (!userProfile) return showToast(t('Sign in to create a playlist.'));
     activePlaylistMutationsRef.current += 1;
     try {
       const response = await fetch('/api/playlists', {
@@ -1617,7 +1619,7 @@ export default function App() {
         }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.playlist) return showToast(data?.error || 'Playlist creation failed.');
+      if (!response.ok || !data?.playlist) return showToast(data?.error || t('Playlist creation failed.'));
       const createdPlaylist: Playlist = {
         ...data.playlist,
         userId: String(data.playlist.userId || userProfile.id),
@@ -1630,7 +1632,7 @@ export default function App() {
       showToast(`Created "${createdPlaylist.title}" and added it to Your Library.`);
     } catch (error) {
       console.error('Error creating playlist:', error);
-      showToast('Playlist creation failed.');
+      showToast(t('Playlist creation failed.'));
     } finally {
       activePlaylistMutationsRef.current = Math.max(0, activePlaylistMutationsRef.current - 1);
       playlistMutationVersionRef.current += 1;
@@ -1734,7 +1736,7 @@ export default function App() {
         handlePlayTrack(track);
         setIsSongScreenOpen(true);
       } else {
-        showToast('That song link is invalid or the track was removed.');
+        showToast(t('That song link is invalid or the track was removed.'));
       }
       window.history.replaceState({}, '', '/');
     } else if (playlistMatch) {
@@ -1744,7 +1746,7 @@ export default function App() {
       if (playlist) {
         handleSelectPlaylist(playlist);
       } else {
-        showToast('That playlist link is invalid or was removed.');
+        showToast(t('That playlist link is invalid or was removed.'));
       }
       window.history.replaceState({}, '', '/');
     } else if (artistMatch) {
@@ -1777,14 +1779,14 @@ export default function App() {
     const target = tracks.find((track) => track.id === trackId);
     if (!target) return showToast('404 — Track not found.');
     if (!userProfile || target.userId !== userProfile.id) {
-      return showToast('Only the track owner can delete it.');
+      return showToast(t('Only the track owner can delete it.'));
     }
 
     try {
       const res = await fetch(`/api/tracks/${trackId}`, { method: 'DELETE', headers: getAuthHeaders() });
       const payload = await res.json().catch(() => null);
       if (!res.ok || payload?.success === false) {
-        showToast(payload?.error || 'Failed to delete track.');
+        showToast(payload?.error || t('Failed to delete track.'));
         return;
       }
 
@@ -1801,19 +1803,19 @@ export default function App() {
         setIsPlaying(false);
         setCurrentTrack(null);
       }
-      showToast('Track deleted.');
+      showToast(t('Track deleted.'));
     } catch (error) {
       console.error('Error deleting track:', error);
-      showToast('Failed to delete track. Please check your connection.');
+      showToast(t('Failed to delete track. Please check your connection.'));
     }
   };
 
   const handleWipeAllTracks = async () => {
-    if (!userProfile) return showToast('Sign in first.');
+    if (!userProfile) return showToast(t('Sign in first.'));
     try {
       const response = await fetch('/api/tracks/wipe', { method: 'POST', headers: getAuthHeaders() });
       const data = await response.json().catch(() => null);
-      if (!response.ok) return showToast(data?.error || 'Track cleanup failed.');
+      if (!response.ok) return showToast(data?.error || t('Track cleanup failed.'));
       const deletedIds = new Set<string>(Array.isArray(data?.deletedTrackIds) ? data.deletedTrackIds : []);
       setTracks((previous) => previous.filter((track) => !deletedIds.has(track.id)));
       setQueue((previous) => previous.filter((track) => !deletedIds.has(track.id)));
@@ -1830,7 +1832,7 @@ export default function App() {
       showToast(`${deletedIds.size} owned track removed.`);
     } catch (error) {
       console.error('Error wiping owned tracks:', error);
-      showToast('Track cleanup failed.');
+      showToast(t('Track cleanup failed.'));
     }
   };
 
@@ -1846,7 +1848,7 @@ export default function App() {
         body: JSON.stringify({ action }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok) return showToast(data?.error || 'Follow action failed.');
+      if (!response.ok) return showToast(data?.error || t('Follow action failed.'));
 
       setFollowedArtistIds(Array.isArray(data.followedArtistIds) ? data.followedArtistIds : []);
       setUserProfile((previous) => previous ? {
@@ -1869,7 +1871,7 @@ export default function App() {
       setSelectedArtist((current) => current?.id === target.id ? { ...current, stats: confirmed.stats! } : current);
     } catch (error) {
       console.error('Error updating follow relation:', error);
-      showToast('Follow action failed.');
+      showToast(t('Follow action failed.'));
     }
   };
 
@@ -1886,7 +1888,7 @@ export default function App() {
     artistPickComment?: string;
   }) => {
     if (!userProfile || selectedArtist?.id !== userProfile.id) {
-      showToast('Only the profile owner can edit this artist profile.');
+      showToast(t('Only the profile owner can edit this artist profile.'));
       return;
     }
 
@@ -1942,7 +1944,7 @@ export default function App() {
       setEditingTrack((previous) => previous ? syncOwnedTrack(previous) : null);
       setSelectedArtist(syncedArtist);
       upsertArtist(syncedArtist);
-      showToast('Artist profile saved successfully!');
+      showToast(t('Artist profile saved successfully!'));
     } catch (error) {
       console.error('Failed to sync artist profile update with server:', error);
       setUserProfile(previousProfile);
@@ -1953,7 +1955,7 @@ export default function App() {
 
   const handleUpdateUserProfile = async (updated: UserProfile) => {
     if (!userProfile || updated.id !== userProfile.id) {
-      showToast('You can only edit your own profile.');
+      showToast(t('You can only edit your own profile.'));
       return;
     }
 
@@ -1974,7 +1976,7 @@ export default function App() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success || !data.user) {
-        showToast(data?.error || 'Profile update failed.');
+        showToast(data?.error || t('Profile update failed.'));
         return;
       }
       const persisted = { ...userProfile, ...data.user } as UserProfile;
@@ -1998,12 +2000,12 @@ export default function App() {
       }
     } catch (error) {
       console.error('Failed to update user profile on server:', error);
-      showToast('Profile update failed.');
+      showToast(t('Profile update failed.'));
     }
   };
 
   const handleChangePassword = async (currentPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
-    if (!userProfile) return { success: false, error: 'Sign in to change your password.' };
+    if (!userProfile) return { success: false, error: t('Sign in to change your password.') };
 
     try {
       const response = await fetch(`/api/users/${userProfile.id}/password`, {
@@ -2013,9 +2015,9 @@ export default function App() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.success) {
-        return { success: false, error: data?.error || 'Password update failed.' };
+        return { success: false, error: data?.error || t('Password update failed.') };
       }
-      showToast('Password updated successfully!');
+      showToast(t('Password updated successfully!'));
       return { success: true };
     } catch (error) {
       console.error('Failed to update account password:', error);

@@ -17,6 +17,7 @@ import { UserProfile } from '../../types';
 import VertexLogo from '../Brand/VertexLogo';
 import GlassSurface from '../GlassSurface/GlassSurface';
 import LogoLoop from '../LogoLoop/LogoLoop';
+import { useI18n } from '../../i18n/I18nContext';
 
 const AUTH_TERMINAL_GRID = [2, 1];
 const FaultyTerminal = React.lazy(() => import('../Backgrounds/FaultyTerminal'));
@@ -106,6 +107,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onLoginSuccess,
 }) => {
+  const { t } = useI18n();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -181,12 +183,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        setGoogleError(data.error || 'Google sign-in failed. Please try again.');
+        setGoogleError(data.error || t('Google sign-in failed. Please try again.'));
         return;
       }
       completeAuthentication(data.user, data.token, 'google');
     } catch {
-      setGoogleError('Google sign-in could not reach the server. Please try again.');
+      setGoogleError(t('Google sign-in could not reach the server. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -210,7 +212,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           retryTimer = window.setTimeout(tryRender, 100);
         } else {
           setGoogleStatus('error');
-          setGoogleError('Google sign-in could not be loaded. Check your connection and try again.');
+          setGoogleError(t('Google sign-in could not be loaded. Check your connection and try again.'));
         }
         return;
       }
@@ -237,7 +239,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setGoogleStatus('ready');
       } catch {
         setGoogleStatus('error');
-        setGoogleError('Google sign-in could not be initialized. Please try again.');
+        setGoogleError(t('Google sign-in could not be initialized. Please try again.'));
       }
     };
 
@@ -265,15 +267,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setUsernameStatus('invalid');
       setUsernameMessage(
         cleanUsername.length < 3
-          ? 'Use at least 3 characters.'
-          : 'Only letters, numbers, dot, underscore and hyphen are allowed.'
+          ? t('Use at least 3 characters.')
+          : t('Only letters, numbers, dot, underscore and hyphen are allowed.')
       );
       return;
     }
 
     const controller = new AbortController();
     setUsernameStatus('checking');
-    setUsernameMessage('Checking availability...');
+    setUsernameMessage(t('Checking availability...'));
 
     const timer = window.setTimeout(async () => {
       try {
@@ -284,20 +286,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         const data = await response.json();
         if (!response.ok) {
           setUsernameStatus('error');
-          setUsernameMessage(data.error || 'Availability check failed. Registration can still be attempted.');
+          setUsernameMessage(data.error || t('Availability check failed. Registration can still be attempted.'));
           return;
         }
         if (data.available) {
           setUsernameStatus('available');
-          setUsernameMessage('Username is available.');
+          setUsernameMessage(t('Username is available.'));
         } else {
           setUsernameStatus('taken');
-          setUsernameMessage('This username is already taken.');
+          setUsernameMessage(t('This username is already taken.'));
         }
       } catch (requestError) {
         if ((requestError as Error).name === 'AbortError') return;
         setUsernameStatus('error');
-        setUsernameMessage('Could not check availability. Registration can still be attempted.');
+        setUsernameMessage(t('Could not check availability. Registration can still be attempted.'));
       }
     }, 450);
 
@@ -328,12 +330,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        setError(data.error || 'Login failed. Please check your credentials.');
+        setError(data.error || t('Login failed. Please check your credentials.'));
         return;
       }
       completeAuthentication(data.user, data.token, 'login');
     } catch {
-      setError('Server connection error. Please try again.');
+      setError(t('Server connection error. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -344,11 +346,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError(null);
 
     if (usernameStatus === 'checking') {
-      setError('Please wait for the username availability check to finish.');
+      setError(t('Please wait for the username availability check to finish.'));
       return;
     }
     if (usernameStatus === 'invalid' || usernameStatus === 'taken') {
-      setError(usernameMessage || 'Please choose another username.');
+      setError(usernameMessage || t('Please choose another username.'));
       return;
     }
 
@@ -367,12 +369,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        setError(data.error || 'Registration failed.');
+        setError(data.error || t('Registration failed.'));
         return;
       }
       completeAuthentication(data.user, data.token, 'register');
     } catch {
-      setError('Server connection error. Please try again.');
+      setError(t('Server connection error. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -422,15 +424,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             >
               <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#151316] px-7 py-8 shadow-2xl animate-in zoom-in-95 duration-300">
                 <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-400" />
-                <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-400">Authentication successful</p>
+                <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-400">{t('Authentication successful')}</p>
                 <h2 className="mt-2 text-2xl font-black tracking-tight">
                   {authSuccess === 'register'
-                    ? 'Your account is ready!'
+                    ? t('Your account is ready!')
                     : authSuccess === 'google'
-                      ? 'Google sign-in complete!'
-                      : 'Welcome back!'}
+                      ? t('Google sign-in complete!')
+                      : t('Welcome back!')}
                 </h2>
-                <p className="mt-2 text-sm text-zinc-400">Taking you to your music space...</p>
+                <p className="mt-2 text-sm text-zinc-400">{t('Taking you to your music space...')}</p>
               </div>
             </div>
           )}
@@ -458,12 +460,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="relative w-full">
                   <div className="flex items-center gap-3">
                     <VertexLogo alt="" className="h-12 w-12 shrink-0" />
-                    <div><p className="text-[13px] font-bold uppercase tracking-[0.14em] text-[#D946EF]">Your sound. Your space.</p><h1 className="mt-1 text-2xl font-black tracking-tight">VERTEX Music</h1></div>
+                    <div><p className="text-[13px] font-bold uppercase tracking-[0.14em] text-[#D946EF]">{t('Your sound. Your space.')}</p><h1 className="mt-1 text-2xl font-black tracking-tight">VERTEX Music</h1></div>
                   </div>
 
                   <div className="mt-12">
-                    <h2 className="max-w-sm text-[2rem] font-black leading-[1.12] tracking-[-0.03em]">Everything you listen to, create and share in one place.</h2>
-                    <p className="mt-4 max-w-sm text-sm leading-6 text-zinc-300">Return to your library or create an account to publish music, build playlists and keep listening history synced.</p>
+                    <h2 className="max-w-sm text-[2rem] font-black leading-[1.12] tracking-[-0.03em]">{t('Everything you listen to, create and share in one place.')}</h2>
+                    <p className="mt-4 max-w-sm text-sm leading-6 text-zinc-300">{t('Return to your library or create an account to publish music, build playlists and keep listening history synced.')}</p>
                   </div>
 
                   <div className="mt-10 grid gap-4 px-1">
@@ -474,7 +476,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     ].map(({ icon: Icon, text }) => (
                       <div key={text} className="flex items-center gap-3 text-[15px] font-semibold text-zinc-300">
                         <Icon className="h-[18px] w-[18px] shrink-0 text-[#D946EF]" />
-                        <span>{text}</span>
+                        <span>{t(text)}</span>
                       </div>
                     ))}
                   </div>
@@ -505,18 +507,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="mx-auto w-full max-w-md">
               <div className="mb-5 flex items-center gap-3 md:hidden sm:mb-7">
                 <VertexLogo alt="" className="h-11 w-11 shrink-0" />
-                <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D946EF]">Welcome to</p><p className="mt-0.5 text-lg font-black">VERTEX Music</p></div>
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D946EF]">{t('Welcome to')}</p><p className="mt-0.5 text-lg font-black">VERTEX Music</p></div>
               </div>
 
-              <div className="flex items-center gap-6 border-b border-white/[0.08]" role="tablist" aria-label="Authentication mode">
-                <button type="button" role="tab" aria-selected={mode === 'login'} onClick={() => switchMode('login')} className={`-mb-px border-b px-0.5 pb-2.5 text-[13px] font-semibold transition-colors ${mode === 'login' ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>Sign in</button>
-                <button type="button" role="tab" aria-selected={mode === 'register'} onClick={() => switchMode('register')} className={`-mb-px border-b px-0.5 pb-2.5 text-[13px] font-semibold transition-colors ${mode === 'register' ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>Sign up</button>
+              <div className="flex items-center gap-6 border-b border-white/[0.08]" role="tablist" aria-label={t('Authentication mode')}>
+                <button type="button" role="tab" aria-selected={mode === 'login'} onClick={() => switchMode('login')} className={`-mb-px border-b px-0.5 pb-2.5 text-[13px] font-semibold transition-colors ${mode === 'login' ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>{t('Sign in')}</button>
+                <button type="button" role="tab" aria-selected={mode === 'register'} onClick={() => switchMode('register')} className={`-mb-px border-b px-0.5 pb-2.5 text-[13px] font-semibold transition-colors ${mode === 'register' ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>{t('Sign up')}</button>
               </div>
 
               <div key={mode} className={`mt-5 animate-in fade-in slide-in-from-right-2 duration-300 sm:mt-7 ${mode === 'register' ? 'md:mt-5' : ''}`}>
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#D946EF]">{mode === 'login' ? 'Welcome back' : 'New listener'}</p>
-                <h2 className="mt-1.5 break-words text-2xl font-black leading-tight tracking-[-0.025em] sm:text-[1.75rem]">{mode === 'login' ? 'Sign in to continue' : 'Create your account'}</h2>
-                <p className="mt-2 text-sm leading-5 text-zinc-400">{mode === 'login' ? 'Your library, playlists and artist tools are waiting.' : 'Set up your profile and start building your music space.'}</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#D946EF]">{t(mode === 'login' ? 'Welcome back' : 'New listener')}</p>
+                <h2 className="mt-1.5 break-words text-2xl font-black leading-tight tracking-[-0.025em] sm:text-[1.75rem]">{t(mode === 'login' ? 'Sign in to continue' : 'Create your account')}</h2>
+                <p className="mt-2 text-sm leading-5 text-zinc-400">{t(mode === 'login' ? 'Your library, playlists and artist tools are waiting.' : 'Set up your profile and start building your music space.')}</p>
               </div>
 
               {error && (
@@ -544,17 +546,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     {loading ? (
                       <>
                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        Please wait...
+                        {t('Please wait...')}
                       </>
                     ) : googleStatus === 'loading' ? (
                       <>
                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        Loading Google sign-in...
+                        {t('Loading Google sign-in...')}
                       </>
                     ) : googleStatus === 'error' ? (
                       <>
                         <AlertCircle className="h-4 w-4" />
-                        Retry Google sign-in
+                        {t('Retry Google sign-in')}
                         <ArrowRight className="h-4 w-4" />
                       </>
                     ) : (
@@ -562,7 +564,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-sm">
                           <GoogleMark />
                         </span>
-                        {mode === 'register' ? 'Sign up with Google' : 'Sign in with Google'}
+                        {t(mode === 'register' ? 'Sign up with Google' : 'Sign in with Google')}
                         <ArrowRight className="h-4 w-4" />
                       </>
                     )}
@@ -581,21 +583,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
                 )}
                 <div className="flex w-full items-center gap-3 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">
-                  <span className="h-px flex-1 bg-white/10" /> Or <span className="h-px flex-1 bg-white/10" />
+                  <span className="h-px flex-1 bg-white/10" /> {t('Or')} <span className="h-px flex-1 bg-white/10" />
                 </div>
               </div>
 
               {mode === 'login' ? (
                 <form onSubmit={handleLogin} className="mt-6 space-y-4">
-                  <div><label className={labelClass}>Username or email</label><div className="relative"><User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="username" required value={loginIdentifier} onChange={(event) => setLoginIdentifier(event.target.value)} placeholder="Enter username or email" className={inputClass} /></div></div>
-                  <div><label className={labelClass}>Password</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} placeholder="Enter your password" className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
-                  <button type="submit" disabled={loading} className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#D946EF] px-5 py-3.5 text-sm font-black transition-colors hover:bg-[#E05AF2] disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Signing in...</> : <>Sign in <ArrowRight className="h-4 w-4" /></>}</button>
+                  <div><label className={labelClass}>{t('Username or email')}</label><div className="relative"><User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="username" required value={loginIdentifier} onChange={(event) => setLoginIdentifier(event.target.value)} placeholder={t('Enter username or email')} className={inputClass} /></div></div>
+                  <div><label className={labelClass}>{t('Password')}</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} placeholder={t('Enter your password')} className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={t(showPassword ? 'Hide password' : 'Show password')}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+                  <button type="submit" disabled={loading} className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#D946EF] px-5 py-3.5 text-sm font-black transition-colors hover:bg-[#E05AF2] disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> {t('Signing in...')}</> : <>{t('Sign in')} <ArrowRight className="h-4 w-4" /></>}</button>
                 </form>
               ) : (
                 <form onSubmit={handleRegister} className="mt-6 space-y-3.5 md:mt-4 md:space-y-3">
                   <div className="grid gap-3.5 sm:grid-cols-2">
                     <div>
-                      <label className={labelClass}>Username</label>
+                      <label className={labelClass}>{t('Username')}</label>
                       <div className="relative">
                         <User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                         <input
@@ -638,18 +640,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         </p>
                       )}
                     </div>
-                    <div><label className={labelClass}>Display name</label><div className="relative"><Sparkles className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="name" maxLength={80} value={regDisplayName} onChange={(event) => setRegDisplayName(event.target.value)} placeholder="Public name" className={inputClass} /></div></div>
+                    <div><label className={labelClass}>{t('Display name')}</label><div className="relative"><Sparkles className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="text" autoComplete="name" maxLength={80} value={regDisplayName} onChange={(event) => setRegDisplayName(event.target.value)} placeholder={t('Public name')} className={inputClass} /></div></div>
                   </div>
                   <div className="grid gap-3.5 md:grid-cols-2">
-                    <div><label className={labelClass}>Email address</label><div className="relative"><Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="email" autoComplete="email" required value={regEmail} onChange={(event) => setRegEmail(event.target.value)} placeholder="yourname@example.com" className={inputClass} /></div></div>
-                    <div><label className={labelClass}>Password</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={8} maxLength={128} value={regPassword} onChange={(event) => setRegPassword(event.target.value)} placeholder="At least 8 characters" className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+                    <div><label className={labelClass}>{t('Email address')}</label><div className="relative"><Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type="email" autoComplete="email" required value={regEmail} onChange={(event) => setRegEmail(event.target.value)} placeholder="yourname@example.com" className={inputClass} /></div></div>
+                    <div><label className={labelClass}>{t('Password')}</label><div className="relative"><Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" required minLength={8} maxLength={128} value={regPassword} onChange={(event) => setRegPassword(event.target.value)} placeholder={t('At least 8 characters')} className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label={t(showPassword ? 'Hide password' : 'Show password')}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
                   </div>
-                  <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-zinc-400"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Your library remains tied to this account.</div>
-                  <button type="submit" disabled={loading || usernameStatus === 'checking' || usernameStatus === 'taken' || usernameStatus === 'invalid'} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#D946EF] px-5 py-3.5 text-sm font-black transition-colors hover:bg-[#E05AF2] disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Creating account...</> : <>Create account <ArrowRight className="h-4 w-4" /></>}</button>
+                  <div className="flex items-center gap-2 px-1 text-[11px] font-semibold text-zinc-400"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> {t('Your library remains tied to this account.')}</div>
+                  <button type="submit" disabled={loading || usernameStatus === 'checking' || usernameStatus === 'taken' || usernameStatus === 'invalid'} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#D946EF] px-5 py-3.5 text-sm font-black transition-colors hover:bg-[#E05AF2] disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> {t('Creating account...')}</> : <>{t('Create account')} <ArrowRight className="h-4 w-4" /></>}</button>
                 </form>
               )}
 
-              <p className={`mx-auto mt-6 max-w-sm text-center text-[11px] leading-5 text-zinc-500 ${mode === 'register' ? 'md:mt-4' : ''}`}>By continuing, you confirm that this account belongs to you and that uploaded music follows the platform rules.</p>
+              <p className={`mx-auto mt-6 max-w-sm text-center text-[11px] leading-5 text-zinc-500 ${mode === 'register' ? 'md:mt-4' : ''}`}>{t('By continuing, you confirm that this account belongs to you and that uploaded music follows the platform rules.')}</p>
             </div>
           </main>
           </GlassSurface>
@@ -665,7 +667,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           gap={42}
           hoverSpeed={0}
           scaleOnHover
-          ariaLabel="VERTEX Music highlights"
+          ariaLabel={t('VERTEX Music highlights')}
           className="text-zinc-400"
         />
       </div>

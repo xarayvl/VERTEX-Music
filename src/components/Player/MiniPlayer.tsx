@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Pause, SkipForward, Heart } from 'lucide-react';
 import { Track } from '../../types';
 import { AudioVisualizer } from './AudioVisualizer';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface MiniPlayerProps {
   currentTrack: Track | null;
@@ -22,6 +23,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   onToggleLike,
   onOpenSongScreen,
 }) => {
+  const { t } = useI18n();
   if (!currentTrack) return null;
   return (
     <div className="mobile-mini-player fixed inset-x-2 z-30 mx-auto max-w-md transition-all duration-300">
@@ -81,7 +83,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
           <button
             onClick={() => onToggleLike(currentTrack.id)}
             className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-rose-400"
-            title="Like track"
+            title={t('Like track')}
           >
             <Heart
               className={`w-4 h-4 ${
@@ -93,7 +95,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
           <button
             onClick={onTogglePlay}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black shadow-lg transition-all hover:scale-105 active:scale-95"
-            title={isPlaying ? 'Pause' : 'Play'}
+            title={t(isPlaying ? 'Pause' : 'Play')}
           >
             {isPlaying ? (
               <Pause className="w-4 h-4 fill-black text-black" />
@@ -105,7 +107,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
           <button
             onClick={onNext}
             className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
-            title="Next Track"
+            title={t('Next Track')}
           >
             <SkipForward className="w-4.5 h-4.5" />
           </button>

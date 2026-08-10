@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowUp, BrainCog, Globe, Sparkles, Square, Trash2 } from 'lucide-react';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface AiPromptBoxProps {
   value: string;
@@ -39,6 +40,7 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
   modelLabel = 'GPT-OSS 120B',
   className = '',
 }, forwardedRef) => {
+  const { t } = useI18n();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasContent = value.trim().length > 0;
   const controlsDisabled = disabled || isLoading;
@@ -58,11 +60,11 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
   };
 
   const activePlaceholder = webSearchEnabled && highReasoningEnabled
-    ? 'Search the web and reason carefully...'
+    ? t('Search the web and reason carefully...')
     : webSearchEnabled
-      ? 'Search the web...'
+      ? t('Search the web...')
       : highReasoningEnabled
-        ? 'Ask with high reasoning...'
+        ? t('Ask with high reasoning...')
         : placeholder;
 
   return (
@@ -85,8 +87,8 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
         rows={1}
         maxLength={20_000}
         disabled={controlsDisabled}
-        placeholder={isLoading ? 'AI DJ is responding...' : activePlaceholder}
-        aria-label="Message AI DJ"
+        placeholder={isLoading ? t('AI DJ is responding...') : activePlaceholder}
+        aria-label={t('Message AI DJ')}
         className="custom-scrollbar block min-h-10 max-h-[180px] w-full resize-none overflow-y-hidden border-0 bg-transparent px-3 py-2 text-[16px] leading-6 text-zinc-100 outline-none placeholder:text-zinc-600 disabled:cursor-not-allowed disabled:opacity-55 sm:text-[15px]"
       />
 
@@ -97,7 +99,7 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
             onClick={() => onWebSearchChange(!webSearchEnabled)}
             disabled={controlsDisabled}
             aria-pressed={webSearchEnabled}
-            title="Search current web sources"
+            title={t('Search current web sources')}
             className={`flex h-8 flex-none items-center gap-1 overflow-hidden rounded-full border px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               webSearchEnabled
                 ? 'border-[#D946EF]/55 bg-[#D946EF]/15 text-[#F0ABFC]'
@@ -119,7 +121,7 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
                   exit={{ width: 0, opacity: 0 }}
                   className="overflow-hidden whitespace-nowrap text-[11px] font-black"
                 >
-                  Web search
+                  {t('Web search')}
                 </motion.span>
               )}
             </AnimatePresence>
@@ -132,7 +134,7 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
             onClick={() => onHighReasoningChange(!highReasoningEnabled)}
             disabled={controlsDisabled}
             aria-pressed={highReasoningEnabled}
-            title="Use high reasoning effort"
+            title={t('Use high reasoning effort')}
             className={`flex h-8 flex-none items-center gap-1 overflow-hidden rounded-full border px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               highReasoningEnabled
                 ? 'border-[#D946EF]/55 bg-[#D946EF]/15 text-[#F0ABFC]'
@@ -154,7 +156,7 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
                   exit={{ width: 0, opacity: 0 }}
                   className="overflow-hidden whitespace-nowrap text-[11px] font-black"
                 >
-                  High reasoning
+                  {t('High reasoning')}
                 </motion.span>
               )}
             </AnimatePresence>
@@ -170,8 +172,8 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
             type="button"
             onClick={onClear}
             disabled={!canClear || isLoading}
-            aria-label="Clear chat history"
-            title="Clear chat history"
+            aria-label={t('Clear chat history')}
+            title={t('Clear chat history')}
             className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-600 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-35"
           >
             <Trash2 className="h-4 w-4" />
@@ -181,8 +183,8 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
             type="button"
             onClick={isLoading ? onCancel : submit}
             disabled={!isLoading && (!hasContent || disabled)}
-            aria-label={isLoading ? 'Cancel AI request' : 'Send message'}
-            title={isLoading ? 'Cancel request' : 'Send message'}
+            aria-label={t(isLoading ? 'Cancel AI request' : 'Send message')}
+            title={t(isLoading ? 'Cancel request' : 'Send message')}
             className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
               isLoading || hasContent
                 ? 'bg-[#D946EF] text-white hover:bg-[#C026D3]'

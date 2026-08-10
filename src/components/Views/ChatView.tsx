@@ -6,6 +6,7 @@ import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import { AgentPlanning, type PlanStep } from '../ui/ai-planning';
 import { AiPromptBox } from '../ui/ai-prompt-box';
 import { Hero } from '../ui/tailwind-css-background-snippet';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -41,33 +42,49 @@ const createMessageId = (prefix: 'user' | 'ai' | 'err'): string => {
 const summarizeReasoningChunk = (text: string, relatedAction = '', maxLength = 220): string => {
   const cleaned = text
     .replace(/<\/?(?:think|analysis)>/gi, ' ')
-    .replace(/(?:^|\s)[*-]\s+/g, ' ')
+    .replace(/(?:^|\s)(?:[*-]|\d+[.)])\s+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   if (!cleaned) return '';
 
-  // Prefer sentences describing a decision, data check, calculation, search,
-  // or response action. Raw reasoning often opens by merely restating what
-  // the user said; showing only that sentence makes the summary misleading.
-  const sentences = cleaned.split(/(?<=[.!?…])\s+(?=[A-ZÇĞİÖŞÜ0-9])/).filter(Boolean);
-  const actionPattern = /\b(?:need(?:s|ed)?|should|will|plan(?:s|ned)?|decid(?:e|ed|ing)|search(?:ed|ing)?|browse|look(?:ed|ing)? up|check(?:ed|ing)?|verif(?:y|ied|ying)|compar(?:e|ed|ing)|review(?:ed|ing)?|use(?:d|ing)?|calculat(?:e|ed|ing)|determin(?:e|ed|ing)|answer(?:ed|ing)?|respond(?:ed|ing)?|cite(?:d|ing)?|gerek(?:iyor|ti)?|arama|ara(?:yacağım|mak|dı|yor)|kontrol|doğrula|karşılaştır|incele|hesapla|belirle|yanıtla|cevapla|kullan)\b/i;
-  const decisionPattern = /\b(?:so|therefore|because|however|instead|then|next|bu yüzden|dolayısıyla|çünkü|ancak|yerine|ardından|sonra)\b/i;
-  const restatementPattern = /^(?:the\s+)?user\b|^kullanıcı\b/i;
-  const scored = sentences.map((sentence, index) => ({
+  // Provider reasoning commonly begins with task-management chatter such as
+  // “We must answer politely” or a paraphrase of the user's message. Those
+  // lines are not useful progress updates, so exclude them before ranking the
+  // concrete analysis and decisions.
+  const boilerplatePattern = /^(?:(?:okay|ok|alright|right|so|first|now)[,.:;]?\s*)?(?:(?:we|i)\s+)?(?:must|need(?:s)?(?:\s+to)?|should|have\s+to|will|can)\s+(?:answer|respond|reply|address|help|comply|follow|ensure|avoid|provide|give|mention|say|tell|explain|format|write|keep|be\s+(?:polite|concise|careful|helpful|clear))\b/i;
+  const restatementPattern = /^(?:(?:the\s+)?user|they|kullanıcı)\s+(?:asks?|asked|wants?|wanted|requests?|requested|is\s+asking|said|says|mentions?|provided|istiyor|soruyor|sordu|istemiş)\b/i;
+  const draftingPattern = /^(?:let(?:'s|\s+us)|i(?:'ll|\s+will)|we(?:'ll|\s+will))\s+(?:answer|respond|reply|craft|draft|write|provide|give|explain|format|keep|make|ensure)\b/i;
+  const processPattern = /^(?:no|there(?:'s|\s+is))\s+need\s+(?:to|for)\s+(?:browse|search|use|call)|^(?:analysis|reasoning|thoughts?|plan)\s*:/i;
+  const meaningfulPattern = /\b(?:because|therefore|however|instead|based\s+on|found|show(?:s|ed)?|indicat(?:e|es|ed)|suggest(?:s|ed)?|match(?:es|ed)?|fit(?:s|ted)?|compar(?:e|ed|ing)|check(?:ed|ing)|verif(?:y|ied|ying)|select(?:ed|ing)|chose|recommend(?:ed|ing)|result|source|tempo|genre|mood|artist|track|album|sound|rhythm|melody|çünkü|bu\s+yüzden|ancak|yerine|bulundu|gösteriyor|karşılaştır|doğrula|seç|öner|sonuç|kaynak|tür|sanatçı|şarkı|albüm)\b/i;
+  const sentences = cleaned
+    .split(/(?<=[.!?…])\s+/)
+    .map((sentence) => sentence.replace(/^(?:analysis|reasoning|thoughts?|plan)\s*:\s*/i, '').trim())
+    .filter(Boolean);
+  const usefulSentences = sentences.filter((sentence) => !(
+    boilerplatePattern.test(sentence)
+    || restatementPattern.test(sentence)
+    || draftingPattern.test(sentence)
+    || processPattern.test(sentence)
+  ));
+  const scored = usefulSentences.map((sentence, index) => ({
     sentence,
     index,
-    score: (actionPattern.test(sentence) ? 4 : 0)
-      + (decisionPattern.test(sentence) ? 2 : 0)
-      - (restatementPattern.test(sentence) ? 3 : 0),
+    score: (meaningfulPattern.test(sentence) ? 4 : 1)
+      + (/\b(?:so|therefore|because|however|instead|bu\s+yüzden|dolayısıyla|çünkü|ancak|yerine)\b/i.test(sentence) ? 2 : 0)
+      - (/^(?:we|i)\b/i.test(sentence) ? 1 : 0),
   }));
   const selected = scored
-    .filter((item) => item.score > 0)
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .slice(0, 2)
     .sort((left, right) => left.index - right.index)
     .map((item) => item.sentence);
-  const fallback = sentences.filter((sentence) => !restatementPattern.test(sentence)).slice(0, 2);
-  let summary = (selected.length > 0 ? selected : fallback.length > 0 ? fallback : sentences.slice(0, 1)).join(' ') || cleaned;
+  let summary = selected.join(' ');
+
+  // When a chunk contains only boilerplate, show a clean activity summary
+  // instead of leaking that boilerplate back through a fallback.
+  if (!summary) {
+    summary = relatedAction || 'Analyzed the request and focused on the details most relevant to the answer.';
+  }
   if (relatedAction && !/\b(?:search(?:ed|ing)?|web|arama|ara(?:dı|yor|mak))\b/i.test(summary)) {
     const contextLimit = Math.max(40, maxLength - relatedAction.length - 2);
     const context = summary.length > contextLimit
@@ -84,6 +101,14 @@ const summarizeReasoningChunk = (text: string, relatedAction = '', maxLength = 2
   return summary;
 };
 
+const getReasoningStepTitle = (summary: string): string => {
+  if (/\b(?:search|web|source|result|arama|kaynak|sonuç)\b/i.test(summary)) return 'Reviewing current information';
+  if (/\b(?:compar|instead|difference|karşılaştır|fark)\b/i.test(summary)) return 'Comparing the options';
+  if (/\b(?:check|verif|confirm|doğrula|kontrol)\b/i.test(summary)) return 'Verifying the details';
+  if (/\b(?:select|chose|recommend|match|fit|seç|öner|eşleş)\b/i.test(summary)) return 'Choosing the best matches';
+  return 'Analyzing the request';
+};
+
 const reasoningStepContent = (summary: string) => (
   <div className="flex items-start gap-2 rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
     <BrainCircuit className="mt-0.5 h-3.5 w-3.5 flex-none text-[#F0ABFC]" />
@@ -93,7 +118,7 @@ const reasoningStepContent = (summary: string) => (
 
 const createReasonedStep = (id: string, summary: string): PlanStep => ({
   id,
-  title: 'Reasoning',
+  title: getReasoningStepTitle(summary),
   status: 'success',
   icon: <BrainCircuit className="h-3.5 w-3.5" />,
   content: reasoningStepContent(summary),
@@ -140,9 +165,9 @@ const createRealReasoningSteps = (reasoningText: string, timeline?: ReasoningTim
           ? `${previousEntry.query.slice(0, 90)}${previousEntry.query.length > 90 ? '…' : ''}`
           : '';
         const relatedAction = nextEntry?.type === 'tool' && nextEntry.tool === 'web_search'
-          ? `I then searched the live web for “${nextQuery}”.`
+          ? `Searched the live web for “${nextQuery}” to verify current information.`
           : previousEntry?.type === 'tool' && previousEntry.tool === 'web_search'
-            ? `I used the live results for “${previousQuery}” to prepare the answer.`
+            ? `Reviewed the live results for “${previousQuery}” and used the strongest findings in the answer.`
             : '';
         const summary = summarizeReasoningChunk(entry.text, relatedAction);
         if (summary) steps.push(createReasonedStep(`reasoned-${index}`, summary));
@@ -173,6 +198,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   userAvatarUrl,
   userDisplayName,
 }) => {
+  const { locale, t } = useI18n();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [rateLimitSeconds, setRateLimitSeconds] = useState(0);
@@ -204,10 +230,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   const suggestionPrompts = [
-    { label: 'New releases', prompt: 'Recommend some exciting new music releases ✨' },
-    { label: 'Night drive', prompt: 'Recommend synthwave tracks for night driving 🌙' },
-    { label: 'Study mix', prompt: 'Suggest a lofi playlist for studying 📚' },
-    { label: 'Genre guide', prompt: 'Explain the difference between Synthwave and Cyberpunk ⚡' },
+    { label: t('New releases'), prompt: t('Recommend some exciting new music releases ✨') },
+    { label: t('Night drive'), prompt: t('Recommend synthwave tracks for night driving 🌙') },
+    { label: t('Study mix'), prompt: t('Suggest a lofi playlist for studying 📚') },
+    { label: t('Genre guide'), prompt: t('Explain the difference between Synthwave and Cyberpunk ⚡') },
   ];
 
   const handleSendMessage = async (customText?: string) => {
@@ -425,7 +451,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const formatTimestamp = (ts: string) => {
     try {
       const date = new Date(ts);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     } catch (e) {
       return '';
     }
@@ -441,7 +467,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       id: activity.id,
       title: activity.title,
       status: activity.status,
-      duration: activity.status === 'success' ? 'Done' : activity.status === 'active' ? 'Now' : undefined,
+      duration: activity.status === 'success' ? t('Done') : activity.status === 'active' ? t('Now') : undefined,
       icon: <ActivityIcon className="h-3.5 w-3.5" />,
       defaultExpanded: activity.status === 'active',
       content: detail ? (
@@ -467,10 +493,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#D946EF]/30 bg-[#D946EF]/10 text-[#F0ABFC] shadow-[0_18px_50px_rgba(217,70,239,0.12)] sm:h-16 sm:w-16 sm:rounded-3xl">
                   <Bot className="h-7 w-7 sm:h-8 sm:w-8" />
                 </div>
-                <p className="mt-4 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] sm:mt-5 sm:text-[10px] sm:tracking-[0.22em]">VERTEX Music intelligence</p>
-                <h2 className="mt-2 text-xl font-black tracking-tight sm:text-2xl">What should we listen to?</h2>
+                <p className="mt-4 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] sm:mt-5 sm:text-[10px] sm:tracking-[0.22em]">{t('VERTEX Music intelligence')}</p>
+                <h2 className="mt-2 text-xl font-black tracking-tight sm:text-2xl">{t('What should we listen to?')}</h2>
                 <p className="mx-auto mt-2 max-w-md px-3 text-xs leading-relaxed text-zinc-500 sm:px-0 sm:text-sm">
-                  Ask about artists and genres, discover music, or build a listening plan.
+                  {t('Ask about artists and genres, discover music, or build a listening plan.')}
                 </p>
               </div>
             </div>
@@ -496,7 +522,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     <img
                       key={userAvatarUrl || DEFAULT_AVATAR_URL}
                       src={userAvatarUrl || DEFAULT_AVATAR_URL}
-                      alt={userDisplayName ? `${userDisplayName}'s profile` : 'Your profile'}
+                      alt={userDisplayName ? `${userDisplayName} · ${t('profile')}` : t('Your profile')}
                       referrerPolicy="no-referrer"
                       className="h-full w-full object-cover"
                       onError={(event) => {
@@ -518,7 +544,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 >
                   {msg.sender === 'ai' && (Boolean(msg.reasoning?.trim()) || Boolean(msg.reasoningTimeline?.length)) && (
                     <AgentPlanning
-                      title={typeof msg.thinkingSeconds === 'number' ? `Thought for ${msg.thinkingSeconds}s` : 'How this answer was prepared'}
+                      title={typeof msg.thinkingSeconds === 'number' ? `${msg.thinkingSeconds} ${t('seconds of thought')}` : t('How this answer was prepared')}
                       steps={createRealReasoningSteps(msg.reasoning || '', msg.reasoningTimeline)}
                       defaultExpanded={false}
                       className="mb-3"
@@ -532,7 +558,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         className="control-press flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-300 hover:bg-emerald-500/15"
                       >
                         <Globe className="h-3 w-3" />
-                        Web Search{msg.sources?.length ? ` · ${msg.sources.length} sources` : ''}
+                        {t('Web Search')}{msg.sources?.length ? ` · ${msg.sources.length} ${t('sources')}` : ''}
                         <ChevronDown className={`h-3 w-3 transition-transform ${expandedSources[msg.id] ? 'rotate-180' : ''}`} />
                       </button>
 
@@ -583,7 +609,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   {msg.matchedTracks && msg.matchedTracks.length > 0 && (
                     <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
                       <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-[#D8B4FE]">
-                        <Music className="h-3.5 w-3.5" /> Tracks from your library
+                        <Music className="h-3.5 w-3.5" /> {t('Tracks from your library')}
                       </p>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {msg.matchedTracks.map((track) => (
@@ -630,10 +656,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </div>
                 <div className="min-w-0 max-w-[calc(100%_-_40px)] flex-1 sm:max-w-lg sm:flex-none">
                   {liveReasoningSteps.length > 0 ? (
-                    <AgentPlanning title="Reasoning" steps={liveReasoningSteps} />
+                    <AgentPlanning title={t('Reasoning')} steps={liveReasoningSteps} />
                   ) : (
                     <div className="rounded-2xl border border-white/[0.08] bg-[#202020] px-4 py-3 text-[13px] font-black text-zinc-300">
-                      Reasoning
+                      {t('Reasoning')}
                     </div>
                   )}
                 </div>
@@ -668,7 +694,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <span className="mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-amber-400" />
               <span>
                 {quotaNotice}
-                {rateLimitSeconds > 0 && ` Requests are paused for ${rateLimitSeconds}s to prevent repeated failures.`}
+                {rateLimitSeconds > 0 && ` ${t('Requests are paused for {{seconds}}s to prevent repeated failures.', { seconds: rateLimitSeconds })}`}
               </span>
             </div>
           )}
@@ -682,15 +708,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
             isLoading={isLoading}
             disabled={rateLimitSeconds > 0}
             placeholder={rateLimitSeconds > 0
-              ? `AI paused · retry in ${rateLimitSeconds}s`
-              : 'Ask about music, artists, genres or your next playlist...'}
+              ? t('AI paused · retry in {{seconds}}s', { seconds: rateLimitSeconds })
+              : t('Ask about music, artists, genres or your next playlist...')}
             webSearchEnabled={webSearchEnabled}
             onWebSearchChange={setWebSearchEnabled}
             highReasoningEnabled={highReasoningEnabled}
             onHighReasoningChange={setHighReasoningEnabled}
           />
           <p className="mt-2 hidden px-2 text-center text-[9px] font-medium text-zinc-600 sm:block">
-            AI responses can be inaccurate. Verify important music and artist information.
+            {t('AI responses can be inaccurate. Verify important music and artist information.')}
           </p>
         </div>
       </div>

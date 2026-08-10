@@ -27,6 +27,7 @@ import {
 import { Artist, UserProfile, Track, Playlist } from '../../types';
 import { EditArtistModal } from '../Modals/EditArtistModal';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface ArtistViewProps {
   artist: Artist | UserProfile | null;
@@ -79,6 +80,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   isLoading = false,
   loadError = null,
 }) => {
+  const { t } = useI18n();
   const [discographyFilter, setDiscographyFilter] = useState<'popular' | 'singles'>('popular');
   const [showAllPopular, setShowAllPopular] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -130,7 +132,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
 
   if (isLoading) {
     return (
-      <div className="space-y-8 pb-24 animate-pulse" aria-label="Loading artist profile">
+      <div className="space-y-8 pb-24 animate-pulse" aria-label={t('Loading artist profile')}>
         <div className="h-[380px] rounded-2xl bg-gradient-to-br from-zinc-800 via-zinc-900 to-black border border-white/10 p-10 flex flex-col justify-end gap-4">
           <div className="h-4 w-32 rounded bg-white/10" />
           <div className="h-16 w-2/3 rounded-xl bg-white/10" />
@@ -149,7 +151,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-8 text-zinc-400">
         <User className="w-12 h-12 mb-3 text-zinc-600" />
-        <p className="text-base font-bold text-white">Artist profile unavailable</p>
+        <p className="text-base font-bold text-white">{t('Artist profile unavailable')}</p>
         <p className="text-xs text-zinc-500 mt-1">
           {loadError || '404 — Artist not found.'}
         </p>
@@ -299,7 +301,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
           className="flex items-center space-x-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors pt-2"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back</span>
+          <span>{t('Back')}</span>
         </button>
       )}
 
@@ -322,7 +324,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
             <div className="flex items-center space-x-1.5 text-blue-400 font-bold text-xs">
               <ShieldCheck className="w-5 h-5 fill-blue-500 text-black" />
               <span className="text-white font-extrabold text-xs uppercase tracking-wider">
-                Verified Artist
+                {t('Verified Artist')}
               </span>
             </div>
           )}
@@ -374,7 +376,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                 : 'bg-transparent border border-[#D946EF] text-[#D946EF] hover:bg-[#D946EF]/10'
             }`}
           >
-            {isFollowing ? 'Following' : 'Follow'}
+            {t(isFollowing ? 'Following' : 'Follow')}
           </button>
         )}
 
@@ -383,11 +385,11 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
           <button
             onClick={() => setIsEditModalOpen(true)}
             className="flex items-center space-x-2 px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-extrabold uppercase tracking-wider transition-all active:scale-95 shadow-lg"
-            title="Edit Artist Profile"
+            title={t('Edit Artist Profile')}
           >
             <Sparkles className="w-4 h-4 text-[#D946EF]" />
-            <span className="sm:hidden">Edit profile</span>
-            <span className="hidden sm:inline">Edit Artist Profile</span>
+            <span className="sm:hidden">{t('Edit profile')}</span>
+            <span className="hidden sm:inline">{t('Edit Artist Profile')}</span>
           </button>
         )}
 
@@ -400,8 +402,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
               ? 'text-[#D946EF] hover:text-[#E879F9]'
               : 'text-zinc-400 hover:text-white'
           }`}
-          title={isShuffle ? 'Disable Shuffle' : 'Enable Shuffle'}
-          aria-label={isShuffle ? 'Disable shuffle' : 'Enable shuffle'}
+          title={t(isShuffle ? 'Disable Shuffle' : 'Enable Shuffle')}
+          aria-label={t(isShuffle ? 'Disable shuffle' : 'Enable shuffle')}
           aria-pressed={isShuffle}
         >
           <Shuffle className="w-6 h-6" />
@@ -416,9 +418,9 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
             onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
             aria-haspopup="menu"
             aria-expanded={isArtistMenuOpen}
-            aria-label="More artist actions"
+            aria-label={t('More artist actions')}
             className={`control-press flex h-11 w-11 items-center justify-center rounded-2xl border transition-colors ${isArtistMenuOpen ? 'border-[#D946EF]/40 bg-[#D946EF]/15 text-[#F0ABFC]' : 'border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}
-            title="More artist actions"
+            title={t('More artist actions')}
           >
             <MoreHorizontal className="h-6 w-6" />
           </button>
@@ -433,19 +435,19 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
               style={{ top: artistMenuPosition.top, left: artistMenuPosition.left }}
             >
               <div className="space-y-0.5">
-                <button type="button" onClick={() => { handlePlayArtist(); closeArtistMenu(); }} disabled={displayTracks.length === 0} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><Play className="h-4 w-4 text-zinc-400" /><span>Play artist</span></button>
+                <button type="button" onClick={() => { handlePlayArtist(); closeArtistMenu(); }} disabled={displayTracks.length === 0} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><Play className="h-4 w-4 text-zinc-400" /><span>{t('Play artist')}</span></button>
                 <button type="button" onClick={() => { onToggleShuffle?.(displayTracks); closeArtistMenu(); }} disabled={displayTracks.length === 0 || !onToggleShuffle} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><Shuffle className="h-4 w-4 text-zinc-400" /><span>{isShuffle ? 'Disable artist shuffle' : 'Shuffle artist'}</span></button>
 
-                {!isOwner && <button type="button" onClick={() => { onToggleFollow?.(artist); closeArtistMenu(); }} disabled={!onToggleFollow} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40">{isFollowing ? <Check className="h-4 w-4 text-[#D946EF]" /> : <UserPlus className="h-4 w-4 text-zinc-400" />}<span>{isFollowing ? 'Unfollow artist' : 'Follow artist'}</span></button>}
-                {isOwner && <button type="button" onClick={() => { setIsEditModalOpen(true); closeArtistMenu(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Edit3 className="h-4 w-4 text-[#D946EF]" /><span>Edit artist profile</span></button>}
+                {!isOwner && <button type="button" onClick={() => { onToggleFollow?.(artist); closeArtistMenu(); }} disabled={!onToggleFollow} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40">{isFollowing ? <Check className="h-4 w-4 text-[#D946EF]" /> : <UserPlus className="h-4 w-4 text-zinc-400" />}<span>{t(isFollowing ? 'Unfollow artist' : 'Follow artist')}</span></button>}
+                {isOwner && <button type="button" onClick={() => { setIsEditModalOpen(true); closeArtistMenu(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Edit3 className="h-4 w-4 text-[#D946EF]" /><span>{t('Edit artist profile')}</span></button>}
 
                 <div className="my-1 h-px bg-white/[0.08]" />
-                <button type="button" onClick={() => void copyArtistLink()} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Copy className="h-4 w-4 text-zinc-400" /><span>Copy artist link</span></button>
+                <button type="button" onClick={() => void copyArtistLink()} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Copy className="h-4 w-4 text-zinc-400" /><span>{t('Copy artist link')}</span></button>
 
                 {(instagramUrl || twitterUrl || websiteUrl) && <div className="my-1 h-px bg-white/[0.08]" />}
-                {instagramUrl && <button type="button" onClick={() => openArtistUrl(instagramUrl, 'instagram')} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Instagram className="h-4 w-4 text-pink-400" /><span>Open Instagram</span><ExternalLink className="ml-auto h-3 w-3 text-zinc-600" /></button>}
-                {twitterUrl && <button type="button" onClick={() => openArtistUrl(twitterUrl, 'twitter')} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Twitter className="h-4 w-4 text-sky-400" /><span>Open Twitter</span><ExternalLink className="ml-auto h-3 w-3 text-zinc-600" /></button>}
-                {websiteUrl && <button type="button" onClick={() => openArtistUrl(websiteUrl, 'website')} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Globe className="h-4 w-4 text-[#D946EF]" /><span>Open official site</span><ExternalLink className="ml-auto h-3 w-3 text-zinc-600" /></button>}
+                {instagramUrl && <button type="button" onClick={() => openArtistUrl(instagramUrl, 'instagram')} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Instagram className="h-4 w-4 text-pink-400" /><span>{t('Open Instagram')}</span><ExternalLink className="ml-auto h-3 w-3 text-zinc-600" /></button>}
+                {twitterUrl && <button type="button" onClick={() => openArtistUrl(twitterUrl, 'twitter')} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Twitter className="h-4 w-4 text-sky-400" /><span>{t('Open Twitter')}</span><ExternalLink className="ml-auto h-3 w-3 text-zinc-600" /></button>}
+                {websiteUrl && <button type="button" onClick={() => openArtistUrl(websiteUrl, 'website')} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Globe className="h-4 w-4 text-[#D946EF]" /><span>{t('Open official site')}</span><ExternalLink className="ml-auto h-3 w-3 text-zinc-600" /></button>}
               </div>
             </div>,
             document.body
@@ -457,13 +459,13 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
       <div className="grid grid-cols-1 gap-6 sm:gap-8 lg:grid-cols-3">
         {/* LEFT 2 COLUMNS: POPULAR TRACKS TABLE */}
         <div className="lg:col-span-2 space-y-4">
-          <h2 className="text-2xl font-black text-white tracking-tight">Popular</h2>
+          <h2 className="text-2xl font-black text-white tracking-tight">{t('Popular')}</h2>
 
           {displayTracks.length === 0 ? (
             <div className="p-8 rounded-2xl bg-[#181818]/70 border border-white/5 text-center text-zinc-400 space-y-2">
               <Music className="w-10 h-10 mx-auto text-zinc-600 mb-2" />
-              <p className="text-sm font-bold text-white">No tracks uploaded yet</p>
-              <p className="text-xs text-zinc-500">This artist hasn't uploaded any music yet.</p>
+              <p className="text-sm font-bold text-white">{t('No tracks uploaded yet')}</p>
+              <p className="text-xs text-zinc-500">{t("This artist hasn't uploaded any music yet.")}</p>
             </div>
           ) : (
             <div className="bg-[#181818]/70 rounded-2xl overflow-hidden border border-white/5 divide-y divide-white/5 shadow-xl">
@@ -563,7 +565,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
               onClick={() => setShowAllPopular(!showAllPopular)}
               className="text-xs font-bold text-zinc-400 hover:text-white uppercase tracking-wider pt-2"
             >
-              {showAllPopular ? 'Show less' : 'See more'}
+              {t(showAllPopular ? 'Show less' : 'See more')}
             </button>
           )}
         </div>
@@ -571,7 +573,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         {/* RIGHT COLUMN: ARTIST PICK CARD */}
         {featuredTrack && (
           <div className="space-y-4">
-            <h2 className="text-2xl font-black text-white tracking-tight">Artist Pick</h2>
+            <h2 className="text-2xl font-black text-white tracking-tight">{t('Artist Pick')}</h2>
             <div
               data-track-id={featuredTrack.id}
               data-context-type="track"
@@ -614,7 +616,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
       {/* DISCOGRAPHY SECTION */}
       <div className="space-y-4 pt-4">
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-2xl font-black text-white tracking-tight">Discography</h2>
+          <h2 className="text-2xl font-black text-white tracking-tight">{t('Discography')}</h2>
           {displayTracks.length > 0 && (
             <div className="scrollbar-none flex max-w-full items-center gap-2 overflow-x-auto pb-1">
               <button
@@ -625,7 +627,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                     : 'bg-white/10 text-zinc-400 hover:text-white'
                 }`}
               >
-                Popular releases
+                {t('Popular releases')}
               </button>
               <button
                 onClick={() => setDiscographyFilter('singles')}
@@ -635,7 +637,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                     : 'bg-white/10 text-zinc-400 hover:text-white'
                 }`}
               >
-                Singles & EPs
+                {t('Singles & EPs')}
               </button>
             </div>
           )}
@@ -644,8 +646,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         {displayTracks.length === 0 ? (
           <div className="p-8 rounded-2xl bg-[#181818]/70 border border-white/5 text-center text-zinc-400 space-y-2">
             <Disc className="w-10 h-10 mx-auto text-zinc-600 mb-2" />
-            <p className="text-sm font-bold text-white">No tracks uploaded yet</p>
-            <p className="text-xs text-zinc-500">This artist hasn't uploaded any music yet.</p>
+            <p className="text-sm font-bold text-white">{t('No tracks uploaded yet')}</p>
+            <p className="text-xs text-zinc-500">{t("This artist hasn't uploaded any music yet.")}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
@@ -710,7 +712,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
 
       {/* SPOTIFY ABOUT SECTION */}
       <div className="space-y-4 pt-4">
-        <h2 className="text-2xl font-black text-white tracking-tight">About</h2>
+        <h2 className="text-2xl font-black text-white tracking-tight">{t('About')}</h2>
         <div data-artist-id={artist.id} data-context-type="artist" className="relative rounded-2xl overflow-hidden p-8 sm:p-10 bg-[#181818] border border-white/10 shadow-2xl group cursor-pointer">
           <div className="relative z-10 max-w-2xl space-y-4">
             <div className="flex items-center space-x-4">
@@ -724,7 +726,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
               </div>
               <div>
                 <p className="text-xl font-black text-white">{totalStreamsLabel}</p>
-                <p className="text-xs text-zinc-400">Streaming Listeners on VERTEX</p>
+                <p className="text-xs text-zinc-400">{t('Streaming Listeners on VERTEX')}</p>
               </div>
             </div>
 
@@ -735,7 +737,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
             <div className="flex flex-wrap items-center gap-3 pt-2">
               {isVerified && (
                 <span className="px-3 py-1 rounded-full bg-white/10 text-white text-xs font-bold border border-white/10">
-                  Verified Artist
+                  {t('Verified Artist')}
                 </span>
               )}
               {instagramUrl && (
@@ -770,7 +772,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                   className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-white/5 hover:bg-white/10 text-xs text-[#D946EF] font-bold border border-white/10 transition-colors"
                 >
                   <Globe className="w-3.5 h-3.5" />
-                  <span>Official Site</span>
+                  <span>{t('Official Site')}</span>
                 </a>
               )}
             </div>

@@ -4,6 +4,7 @@ import { Track, Artist, Playlist, UserProfile } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { getArtistStats } from '../../utils/artistUtils';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface NowPlayingSidebarProps {
   currentTrack: Track | null;
@@ -36,6 +37,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
   onOpenNewPlaylistModal,
   showToast,
 }) => {
+  const { t } = useI18n();
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
 
   if (!currentTrack) {
@@ -43,7 +45,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
       <aside className="w-full h-full flex-shrink-0 flex flex-col select-none text-zinc-300 relative z-20">
         <div className="bg-[#121212] rounded-xl flex-1 flex flex-col overflow-hidden border border-white/[0.04]">
           <div className="flex items-center justify-between p-4 border-b border-white/5">
-            <span className="font-bold text-sm text-white">Now Playing</span>
+            <span className="font-bold text-sm text-white">{t('Now Playing')}</span>
             <button
               onClick={onClose}
               className="p-1 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
@@ -57,9 +59,9 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
               <Music className="w-8 h-8" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-white mb-1">No Track Playing</h4>
+              <h4 className="text-sm font-bold text-white mb-1">{t('No Track Playing')}</h4>
               <p className="text-xs text-zinc-500 max-w-[200px] mx-auto leading-relaxed">
-                Select a song from Home, Search, or Library to start playing.
+                {t('Select a song from Home, Search, or Library to start playing.')}
               </p>
             </div>
           </div>
@@ -96,9 +98,9 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
   // Queue order alone is not enough to identify the playback source.
   // Showing a playlist name by comparing arrays caused unrelated queues with
   // the same tracks to be attributed to the wrong playlist.
-  const releaseContextText = currentTrack.releaseType === 'SINGLE' || currentTrack.album === 'Single'
+  const releaseContextText = t(currentTrack.releaseType === 'SINGLE' || currentTrack.album === 'Single'
     ? 'PLAYING FROM SINGLE'
-    : 'PLAYING FROM RELEASE';
+    : 'PLAYING FROM RELEASE');
   const releaseName = currentTrack.releaseTitle ||
     (currentTrack.album && currentTrack.album !== 'Single' ? currentTrack.album : currentTrack.title);
 
@@ -165,10 +167,10 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
               <button
                 onClick={() => {
                   onToggleLike(currentTrack.id);
-                  showToast?.(currentTrack.isLiked ? 'Removed from Liked Songs' : 'Added to Liked Songs');
+                  showToast?.(t(currentTrack.isLiked ? 'Removed from Liked Songs' : 'Added to Liked Songs'));
                 }}
                 className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white transition-all active:scale-95"
-                title={currentTrack.isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+                title={t(currentTrack.isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs')}
               >
                 <Heart className={`w-5 h-5 ${currentTrack.isLiked ? 'fill-[#D946EF] text-[#D946EF]' : ''}`} />
               </button>
@@ -178,7 +180,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
                 <button
                   onClick={() => setShowPlaylistMenu(!showPlaylistMenu)}
                   className={`p-2 rounded-full hover:bg-white/5 transition-all active:scale-95 ${showPlaylistMenu ? 'text-[#D946EF] bg-white/5' : 'text-zinc-400 hover:text-white'}`}
-                  title="Add to Playlist"
+                  title={t('Add to Playlist')}
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -201,7 +203,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
                         className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-[#D946EF]/20 text-[#D946EF] font-bold text-left"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Create New Playlist</span>
+                        <span>{t('Create New Playlist')}</span>
                       </button>
                       <div className="h-[1px] bg-white/10 my-1" />
                       {playlists.length > 0 ? (
@@ -220,7 +222,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
                           </button>
                         ))
                       ) : (
-                        <p className="px-2.5 py-1.5 text-zinc-500 italic text-[10px]">No playlists available</p>
+                        <p className="px-2.5 py-1.5 text-zinc-500 italic text-[10px]">{t('No playlists available')}</p>
                       )}
                     </motion.div>
                   )}
@@ -245,7 +247,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
               {isVerified && (
                 <div className="absolute top-3 left-3 flex items-center space-x-1.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full text-[10px] font-bold text-blue-400 border border-white/5">
                   <ShieldCheck className="w-3.5 h-3.5 fill-blue-500 text-black" />
-                  <span>VERIFIED</span>
+                  <span>{t('VERIFIED')}</span>
                 </div>
               )}
             </div>
@@ -271,7 +273,7 @@ export const NowPlayingSidebar: React.FC<NowPlayingSidebarProps> = ({
                 onClick={() => onSelectArtist(displayObj || currentTrack.userId || '')}
                 className="w-full flex items-center justify-center space-x-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all hover:border-white/20 active:scale-95"
               >
-                <span>Go to Artist Page</span>
+                <span>{t('Go to Artist Page')}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </button>
             </div>

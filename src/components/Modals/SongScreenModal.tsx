@@ -16,6 +16,7 @@ import {
 import { Track } from '../../types';
 import { AudioVisualizer } from '../Player/AudioVisualizer';
 import { extractCoverPalette, CoverPalette } from '../../utils/coverColors';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface SongScreenModalProps {
   isOpen: boolean;
@@ -63,6 +64,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
   onSelectArtist,
   onSelectAlbum,
 }) => {
+  const { t } = useI18n();
   const [palette, setPalette] = useState<CoverPalette>({
     accent: currentTrack?.accentColor || '#A855F7',
     secondary: currentTrack?.secondaryColor || '#D946EF',
@@ -100,7 +102,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
             </div>
             <div className="min-w-0">
               <div className="mb-0.5 flex items-center text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] md:mb-1 md:text-[10px] md:tracking-[0.24em]">
-                Now playing
+                {t('Now Playing')}
               </div>
               <h1 data-track-id={currentTrack.id} data-context-type="track" className="truncate text-lg font-black tracking-tight md:text-3xl">{releaseName}</h1>
             </div>
@@ -108,8 +110,8 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
           <button
             onClick={onClose}
             className="control-press flex h-11 w-11 items-center justify-center rounded-[15px] border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white md:h-auto md:w-auto md:rounded-full md:p-2.5"
-            aria-label="Minimize now playing"
-            title="Minimize Now Playing"
+            aria-label={t('Minimize now playing')}
+            title={t('Minimize Now Playing')}
           >
             <ChevronDown className="h-5 w-5" />
           </button>
@@ -134,7 +136,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
           <article className="song-screen-controls workspace-card flex min-h-0 min-w-0 max-w-full flex-shrink-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#211827] to-[#181818] p-3 shadow-2xl md:self-stretch md:rounded-3xl md:p-5">
             <div className="flex items-center justify-between gap-3 md:items-start md:gap-4">
               <div className="min-w-0">
-                <p className="hidden text-[10px] font-black uppercase tracking-[0.22em] text-[#D8B4FE] md:block">Listening session</p>
+                <p className="hidden text-[10px] font-black uppercase tracking-[0.22em] text-[#D8B4FE] md:block">{t('Listening session')}</p>
                 <h2 data-track-id={currentTrack.id} data-context-type="track" className="truncate text-xl font-black tracking-tight text-white md:mt-2 md:text-4xl">{currentTrack.title}</h2>
                 <button
                   data-artist-id={currentTrack.userId}
@@ -152,7 +154,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                     ? 'border-[#D946EF]/40 bg-[#D946EF]/15 text-[#E879F9]'
                     : 'border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
                 }`}
-                title={currentTrack.isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+                title={t(currentTrack.isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs')}
               >
                 <Heart className={`h-5 w-5 ${currentTrack.isLiked ? 'fill-current' : ''}`} />
               </button>
@@ -165,8 +167,8 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                   className={`control-press relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
                     isShuffle ? 'bg-[#D946EF]/15 text-[#F0ABFC]' : 'text-zinc-500 hover:bg-white/[0.07] hover:text-white'
                   }`}
-                  title={isShuffle ? 'Turn shuffle off' : 'Turn shuffle on'}
-                  aria-label={isShuffle ? 'Turn shuffle off' : 'Turn shuffle on'}
+                  title={t(isShuffle ? 'Turn shuffle off' : 'Turn shuffle on')}
+                  aria-label={t(isShuffle ? 'Turn shuffle off' : 'Turn shuffle on')}
                   aria-pressed={isShuffle}
                 >
                   <Shuffle className="h-4 w-4" />
@@ -175,7 +177,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                 <button
                   onClick={onPrev}
                   className="control-press flex h-11 w-11 items-center justify-center rounded-full text-zinc-300 hover:bg-white/[0.07] hover:text-white md:h-auto md:w-auto md:p-3"
-                  title="Previous track"
+                  title={t('Previous track')}
                 >
                   <SkipBack className="h-5 w-5 fill-current" />
                 </button>
@@ -183,7 +185,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                   onClick={onTogglePlay}
                   className="now-playing-gradient-button control-press flex h-14 w-14 items-center justify-center rounded-full text-black shadow-[0_14px_34px_rgba(0,0,0,0.35)] hover:brightness-110 md:h-16 md:w-16"
                   style={{ background: `linear-gradient(135deg, ${palette.accent}, ${palette.secondary})` }}
-                  title={isPlaying ? 'Pause' : 'Play'}
+                  title={t(isPlaying ? 'Pause' : 'Play')}
                 >
                   {isPlaying ? (
                     <Pause className="h-6 w-6 fill-current md:h-7 md:w-7" />
@@ -194,7 +196,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                 <button
                   onClick={onNext}
                   className="control-press flex h-11 w-11 items-center justify-center rounded-full text-zinc-300 hover:bg-white/[0.07] hover:text-white md:h-auto md:w-auto md:p-3"
-                  title="Next track"
+                  title={t('Next track')}
                 >
                   <SkipForward className="h-5 w-5 fill-current" />
                 </button>
@@ -203,8 +205,8 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                   className={`control-press relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
                     repeatMode !== 'off' ? 'bg-[#D946EF]/15 text-[#F0ABFC]' : 'text-zinc-500 hover:bg-white/[0.07] hover:text-white'
                   }`}
-                  title={repeatMode === 'off' ? 'Turn repeat on' : repeatMode === 'all' ? 'Repeat all' : 'Repeat one'}
-                  aria-label={repeatMode === 'off' ? 'Repeat off. Turn repeat on' : repeatMode === 'all' ? 'Repeat all. Switch to repeat one' : 'Repeat one. Turn repeat off'}
+                  title={t(repeatMode === 'off' ? 'Turn repeat on' : repeatMode === 'all' ? 'Repeat all' : 'Repeat one')}
+                  aria-label={t(repeatMode === 'off' ? 'Repeat off. Turn repeat on' : repeatMode === 'all' ? 'Repeat all. Switch to repeat one' : 'Repeat one. Turn repeat off')}
                 >
                   {repeatMode === 'one' ? <Repeat1 className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
                   {repeatMode !== 'off' && <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-[#D946EF]" />}
@@ -235,7 +237,7 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
                     value={progress}
                     onChange={(event) => onSeek(Number(event.target.value))}
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                    aria-label="Track progress"
+                    aria-label={t('Track progress')}
                   />
                 </div>
                 <span className="w-9">{formatTime(currentTrack.duration)}</span>
@@ -246,16 +248,16 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">
-                    <Waves className="h-4 w-4 text-[#D946EF]" /> Live spectrum
+                    <Waves className="h-4 w-4 text-[#D946EF]" /> {t('Live spectrum')}
                   </div>
-                  <p className="mt-1 text-xs text-zinc-500">Audio activity for the current track</p>
+                  <p className="mt-1 text-xs text-zinc-500">{t('Audio activity for the current track')}</p>
                 </div>
                 {onOpenEQ && (
                   <button
                     onClick={onOpenEQ}
                     className="control-press flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-300 hover:bg-white/10 hover:text-white"
                   >
-                    <SlidersHorizontal className="h-3.5 w-3.5" /> Equalizer
+                    <SlidersHorizontal className="h-3.5 w-3.5" /> {t('Equalizer')}
                   </button>
                 )}
               </div>

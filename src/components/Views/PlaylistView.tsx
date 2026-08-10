@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { Playlist, Track } from '../../types';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface PlaylistViewProps {
   playlist: Playlist | null;
@@ -79,6 +80,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
   onSelectArtist,
   showToast,
 }) => {
+  const { t } = useI18n();
   const [songSearchQuery, setSongSearchQuery] = useState('');
   const [showAddSection, setShowAddSection] = useState(false);
   const [pendingTrackIds, setPendingTrackIds] = useState<Set<string>>(new Set());
@@ -103,8 +105,8 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
       <div className="flex min-h-[55vh] items-center justify-center p-8">
         <div className="rounded-3xl border border-white/10 bg-[#181818] px-10 py-12 text-center shadow-2xl">
           <p className="text-5xl font-black text-white">404</p>
-          <h2 className="mt-3 text-xl font-bold text-white">Playlist not found</h2>
-          <p className="mt-2 text-sm text-zinc-400">This playlist does not exist or has been removed.</p>
+          <h2 className="mt-3 text-xl font-bold text-white">{t('Playlist not found')}</h2>
+          <p className="mt-2 text-sm text-zinc-400">{t('This playlist does not exist or has been removed.')}</p>
         </div>
       </div>
     );
@@ -167,15 +169,15 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
         <div className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full bg-[#D946EF]/20 blur-3xl" />
 
         <div className="relative flex flex-col gap-6 p-5 sm:p-7 md:flex-row md:items-end md:p-9">
-          <button type="button" onClick={canManage ? onOpenEditModal : undefined} className={`group relative mx-auto aspect-square w-44 shrink-0 overflow-hidden rounded-3xl border border-white/10 bg-black shadow-[0_22px_55px_rgba(0,0,0,0.5)] sm:w-52 md:mx-0 ${canManage ? 'cursor-pointer' : 'cursor-default'}`} aria-label={canManage ? 'Edit playlist cover and details' : undefined}>
+          <button type="button" onClick={canManage ? onOpenEditModal : undefined} className={`group relative mx-auto aspect-square w-44 shrink-0 overflow-hidden rounded-3xl border border-white/10 bg-black shadow-[0_22px_55px_rgba(0,0,0,0.5)] sm:w-52 md:mx-0 ${canManage ? 'cursor-pointer' : 'cursor-default'}`} aria-label={canManage ? t('Edit playlist cover and details') : undefined}>
             <img src={playlist.coverUrl} alt={playlist.title} referrerPolicy="no-referrer" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-            {canManage && <span className="absolute inset-0 flex items-center justify-center gap-2 bg-black/60 text-xs font-black opacity-0 transition-opacity group-hover:opacity-100"><Edit3 className="h-4 w-4" /> Edit playlist</span>}
+            {canManage && <span className="absolute inset-0 flex items-center justify-center gap-2 bg-black/60 text-xs font-black opacity-0 transition-opacity group-hover:opacity-100"><Edit3 className="h-4 w-4" /> {t('Edit playlist')}</span>}
           </button>
 
           <div className="min-w-0 flex-1 text-center md:text-left">
             <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-[#F0ABFC]"><Sparkles className="h-3 w-3" /> Public playlist</span>
-              {canManage && <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.14em] text-zinc-400">Owned by you</span>}
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-[#F0ABFC]"><Sparkles className="h-3 w-3" /> {t('Public playlist')}</span>
+              {canManage && <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.14em] text-zinc-400">{t('Owned by you')}</span>}
             </div>
             <h1 className="mt-4 break-words text-4xl font-black leading-none tracking-[-0.04em] sm:text-5xl lg:text-6xl">{playlist.title}</h1>
             <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:mx-0">{playlist.description || 'A personal mix from your VERTEX Music library.'}</p>
@@ -190,31 +192,31 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
 
       <section className="workspace-card section-reveal flex flex-col items-stretch gap-4 rounded-3xl border border-white/10 bg-[#181818] p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-5">
         <div className="flex flex-wrap items-center justify-center gap-2.5 sm:justify-start">
-          <button type="button" onClick={handlePlayButton} disabled={playlistTracks.length === 0} className="control-press flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-[0_14px_34px_rgba(168,85,247,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40" title={isCurrentPlaylistPlaying ? 'Pause playlist' : 'Play playlist'}>
+          <button type="button" onClick={handlePlayButton} disabled={playlistTracks.length === 0} className="control-press flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white shadow-[0_14px_34px_rgba(168,85,247,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40" title={t(isCurrentPlaylistPlaying ? 'Pause playlist' : 'Play playlist')}>
             {isCurrentPlaylistPlaying ? <Pause className="h-6 w-6 fill-white" /> : <Play className="ml-0.5 h-6 w-6 fill-white" />}
           </button>
-          <button type="button" onClick={() => onShufflePlaylist(playlistTracks)} disabled={playlistTracks.length === 0} className={`control-press flex h-11 items-center gap-2 rounded-2xl border px-4 text-xs font-black transition-all disabled:opacity-40 ${isCurrentPlaylistShuffled ? 'border-[#D946EF]/50 bg-[#D946EF]/15 text-[#F0ABFC]' : 'border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white'}`} title={isCurrentPlaylistShuffled ? 'Turn shuffle off' : 'Shuffle playlist'}>
+          <button type="button" onClick={() => onShufflePlaylist(playlistTracks)} disabled={playlistTracks.length === 0} className={`control-press flex h-11 items-center gap-2 rounded-2xl border px-4 text-xs font-black transition-all disabled:opacity-40 ${isCurrentPlaylistShuffled ? 'border-[#D946EF]/50 bg-[#D946EF]/15 text-[#F0ABFC]' : 'border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white'}`} title={t(isCurrentPlaylistShuffled ? 'Turn shuffle off' : 'Shuffle playlist')}>
             <Shuffle className="h-4 w-4" /> <span className="hidden sm:inline">{isCurrentPlaylistShuffled ? 'Shuffling' : 'Shuffle'}</span>
           </button>
-          {canManage && <button type="button" onClick={onOpenEditModal} className="control-press flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"><Edit3 className="h-4 w-4 text-[#D946EF]" /> Edit</button>}
-          {canManage && <button type="button" onClick={() => setShowAddSection(true)} className="control-press flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"><Plus className="h-4 w-4" /> Add songs</button>}
-          <button type="button" onClick={handleCopyLink} className="control-press flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"><Copy className="h-4 w-4" /><span className="hidden sm:inline">Copy link</span></button>
+          {canManage && <button type="button" onClick={onOpenEditModal} className="control-press flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"><Edit3 className="h-4 w-4 text-[#D946EF]" /> {t('Edit')}</button>}
+          {canManage && <button type="button" onClick={() => setShowAddSection(true)} className="control-press flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"><Plus className="h-4 w-4" /> {t('Add songs')}</button>}
+          <button type="button" onClick={handleCopyLink} className="control-press flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white"><Copy className="h-4 w-4" /><span className="hidden sm:inline">{t('Copy link')}</span></button>
         </div>
 
-        {canManage && <button type="button" onClick={() => { if (window.confirm(`Delete "${playlist.title}" permanently?`)) onDeletePlaylist(playlist.id); }} className="control-press flex h-11 items-center justify-center gap-2 rounded-2xl border border-red-400/20 bg-red-400/[0.07] px-4 text-xs font-black text-red-300 hover:bg-red-400/15"><Trash2 className="h-4 w-4" /> Delete</button>}
+        {canManage && <button type="button" onClick={() => { if (window.confirm(t('Delete "{{title}}" permanently?', { title: playlist.title }))) onDeletePlaylist(playlist.id); }} className="control-press flex h-11 items-center justify-center gap-2 rounded-2xl border border-red-400/20 bg-red-400/[0.07] px-4 text-xs font-black text-red-300 hover:bg-red-400/15"><Trash2 className="h-4 w-4" /> {t('Delete')}</button>}
       </section>
 
       <section className="workspace-card section-reveal overflow-hidden rounded-3xl border border-white/10 bg-[#181818]">
         <div className="flex items-end justify-between gap-4 border-b border-white/[0.08] px-4 py-4 sm:px-6">
-          <div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Tracklist</p><h2 className="mt-1 text-xl font-black">Inside this playlist</h2></div>
+          <div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">{t('Tracklist')}</p><h2 className="mt-1 text-xl font-black">{t('Inside this playlist')}</h2></div>
           <span className="rounded-full border border-white/[0.08] bg-black/20 px-3 py-1.5 text-[10px] font-bold text-zinc-500">{playlistTracks.length} songs</span>
         </div>
 
         {playlistTracks.length === 0 ? (
           <div className="p-10 text-center sm:p-14">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-zinc-500"><Music className="h-6 w-6" /></div>
-            <h3 className="mt-4 text-base font-black">This playlist is empty</h3>
-            <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-zinc-500">Add songs from your real catalog and they will appear here in playlist order.</p>
+            <h3 className="mt-4 text-base font-black">{t('This playlist is empty')}</h3>
+            <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-zinc-500">{t('Add songs from your real catalog and they will appear here in playlist order.')}</p>
           </div>
         ) : (
           <div className="divide-y divide-white/[0.045]">
@@ -241,7 +243,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1 sm:gap-2">
-                    <button type="button" onClick={(event) => { event.stopPropagation(); onToggleLike(track.id); }} className={`control-press flex h-10 w-10 items-center justify-center rounded-xl ${track.isLiked ? 'text-[#D946EF]' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`} aria-label={track.isLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'}><Heart className={`h-4 w-4 ${track.isLiked ? 'fill-current' : ''}`} /></button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); onToggleLike(track.id); }} className={`control-press flex h-10 w-10 items-center justify-center rounded-xl ${track.isLiked ? 'text-[#D946EF]' : 'text-zinc-500 hover:bg-white/5 hover:text-white'}`} aria-label={t(track.isLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs')}><Heart className={`h-4 w-4 ${track.isLiked ? 'fill-current' : ''}`} /></button>
                     <span className="hidden w-10 text-right font-mono text-[10px] text-zinc-500 sm:block">{formatDuration(track.duration)}</span>
                     {canManage && <button type="button" disabled={pendingTrackIds.size > 0} onClick={(event) => { event.stopPropagation(); void mutateTrack(track, 'remove'); }} className="control-press flex h-9 w-9 items-center justify-center rounded-xl text-zinc-600 hover:bg-red-400/10 hover:text-red-300 disabled:cursor-wait disabled:opacity-40" aria-label={`Remove ${track.title} from playlist`}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button>}
                   </div>
@@ -256,8 +258,8 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
         <div className="fixed inset-0 z-[950] flex items-center justify-center bg-black/80 p-3 text-white sm:p-6" onMouseDown={(event) => { if (event.currentTarget === event.target) setShowAddSection(false); }}>
         <section role="dialog" aria-modal="true" aria-label={`Add songs to ${playlist.title}`} className="workspace-card section-reveal flex max-h-[min(82dvh,760px)] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-[#D946EF]/20 bg-gradient-to-b from-[#211526] to-[#181818] shadow-[0_32px_100px_rgba(0,0,0,0.9)]">
           <header className="flex flex-col gap-4 border-b border-white/10 p-5 sm:flex-row sm:items-end sm:justify-between sm:p-6">
-            <div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#D8B4FE]">Build your mix</p><h2 className="mt-1 text-xl font-black">Add songs to {playlist.title}</h2><p className="mt-1 text-xs text-zinc-500">Search the catalog, preview a track or add it directly.</p></div>
-            <div className="flex items-center gap-2"><div className="relative min-w-0 flex-1 sm:w-72"><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input autoFocus value={songSearchQuery} onChange={(event) => setSongSearchQuery(event.target.value)} placeholder="Search songs, artists, albums..." className="w-full rounded-2xl border border-white/10 bg-black/25 py-3 pl-11 pr-4 text-xs text-white outline-none placeholder:text-zinc-600 focus:border-[#C084FC]/60 focus:ring-4 focus:ring-[#A855F7]/10" /></div><button type="button" onClick={() => setShowAddSection(false)} className="control-press flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white" aria-label="Close add songs"><X className="h-5 w-5" /></button></div>
+            <div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#D8B4FE]">{t('Build your mix')}</p><h2 className="mt-1 text-xl font-black">{t('Add songs to')} {playlist.title}</h2><p className="mt-1 text-xs text-zinc-500">{t('Search the catalog, preview a track or add it directly.')}</p></div>
+            <div className="flex items-center gap-2"><div className="relative min-w-0 flex-1 sm:w-72"><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input autoFocus value={songSearchQuery} onChange={(event) => setSongSearchQuery(event.target.value)} placeholder={t('Search songs, artists, albums...')} className="w-full rounded-2xl border border-white/10 bg-black/25 py-3 pl-11 pr-4 text-xs text-white outline-none placeholder:text-zinc-600 focus:border-[#C084FC]/60 focus:ring-4 focus:ring-[#A855F7]/10" /></div><button type="button" onClick={() => setShowAddSection(false)} className="control-press flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white" aria-label={t('Close add songs')}><X className="h-5 w-5" /></button></div>
           </header>
 
           <div className="min-h-0 overflow-y-auto p-5 sm:p-6">
@@ -271,7 +273,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                   <div key={track.id} data-track-id={track.id} data-context-type="track" style={{ '--stagger-index': index } as React.CSSProperties} className="stagger-item flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-2.5 hover:bg-white/[0.065]">
                     <button type="button" onClick={() => onPlayTrack(track)} className="control-press group relative h-12 w-12 shrink-0 overflow-hidden rounded-xl" aria-label={`Preview ${track.title}`}><img src={track.coverUrl} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" /><span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 group-hover:opacity-100"><Play className="h-4 w-4 fill-white" /></span></button>
                     <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{track.title}</p><p className="mt-1 truncate text-xs text-zinc-500">{track.artist} · {track.releaseTitle || track.album}</p></div>
-                    <button type="button" disabled={pendingTrackIds.size > 0} onClick={() => void mutateTrack(track, 'add')} className="control-press flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-3 text-[10px] font-black shadow-lg disabled:cursor-wait disabled:opacity-50">{pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}<span className="hidden xl:inline">Add</span></button>
+                    <button type="button" disabled={pendingTrackIds.size > 0} onClick={() => void mutateTrack(track, 'add')} className="control-press flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-3 text-[10px] font-black shadow-lg disabled:cursor-wait disabled:opacity-50">{pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}<span className="hidden xl:inline">{t('Add')}</span></button>
                   </div>
                 );
               })}

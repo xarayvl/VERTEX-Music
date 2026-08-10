@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, BrainCircuit, Check, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { useI18n } from '../../i18n/I18nContext';
 
 export type PlanStepStatus = 'pending' | 'active' | 'success' | 'error';
 
@@ -33,6 +34,7 @@ export const AgentPlanning: React.FC<AgentPlanningProps> = ({
   defaultExpanded = true,
   className = '',
 }) => {
+  const { t } = useI18n();
   const [isMainExpanded, setIsMainExpanded] = useState(defaultExpanded);
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>(() =>
     steps.reduce<Record<string, boolean>>((expanded, step) => {
@@ -76,7 +78,7 @@ export const AgentPlanning: React.FC<AgentPlanningProps> = ({
                 <BrainCircuit className="h-4 w-4 text-zinc-500" />
               )}
             </span>
-            <span className="text-[13px] font-black tracking-tight text-zinc-100">{title}</span>
+            <span className="text-[13px] font-black tracking-tight text-zinc-100">{t(title)}</span>
           </span>
 
           <span className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-200">

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Play, Pause, Heart, Clock, MoreHorizontal, ListPlus, FolderPlus, Copy, ChevronRight, Plus, Music2, User, Edit3 } from 'lucide-react';
 import { Track, Artist, UserProfile, Playlist } from '../../types';
 import { getReleaseTracksInPlaybackOrder } from '../../utils/artistUtils';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface AlbumViewProps {
   albumTrack: Track;
@@ -46,6 +47,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   onOpenNewPlaylist,
   showToast,
 }) => {
+  const { locale, t } = useI18n();
   // Find all tracks from the same release or album
   const albumTracks = getReleaseTracksInPlaybackOrder(albumTrack, allTracks);
 
@@ -197,7 +199,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   };
 
   const effectiveYear = albumTrack.releaseYear || (albumTrack.createdAt ? new Date(albumTrack.createdAt).getFullYear() : new Date().getFullYear());
-  const formattedReleaseDate = albumTrack.createdAt ? new Date(albumTrack.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : `Released ${effectiveYear}`;
+  const formattedReleaseDate = albumTrack.createdAt ? new Date(albumTrack.createdAt).toLocaleDateString(locale, { month: 'long', day: 'numeric', year: 'numeric' }) : `${t('Released')} ${effectiveYear}`;
 
   return (
     <div className="no-button-lift flex min-h-full min-w-0 flex-col space-y-2 overflow-x-hidden px-3 animate-in fade-in duration-500 sm:space-y-8 sm:px-6">
@@ -243,7 +245,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
             <span>•</span>
             <span>{effectiveYear}</span>
             <span>•</span>
-            <span>{albumTracks.length} song{albumTracks.length !== 1 ? 's' : ''}</span>
+            <span>{albumTracks.length} {t(albumTracks.length === 1 ? 'song' : 'songs')}</span>
             <span>•</span>
             <span>
               {Math.floor(albumTracks.reduce((acc, t) => acc + t.duration, 0) / 60)} min
@@ -268,7 +270,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
           onClick={() => void toggleReleaseLike()}
           disabled={isLikePending}
           className={`flex h-11 w-11 items-center justify-center rounded-full ${isReleaseLiked ? 'text-[#D946EF]' : 'text-zinc-400 hover:bg-white/5 hover:text-white'} transition-colors disabled:cursor-wait disabled:opacity-50`}
-          aria-label={isReleaseLiked ? 'Remove release from Liked Songs' : 'Save release to Liked Songs'}
+          aria-label={t(isReleaseLiked ? 'Remove release from Liked Songs' : 'Save release to Liked Songs')}
         >
           <Heart className={`w-8 h-8 ${isReleaseLiked ? 'fill-[#D946EF]' : ''}`} />
         </button>
@@ -278,7 +280,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
             onClick={toggleMenu}
             aria-haspopup="menu"
             aria-expanded={isMenuOpen}
-            aria-label="More release actions"
+            aria-label={t('More release actions')}
             className={`control-press flex h-11 w-11 items-center justify-center rounded-2xl border transition-colors ${isMenuOpen ? 'border-[#D946EF]/40 bg-[#D946EF]/15 text-[#F0ABFC]' : 'border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'}`}
           >
             <MoreHorizontal className="h-6 w-6" />
@@ -295,7 +297,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
               <div className="mb-1.5 flex items-center gap-3 border-b border-white/10 px-2.5 py-2.5">
                 <img src={albumTrack.coverUrl} alt="" referrerPolicy="no-referrer" className="h-10 w-10 shrink-0 rounded-xl object-cover shadow" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE]">{albumTracks.length > 1 ? 'Release actions' : 'Song actions'}</p>
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE]">{t(albumTracks.length > 1 ? 'Release actions' : 'Song actions')}</p>
                   <p className="mt-0.5 truncate text-sm font-black text-white">{albumTrack.releaseTitle || primaryTrack.title}</p>
                 </div>
               </div>
@@ -310,7 +312,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                     className="flex w-full items-center space-x-2.5 rounded-xl px-3 py-2.5 text-left font-semibold text-[#E9D5FF] transition-colors hover:bg-[#A855F7]/20 hover:text-white"
                   >
                     <Edit3 className="h-4 w-4 text-[#D946EF]" />
-                    <span>{albumTracks.length > 1 ? 'Edit release & tracklist' : 'Edit song'}</span>
+                    <span>{t(albumTracks.length > 1 ? 'Edit release & tracklist' : 'Edit song')}</span>
                   </button>
                 )}
 
@@ -322,7 +324,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   className="flex w-full items-center space-x-2.5 rounded-xl px-3 py-2.5 text-left font-semibold text-white transition-colors hover:bg-gradient-to-r hover:from-[#A855F7]/30 hover:to-[#D946EF]/20"
                 >
                   {isCurrentAlbumPlaying ? <Pause className="h-4 w-4 fill-current text-[#F0ABFC]" /> : <Play className="h-4 w-4 fill-current text-[#F0ABFC]" />}
-                  <span>{isCurrentAlbumPlaying ? 'Pause' : isCurrentAlbumActive ? 'Resume' : albumTracks.length > 1 ? 'Play release' : 'Play song'}</span>
+                  <span>{t(isCurrentAlbumPlaying ? 'Pause' : isCurrentAlbumActive ? 'Resume' : albumTracks.length > 1 ? 'Play release' : 'Play song')}</span>
                 </button>
 
                 <button
@@ -331,7 +333,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   className="flex w-full items-center space-x-2.5 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-50"
                 >
                   <Heart className={`h-4 w-4 ${isReleaseLiked ? 'fill-[#D946EF] text-[#D946EF]' : 'text-zinc-400'}`} />
-                  <span>{isReleaseLiked ? 'Remove from Liked Songs' : albumTracks.length > 1 ? 'Save release to Liked Songs' : 'Save to Liked Songs'}</span>
+                  <span>{t(isReleaseLiked ? 'Remove from Liked Songs' : albumTracks.length > 1 ? 'Save release to Liked Songs' : 'Save to Liked Songs')}</span>
                 </button>
 
                 {/* Add to Queue */}
@@ -345,7 +347,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   className="w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
                 >
                   <ListPlus className="w-4 h-4 text-zinc-400" />
-                  <span>{albumTracks.length > 1 ? 'Add release to queue' : 'Add to queue'}</span>
+                  <span>{t(albumTracks.length > 1 ? 'Add release to queue' : 'Add to queue')}</span>
                 </button>
 
                 {/* Add to Playlist */}
@@ -356,7 +358,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   >
                     <div className="flex items-center space-x-2.5">
                       <FolderPlus className="w-4 h-4 text-zinc-400" />
-                      <span>{albumTracks.length > 1 ? 'Add release to playlist' : 'Add to playlist'}</span>
+                      <span>{t(albumTracks.length > 1 ? 'Add release to playlist' : 'Add to playlist')}</span>
                     </div>
                     <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
                   </button>
@@ -371,7 +373,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                         className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-[#D946EF]/20 text-[#D946EF] font-bold text-left"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Create New Playlist</span>
+                        <span>{t('Create New Playlist')}</span>
                       </button>
                       <div className="h-[1px] bg-white/10 my-1" />
                       {playlists && playlists.length > 0 ? (
@@ -392,7 +394,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                           </button>
                         ))
                       ) : (
-                        <p className="px-2.5 py-1.5 text-zinc-500 italic text-[11px]">No playlists available</p>
+                        <p className="px-2.5 py-1.5 text-zinc-500 italic text-[11px]">{t('No playlists available')}</p>
                       )}
                     </div>
                   )}
@@ -409,7 +411,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   className="w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
                 >
                   <User className="w-4 h-4 text-zinc-400" />
-                  <span>Go to Artist</span>
+                  <span>{t('Go to Artist')}</span>
                 </button>
 
                 {/* Copy Link / Share */}
@@ -418,7 +420,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   className="w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
                 >
                   <Copy className="w-4 h-4 text-zinc-400" />
-                  <span>{albumTracks.length > 1 ? 'Copy album link' : 'Copy song link'}</span>
+                  <span>{t(albumTracks.length > 1 ? 'Copy album link' : 'Copy song link')}</span>
                 </button>
               </div>
             </div>,
@@ -432,7 +434,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
         {/* Table Header */}
         <div className="grid grid-cols-12 gap-2 border-b border-white/10 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-400 sm:gap-4 sm:px-4">
           <div className="col-span-1 text-center">#</div>
-          <div className="col-span-8 sm:col-span-9">Title</div>
+          <div className="col-span-8 sm:col-span-9">{t('Title')}</div>
           <div className="col-span-3 sm:col-span-2 flex items-center justify-end pr-2 gap-4">
             <Clock className="w-4 h-4" />
           </div>
@@ -551,7 +553,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
         <div className="pt-6 border-t border-white/5">
           <div className="mb-4 flex min-w-0 items-center justify-between">
             <h2 data-artist-id={albumTrack.userId} data-context-type="artist" className="min-w-0 break-words text-lg font-bold text-white hover:underline cursor-pointer sm:text-xl" onClick={() => onSelectArtist(albumTrack.userId || '')}>
-              More by {albumTrack.artist}
+              {t('More by')} {albumTrack.artist}
             </h2>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">

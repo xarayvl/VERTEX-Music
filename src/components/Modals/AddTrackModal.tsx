@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, Music, Upload, Link, Sparkles, Image, Check, FileAudio, AlertCircle, GripVertical, ArrowUp, ArrowDown, Trash2, ListMusic } from 'lucide-react';
 import { Track } from '../../types';
 import { formatCopyright, stripCopyrightPrefix } from '../../utils/copyright';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface AlbumTrackItem {
   clientId: string;
@@ -31,6 +32,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   tracks,
   onTrackAdded,
 }) => {
+  const { t } = useI18n();
   const [title, setTitle] = useState('');
   const [releaseType, setReleaseType] = useState('Single');
   const [album, setAlbum] = useState('__NEW__');
@@ -543,15 +545,15 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
               <div className="mb-1 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] sm:text-[10px] sm:tracking-[0.24em]">
                 <Sparkles className="h-3.5 w-3.5" /> Artist workspace
               </div>
-              <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">Upload music</h1>
-              <p className="mt-1 text-[11px] leading-4 text-zinc-400 sm:text-sm">Build a release, verify its audio and publish it from the main panel.</p>
+              <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">{t('Upload music')}</h1>
+              <p className="mt-1 text-[11px] leading-4 text-zinc-400 sm:text-sm">{t('Build a release, verify its audio and publish it from the main panel.')}</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="control-press shrink-0 rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white"
-            aria-label="Close music uploader"
+            aria-label={t('Close music uploader')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -568,8 +570,8 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
           <section className="workspace-card section-reveal min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-6">
             <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Release format</p>
-                <h2 className="mt-1 text-xl font-black tracking-tight">What are you publishing?</h2>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Release format')}</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight">{t('What are you publishing?')}</h2>
               </div>
               <span className="max-w-full break-words rounded-full border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#F0ABFC]">
                 Publishing as {userProfileName?.trim() || 'your artist account'}
@@ -610,7 +612,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
               <section className="workspace-card section-reveal min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-4 sm:p-7">
                 <div className="mb-6 flex min-w-0 flex-wrap items-start justify-between gap-3 sm:gap-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Audio files</p>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Audio files')}</p>
                     <h2 className="mt-1 text-xl font-black tracking-tight">{isMultiTrackRelease ? 'Build the tracklist' : 'Choose an audio source'}</h2>
                   </div>
                   <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-400">
@@ -673,8 +675,8 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                             <div className="flex flex-col items-center gap-3">
                               <div className="h-9 w-9 animate-spin rounded-full border-2 border-[#D946EF] border-t-transparent" />
                               <div>
-                                <p className="text-sm font-black">Reading audio metadata</p>
-                                <p className="mt-1 text-xs text-zinc-500">Verifying that the file is playable.</p>
+                                <p className="text-sm font-black">{t('Reading audio metadata')}</p>
+                                <p className="mt-1 text-xs text-zinc-500">{t('Verifying that the file is playable.')}</p>
                               </div>
                             </div>
                           ) : audioUrl ? (
@@ -696,8 +698,8 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                                 <FileAudio className="h-7 w-7" />
                               </div>
                               <div>
-                                <p className="text-sm font-black text-white">Drop an audio file here</p>
-                                <p className="mt-1 break-words text-xs leading-5 text-zinc-500">or click to browse · MP3, WAV, OGG, M4A, AAC and FLAC</p>
+                                <p className="text-sm font-black text-white">{t('Drop an audio file here')}</p>
+                                <p className="mt-1 break-words text-xs leading-5 text-zinc-500">{t('or click to browse · MP3, WAV, OGG, M4A, AAC and FLAC')}</p>
                               </div>
                             </label>
                           )}
@@ -706,7 +708,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
                       {audioSourceType === 'url' && (
                         <div className="rounded-3xl border border-white/[0.08] bg-black/20 p-5">
-                          <label className={labelClass}>Direct audio URL</label>
+                          <label className={labelClass}>{t('Direct audio URL')}</label>
                           <div className="relative">
                             <Link className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                             <input
@@ -718,7 +720,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                             />
                           </div>
                           <div className="mt-3 flex items-center justify-between gap-3 text-[11px]">
-                            <span className="text-zinc-500">The URL must expose playable audio metadata.</span>
+                            <span className="text-zinc-500">{t('The URL must expose playable audio metadata.')}</span>
                             <span className={duration > 0 ? 'font-bold text-emerald-300' : 'font-semibold text-zinc-600'}>{formatDuration(duration)}</span>
                           </div>
                         </div>
@@ -754,8 +756,8 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                           <>
                             <div className="h-9 w-9 animate-spin rounded-full border-2 border-[#D946EF] border-t-transparent" />
                             <div>
-                              <p className="text-sm font-black">Reading selected tracks</p>
-                              <p className="mt-1 text-xs text-zinc-500">Checking duration and playability.</p>
+                              <p className="text-sm font-black">{t('Reading selected tracks')}</p>
+                              <p className="mt-1 text-xs text-zinc-500">{t('Checking duration and playability.')}</p>
                             </div>
                           </>
                         ) : (
@@ -764,8 +766,8 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                               <ListMusic className="h-7 w-7" />
                             </div>
                             <div>
-                              <p className="text-sm font-black">Add all release tracks</p>
-                              <p className="mt-1 text-xs text-zinc-500">Multi-select files, then drag rows below to set the final order.</p>
+                              <p className="text-sm font-black">{t('Add all release tracks')}</p>
+                              <p className="mt-1 text-xs text-zinc-500">{t('Multi-select files, then drag rows below to set the final order.')}</p>
                             </div>
                           </>
                         )}
@@ -796,22 +798,22 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                                 type="text"
                                 value={item.title}
                                 onChange={(event) => updateAlbumTrackTitle(index, event.target.value)}
-                                placeholder="Track title"
+                                placeholder={t('Track title')}
                                 className="w-full rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-xs font-bold text-white outline-none placeholder:text-zinc-600 focus:border-[#C084FC]/70"
                               />
                               <p className="mt-1 truncate px-1 text-[9px] font-semibold text-zinc-600">{item.fileName} · {item.fileSize}</p>
                             </div>
                             <span className="hidden shrink-0 font-mono text-[10px] font-bold text-zinc-500 sm:block">{formatDuration(item.duration)}</span>
                             <div className="flex shrink-0 items-center">
-                              <button type="button" onClick={() => moveAlbumTrack(index, -1)} disabled={index === 0} className="control-press rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-20" aria-label="Move track up"><ArrowUp className="h-3.5 w-3.5" /></button>
-                              <button type="button" onClick={() => moveAlbumTrack(index, 1)} disabled={index === albumTracks.length - 1} className="control-press rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-20" aria-label="Move track down"><ArrowDown className="h-3.5 w-3.5" /></button>
-                              <button type="button" onClick={() => removeAlbumTrack(index)} className="control-press rounded-lg p-1.5 text-red-400/70 hover:bg-red-400/10 hover:text-red-300" aria-label="Remove track"><Trash2 className="h-3.5 w-3.5" /></button>
+                              <button type="button" onClick={() => moveAlbumTrack(index, -1)} disabled={index === 0} className="control-press rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-20" aria-label={t('Move track up')}><ArrowUp className="h-3.5 w-3.5" /></button>
+                              <button type="button" onClick={() => moveAlbumTrack(index, 1)} disabled={index === albumTracks.length - 1} className="control-press rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-20" aria-label={t('Move track down')}><ArrowDown className="h-3.5 w-3.5" /></button>
+                              <button type="button" onClick={() => removeAlbumTrack(index)} className="control-press rounded-lg p-1.5 text-red-400/70 hover:bg-red-400/10 hover:text-red-300" aria-label={t('Remove track')}><Trash2 className="h-3.5 w-3.5" /></button>
                             </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-center text-xs text-zinc-600">Your ordered tracklist will appear here.</div>
+                      <div className="mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-center text-xs text-zinc-600">{t('Your ordered tracklist will appear here.')}</div>
                     )}
                   </div>
                 )}
@@ -847,15 +849,15 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-3 text-center">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-zinc-600">Tracks</p>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{t('Tracks')}</p>
                     <p className="mt-1 text-sm font-black">{isMultiTrackRelease ? albumTracks.length : 1}</p>
                   </div>
                   <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-3 text-center">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-zinc-600">Duration</p>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{t('Duration')}</p>
                     <p className="mt-1 text-sm font-black">{formatDuration(totalReleaseDuration)}</p>
                   </div>
                   <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-3 text-center">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-zinc-600">Year</p>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{t('Year')}</p>
                     <p className="mt-1 text-sm font-black">{releaseYear}</p>
                   </div>
                 </div>
@@ -863,27 +865,27 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
               <section className="workspace-card section-reveal min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-6">
                 <div className="mb-5">
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">Release details</p>
-                  <h2 className="mt-1 text-xl font-black tracking-tight">Metadata and artwork</h2>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Release details')}</p>
+                  <h2 className="mt-1 text-xl font-black tracking-tight">{t('Metadata and artwork')}</h2>
                 </div>
 
                 {!isMultiTrackRelease ? (
                   <div>
-                    <label className={labelClass}>Song title *</label>
+                    <label className={labelClass}>{t('Song title *')}</label>
                     <input
                       type="text"
                       required
                       value={title}
                       onChange={(event) => setTitle(event.target.value)}
-                      placeholder="e.g. Midnight signal"
+                      placeholder={t('e.g. Midnight signal')}
                       className={fieldClass}
                     />
                   </div>
                 ) : (
                   <div>
-                    <label className={labelClass}>Release title *</label>
+                    <label className={labelClass}>{t('Release title *')}</label>
                     <select value={album} onChange={(event) => setAlbum(event.target.value)} className={fieldClass}>
-                      <option value="__NEW__">Create a new release</option>
+                      <option value="__NEW__">{t('Create a new release')}</option>
                       {customAlbumList.map((albumName) => (
                         <option key={albumName} value={albumName}>{albumName}</option>
                       ))}
@@ -902,9 +904,9 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                   <div>
-                    <label className={labelClass}>Genre</label>
+                    <label className={labelClass}>{t('Genre')}</label>
                     <select value={genre} onChange={(event) => setGenre(event.target.value)} className={fieldClass}>
-                      <option value="">Select genre</option>
+                      <option value="">{t('Select genre')}</option>
                       <option value="Synthwave">Synthwave</option>
                       <option value="Cyberpunk">Cyberpunk</option>
                       <option value="Lofi">Lofi</option>
@@ -916,7 +918,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass}>Release year</label>
+                    <label className={labelClass}>{t('Release year')}</label>
                     <input
                       type="number"
                       min="1900"
@@ -929,28 +931,28 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                 </div>
 
                 <div className="mt-5">
-                  <label className={labelClass}>Copyright / label</label>
+                  <label className={labelClass}>{t('Copyright / label')}</label>
                   <div className="flex overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] transition-all focus-within:border-[#C084FC]/70 focus-within:bg-white/[0.07] focus-within:ring-4 focus-within:ring-[#A855F7]/10">
                     <span aria-hidden="true" className="flex shrink-0 select-none items-center border-r border-white/10 px-4 text-sm font-black text-white">© {releaseYear}</span>
                     <input
                       type="text"
                       value={copyright}
                       onChange={(event) => setCopyright(stripCopyrightPrefix(event.target.value))}
-                      placeholder="Your Label"
-                      aria-label="Copyright owner and year"
+                      placeholder={t('Your Label')}
+                      aria-label={t('Copyright owner and year')}
                       className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-sm text-white outline-none placeholder:text-zinc-600"
                     />
                   </div>
                 </div>
 
                 <div className="mt-5">
-                  <label className={labelClass}>Cover artwork</label>
+                  <label className={labelClass}>{t('Cover artwork')}</label>
                   <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
                     <input
                       type="text"
                       value={coverUrl}
                       onChange={(event) => setCoverUrl(event.target.value)}
-                      placeholder="Image URL or upload a file"
+                      placeholder={t('Image URL or upload a file')}
                       className={`${fieldClass} min-w-0 flex-1`}
                     />
                     <label className="control-press flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white">
@@ -965,7 +967,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                 {uploadProgress && (
                   <div className="mb-4">
                     <div className="mb-2 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-zinc-500">
-                      <span>Publishing release</span>
+                      <span>{t('Publishing release')}</span>
                       <span>{uploadProgress.current}/{uploadProgress.total}</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
@@ -984,7 +986,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                     disabled={loading}
                     className="control-press rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-zinc-300 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Cancel
+                    {t('Cancel')}
                   </button>
                   <button
                     type="submit"
@@ -994,15 +996,15 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                     {loading ? (
                       <>
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        {uploadProgress ? `Saving ${uploadProgress.current} of ${uploadProgress.total}` : 'Publishing...'}
+                        {uploadProgress ? `${t('Saving')} ${uploadProgress.current} / ${uploadProgress.total}` : t('Publishing...')}
                       </>
                     ) : isReadingFile || isReadingMultiFiles ? (
                       <>
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Reading audio
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> {t('Reading audio')}
                       </>
                     ) : (
                       <>
-                        <Upload className="h-4 w-4" /> {isMultiTrackRelease ? `Publish ${albumTracks.length || ''} track${albumTracks.length === 1 ? '' : 's'}`.replace('  ', ' ') : 'Publish single'}
+                        <Upload className="h-4 w-4" /> {isMultiTrackRelease ? `${t('Publish')} ${albumTracks.length || ''} ${t(albumTracks.length === 1 ? 'track' : 'tracks')}`.replace('  ', ' ') : t('Publish single')}
                       </>
                     )}
                   </button>

@@ -30,6 +30,7 @@ import {
   Disc,
 } from 'lucide-react';
 import { Track, Playlist, Artist, TabType } from '../types';
+import { useI18n } from '../i18n/I18nContext';
 
 export interface ContextMenuTarget {
   x: number;
@@ -100,6 +101,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onSelectAlbum,
   showToast,
 }) => {
+  const { t } = useI18n();
   const menuRef = useRef<HTMLDivElement>(null);
   const [showPlaylistSubmenu, setShowPlaylistSubmenu] = useState(false);
   const [adjustedPos, setAdjustedPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -165,12 +167,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         ? `Playlist: ${activePlaylist.title}`
         : activeArtist
           ? `Artist: ${activeArtist.name}`
-          : 'VERTEX Context Menu'
+          : t('VERTEX Context Menu')
   );
 
   const handleCopyLink = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
-    showToast(`Copied ${label} link to clipboard!`);
+    showToast(t('Copied {{label}} link to clipboard!', { label: t(label) }));
     onClose();
   };
 
@@ -201,7 +203,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-[#A855F7]/20 text-[#C084FC] hover:text-white transition-colors font-semibold"
             >
               <Edit3 className="w-4 h-4 text-[#D946EF]" />
-              <span>Edit Track</span>
+              <span>{t('Edit Track')}</span>
             </button>
           )}
 
@@ -214,19 +216,19 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-gradient-to-r hover:from-[#A855F7]/30 hover:to-[#D946EF]/20 hover:text-white transition-colors"
           >
             {isActiveTrackCurrent && isPlaying ? <Pause className="w-4 h-4 fill-current text-[#C084FC]" /> : <Play className="w-4 h-4 fill-current text-[#C084FC]" />}
-            <span className="font-semibold text-white">{isActiveTrackCurrent && isPlaying ? 'Pause Song' : isActiveTrackCurrent ? 'Resume Song' : 'Play Song'}</span>
+            <span className="font-semibold text-white">{t(isActiveTrackCurrent && isPlaying ? 'Pause Song' : isActiveTrackCurrent ? 'Resume Song' : 'Play Song')}</span>
           </button>
 
           <button
             onClick={() => {
               onAddToQueue(activeTrack);
-              showToast(`Added "${activeTrack.title}" to queue`);
+              showToast(t('Added "{{title}}" to queue', { title: activeTrack.title }));
               onClose();
             }}
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <ListPlus className="w-4 h-4 text-zinc-400" />
-            <span>Add to Queue</span>
+            <span>{t('Add to Queue')}</span>
           </button>
 
           <button
@@ -246,7 +248,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                 activeTrack.isLiked ? 'text-[#D946EF] fill-[#D946EF]' : 'text-zinc-400'
               }`}
             />
-            <span>{activeTrack.isLiked ? 'Remove from Liked' : 'Save to Liked Songs'}</span>
+            <span>{t(activeTrack.isLiked ? 'Remove from Liked' : 'Save to Liked Songs')}</span>
           </button>
 
           {/* Submenu: Add to Playlist */}
@@ -258,7 +260,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             >
               <div className="flex items-center space-x-2.5">
                 <FolderPlus className="w-4 h-4 text-zinc-400" />
-                <span>Add to Playlist</span>
+                <span>{t('Add to Playlist')}</span>
               </div>
               <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
             </button>
@@ -276,7 +278,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-[#D946EF]/20 text-[#D946EF] font-bold"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Create New Playlist</span>
+                  <span>{t('Create New Playlist')}</span>
                 </button>
                 <div className="h-[1px] bg-white/10 my-1" />
                 {playlists.map((pl) => (
@@ -307,7 +309,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <Disc className="w-4 h-4 text-zinc-400" />
-            <span>Go to Album</span>
+            <span>{t('Go to Album')}</span>
           </button>
 
           <button
@@ -315,7 +317,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <Copy className="w-4 h-4 text-zinc-400" />
-            <span>Copy Song Link</span>
+            <span>{t('Copy Song Link')}</span>
           </button>
 
           <div className="h-[1px] bg-white/10 my-1" />
@@ -333,7 +335,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-gradient-to-r hover:from-[#A855F7]/30 hover:to-[#D946EF]/20 hover:text-white transition-colors"
           >
             <Play className="w-4 h-4 text-[#C084FC]" />
-            <span className="font-semibold text-white">Play Playlist</span>
+            <span className="font-semibold text-white">{t('Play Playlist')}</span>
           </button>
 
           <button
@@ -344,7 +346,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <ExternalLink className="w-4 h-4 text-zinc-400" />
-            <span>Open Playlist View</span>
+            <span>{t('Open Playlist View')}</span>
           </button>
 
           <button
@@ -352,7 +354,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <Copy className="w-4 h-4 text-zinc-400" />
-            <span>Copy Playlist Link</span>
+            <span>{t('Copy Playlist Link')}</span>
           </button>
 
           {currentUserId && activePlaylist.userId === currentUserId && (
@@ -364,7 +366,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
-              <span>Delete Playlist</span>
+              <span>{t('Delete Playlist')}</span>
             </button>
           )}
 
@@ -380,7 +382,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <Copy className="w-4 h-4 text-zinc-400" />
-            <span>Copy Artist Link</span>
+            <span>{t('Copy Artist Link')}</span>
           </button>
           <div className="h-[1px] bg-white/10 my-1" />
         </div>
@@ -397,7 +399,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             {isPlaying ? <Pause className="w-4 h-4 text-[#D946EF]" /> : <Play className="w-4 h-4 text-[#A855F7]" />}
-            <span>{isPlaying ? 'Pause Audio' : 'Play Audio'}</span>
+            <span>{t(isPlaying ? 'Pause Audio' : 'Play Audio')}</span>
           </button>
 
           <button
@@ -408,7 +410,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <Radio className="w-4 h-4 text-zinc-400" />
-            <span>Skip to Next Song</span>
+            <span>{t('Skip to Next Song')}</span>
           </button>
 
           <button
@@ -419,7 +421,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <SlidersHorizontal className="w-4 h-4 text-zinc-400" />
-            <span>Open Equalizer (EQ)</span>
+            <span>{t('Open Equalizer (EQ)')}</span>
           </button>
 
           <button
@@ -430,7 +432,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
           >
             <Laptop className="w-4 h-4 text-zinc-400" />
-            <span>Select Output Device</span>
+            <span>{t('Select Output Device')}</span>
           </button>
 
           <div className="h-[1px] bg-white/10 my-1" />
@@ -447,7 +449,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-[#A855F7]/20 text-white transition-colors font-semibold"
         >
           <Upload className="w-4 h-4 text-[#D946EF]" />
-          <span>Upload Audio Track (MP3)</span>
+          <span>{t('Upload Audio Track (MP3)')}</span>
         </button>
 
         <button
@@ -458,7 +460,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
         >
           <Plus className="w-4 h-4 text-zinc-400" />
-          <span>Create New Playlist</span>
+          <span>{t('Create New Playlist')}</span>
         </button>
 
         <button
@@ -469,7 +471,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
         >
           <Bot className="w-4 h-4 text-[#C084FC]" />
-          <span>Ask VERTEX AI DJ</span>
+          <span>{t('Ask VERTEX AI DJ')}</span>
         </button>
 
         <div className="h-[1px] bg-white/10 my-1" />
@@ -487,7 +489,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           className="w-full flex items-center space-x-2.5 px-3 py-1.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
         >
           <Home className="w-3.5 h-3.5 text-zinc-400" />
-          <span>Go to Home</span>
+          <span>{t('Go to Home')}</span>
         </button>
 
         <button
@@ -498,7 +500,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           className="w-full flex items-center space-x-2.5 px-3 py-1.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
         >
           <Search className="w-3.5 h-3.5 text-zinc-400" />
-          <span>Go to Search</span>
+          <span>{t('Go to Search')}</span>
         </button>
 
         <button
@@ -509,7 +511,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           className="w-full flex items-center space-x-2.5 px-3 py-1.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
         >
           <Library className="w-3.5 h-3.5 text-zinc-400" />
-          <span>Go to Library</span>
+          <span>{t('Go to Library')}</span>
         </button>
 
         <button
@@ -520,13 +522,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           className="w-full flex items-center space-x-2.5 px-3 py-1.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors"
         >
           <User className="w-3.5 h-3.5 text-zinc-400" />
-          <span>Profile & Account</span>
+          <span>{t('Profile & Account')}</span>
         </button>
       </div>
 
       {/* Footer Branding */}
       <div className="mt-1 px-3 py-1.5 border-t border-white/5 flex items-center justify-between text-[10px] text-zinc-500">
-        <span>VERTEX Audio Engine</span>
+        <span>{t('VERTEX Audio Engine')}</span>
         <Info className="w-3 h-3" />
       </div>
     </div>

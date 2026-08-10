@@ -3,6 +3,7 @@ import { Search, X, Play, Pause, Heart, ShieldCheck, User as UserIcon, Disc, Arr
 import { Track, Playlist, Artist, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import { groupTracksByRelease } from '../../utils/artistUtils';
+import { useI18n } from '../../i18n/I18nContext';
 
 interface SearchViewProps {
   tracks: Track[];
@@ -48,6 +49,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
   searchQuery: externalQuery,
   onSearchChange,
 }) => {
+  const { t } = useI18n();
   const [internalQuery, setInternalQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'songs' | 'albums' | 'artists' | 'playlists'>('all');
   const query = externalQuery !== undefined ? externalQuery : internalQuery;
@@ -185,7 +187,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
       {/* Header & Search Bar */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Search</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{t('Search')}</h1>
         </div>
 
         <div className="relative w-full max-w-xl">
@@ -194,7 +196,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
             type="text"
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
-            placeholder="Search tracks, albums, artists, or playlists..."
+            placeholder={t('Search tracks, albums, artists, or playlists...')}
             className="w-full pl-12 pr-10 py-3 rounded-full bg-[#242424] border border-white/5 text-sm text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#A855F7] shadow-inner transition-all"
           />
           {query && (
@@ -212,11 +214,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
       {query && (
         <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
           {[
-            { id: 'all', label: 'All Results' },
-            { id: 'songs', label: `Songs (${matchedTracks.length})` },
-            { id: 'albums', label: `Albums (${matchedAlbums.length})` },
-            { id: 'artists', label: `Artists & Users (${matchedArtists.length})` },
-            { id: 'playlists', label: `Playlists (${matchedPlaylists.length})` },
+            { id: 'all', label: t('All Results') },
+            { id: 'songs', label: `${t('Songs')} (${matchedTracks.length})` },
+            { id: 'albums', label: `${t('Albums')} (${matchedAlbums.length})` },
+            { id: 'artists', label: `${t('Artists & Users')} (${matchedArtists.length})` },
+            { id: 'playlists', label: `${t('Playlists')} (${matchedPlaylists.length})` },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -238,7 +240,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
         <div className="space-y-6">
           <div>
             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
-              Explore the current catalog
+              {t('Explore the current catalog')}
             </h3>
             <div className="flex flex-wrap gap-2">
               {trendingSearches.map((tag, idx) => (
@@ -255,7 +257,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
           <div>
             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
-              Browse Music Categories
+              {t('Browse Music Categories')}
             </h3>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
               {[
@@ -269,9 +271,9 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   onClick={() => handleQueryChange(cat.query)}
                   className={`bg-gradient-to-br ${cat.color} p-4 rounded-2xl h-28 flex flex-col justify-between cursor-pointer hover:scale-[1.03] transition-transform shadow-xl relative overflow-hidden group`}
                 >
-                  <h4 className="text-base font-extrabold text-white tracking-tight">{cat.title}</h4>
+                  <h4 className="text-base font-extrabold text-white tracking-tight">{t(cat.title)}</h4>
                   <span className="text-xs text-white/90 font-bold uppercase tracking-wider flex items-center space-x-1 group-hover:translate-x-1 transition-transform">
-                    <span>Explore</span>
+                    <span>{t('Explore')}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </span>
                 </div>
@@ -299,10 +301,10 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider">
-                        Top Result
+                        {t('Top Result')}
                       </h3>
                       <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full bg-[#D946EF]/20 text-[#D946EF] border border-[#D946EF]/30">
-                        {topResult.type}
+                        {t(topResult.type)}
                       </span>
                     </div>
 
@@ -320,7 +322,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                           {topResult.item.title}
                         </h2>
                         <p className="text-xs font-medium text-zinc-400 mt-1">
-                          Song • <span 
+                          {t('Song')} • <span
                             data-artist-id={topResult.item.userId}
                             data-context-type="artist"
                             onClick={(e) => {
@@ -347,7 +349,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                           {topResult.item.title}
                         </h2>
                         <p className="mt-1 text-xs font-medium text-zinc-400">
-                          {topResult.item.releaseType} • <span className="font-bold text-white">{topResult.item.representative.artist}</span> • {topResult.item.tracks.length} songs
+                          {topResult.item.releaseType} • <span className="font-bold text-white">{topResult.item.representative.artist}</span> • {topResult.item.tracks.length} {t('songs')}
                         </p>
                       </div>
                     )}
@@ -371,7 +373,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                         <p className="text-xs font-medium text-zinc-400 mt-1">
                           {topResult.item.username ? `@${topResult.item.username} • ` : ''}
                           <span className="text-white font-bold">
-                            {topResult.item.isUser ? 'User Profile' : 'Artist'}
+                            {t(topResult.item.isUser ? 'User Profile' : 'Artist')}
                           </span>
                         </p>
                       </div>
@@ -389,7 +391,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                           {topResult.item.title}
                         </h2>
                         <p className="text-xs font-medium text-zinc-400 mt-1 line-clamp-1">
-                          Playlist • <span className="text-white font-bold">{topResult.item.description || 'Custom Playlist'}</span>
+                          {t('Playlist')} • <span className="text-white font-bold">{topResult.item.description || t('Custom Playlist')}</span>
                         </p>
                       </div>
                     )}
@@ -440,7 +442,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                       onClick={() => handleArtistClick(topResult.item)}
                       className="mt-5 w-fit px-4 py-2 bg-white/10 hover:bg-[#D946EF] hover:text-white text-zinc-200 rounded-full text-xs font-extrabold transition-all"
                     >
-                      View Profile
+                      {t('View Profile')}
                     </button>
                   )}
 
@@ -449,7 +451,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                       onClick={() => onSelectPlaylist(topResult.item)}
                       className="mt-5 w-fit px-4 py-2 bg-white/10 hover:bg-[#D946EF] hover:text-white text-zinc-200 rounded-full text-xs font-extrabold transition-all"
                     >
-                      Open Playlist
+                      {t('Open Playlist')}
                     </button>
                   )}
                 </div>
@@ -459,11 +461,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
               {(filterType === 'songs' || matchedTracks.length > 0) && <div className={filterType === 'all' && topResult ? 'md:col-span-7' : 'col-span-12'}>
                 <h3 className="text-lg font-extrabold text-white tracking-tight mb-3 flex items-center space-x-2">
                   <Disc className="w-4 h-4 text-[#D946EF]" />
-                  <span>Songs</span>
+                  <span>{t('Songs')}</span>
                 </h3>
 
                 {matchedTracks.length === 0 ? (
-                  <p className="text-xs text-zinc-400 italic py-4">No matching songs found.</p>
+                  <p className="text-xs text-zinc-400 italic py-4">{t('No matching songs found.')}</p>
                 ) : (
                   <div className="space-y-1">
                     {matchedTracks.slice(0, filterType === 'all' ? 5 : 15).map((track) => {
@@ -494,7 +496,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                               className={`absolute inset-0 bg-black/60 items-center justify-center rounded-lg ${
                                 isThisTrackPlaying ? 'flex' : 'hidden group-hover:flex'
                               }`}
-                              title={isThisTrackPlaying ? 'Pause' : 'Play'}
+                              title={t(isThisTrackPlaying ? 'Pause' : 'Play')}
                             >
                               {isThisTrackPlaying ? (
                                 <Pause className="w-4 h-4 fill-white" />
@@ -555,11 +557,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
             <div>
               <h3 className="mb-4 flex items-center space-x-2 text-lg font-extrabold tracking-tight text-white">
                 <Disc className="h-4 w-4 text-[#D946EF]" />
-                <span>Albums & EPs</span>
+                <span>{t('Albums & EPs')}</span>
               </h3>
 
               {matchedAlbums.length === 0 ? (
-                <p className="py-2 text-xs italic text-zinc-400">No matching albums or EPs found.</p>
+                <p className="py-2 text-xs italic text-zinc-400">{t('No matching albums or EPs found.')}</p>
               ) : (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
                   {albumsForGrid.map((album) => {
@@ -599,7 +601,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                         <div className="min-w-0">
                           <h4 className="truncate text-sm font-extrabold text-white transition-colors group-hover:text-[#D946EF]">{album.title}</h4>
                           <p className="mt-1 truncate text-xs text-zinc-400">{album.representative.artist}</p>
-                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-zinc-600">{album.releaseType} · {album.tracks.length} songs</p>
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-zinc-600">{album.releaseType} · {album.tracks.length} {t('songs')}</p>
                         </div>
                       </article>
                     );
@@ -614,11 +616,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
             <div>
               <h3 className="text-lg font-extrabold text-white tracking-tight mb-4 flex items-center space-x-2">
                 <UserIcon className="w-4 h-4 text-[#A855F7]" />
-                <span>Artists & User Profiles</span>
+                <span>{t('Artists & User Profiles')}</span>
               </h3>
 
               {matchedArtists.length === 0 ? (
-                <p className="text-xs text-zinc-400 italic py-2">No matching artists or user profiles found.</p>
+                <p className="text-xs text-zinc-400 italic py-2">{t('No matching artists or user profiles found.')}</p>
               ) : (
                 <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
                   {matchedArtists.map((art) => (
@@ -652,11 +654,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
                       </h4>
 
                       <p className="mt-0.5 w-full truncate text-xs text-zinc-400">
-                        {art.username ? `@${art.username}` : art.genre || 'Artist'}
+                        {art.username ? `@${art.username}` : art.genre || t('Artist')}
                       </p>
 
                       <span className="mt-2 max-w-full truncate rounded-full bg-white/5 px-2 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-zinc-300 transition-colors group-hover:bg-[#D946EF]/20 group-hover:text-[#D946EF] sm:px-2.5 sm:text-[9px]">
-                        {art.isUser ? 'User Profile' : art.verified ? 'Verified Artist' : 'Catalog Artist'}
+                        {t(art.isUser ? 'User Profile' : art.verified ? 'Verified Artist' : 'Catalog Artist')}
                       </span>
                     </div>
                   ))}
@@ -670,11 +672,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
             <div>
               <h3 className="text-lg font-extrabold text-white tracking-tight mb-4 flex items-center space-x-2">
                 <Disc className="w-4 h-4 text-[#D946EF]" />
-                <span>Playlists</span>
+                <span>{t('Playlists')}</span>
               </h3>
 
               {matchedPlaylists.length === 0 ? (
-                <p className="text-xs text-zinc-400 italic py-2">No matching playlists found.</p>
+                <p className="text-xs text-zinc-400 italic py-2">{t('No matching playlists found.')}</p>
               ) : (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
                   {matchedPlaylists.map((pl) => (
@@ -696,7 +698,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                           {pl.title}
                         </h4>
                         <p className="text-xs text-zinc-400 line-clamp-1 mt-1">
-                          {pl.description || 'Curated Playlist'}
+                          {pl.description || t('Curated Playlist')}
                         </p>
                       </div>
                     </div>
