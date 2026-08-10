@@ -20,7 +20,7 @@ async function fetchDuckDuckGoHtml(
   url: string,
   init: RequestInit,
   signal?: AbortSignal,
-  timeoutMs = 12_000,
+  timeoutMs = 5_000,
 ): Promise<string> {
   const response = await fetch(url, {
     ...init,
@@ -88,7 +88,7 @@ export async function searchDuckDuckGo(query: string, signal?: AbortSignal): Pro
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: searchParams,
-    }, signal, 15_000);
+    }, signal, 5_000);
     receivedSearchPage = true;
     const results = parseDuckDuckGoResults(html);
     if (results.length > 0) return results;
@@ -112,7 +112,7 @@ export async function searchBrave(query: string, signal?: AbortSignal): Promise<
       "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
     },
     redirect: "follow",
-    signal: withTimeoutSignal(signal, 10_000),
+    signal: withTimeoutSignal(signal, 5_000),
   });
   const html = await response.text();
   if (!response.ok) {
@@ -124,19 +124,33 @@ export async function searchBrave(query: string, signal?: AbortSignal): Promise<
   return parseBraveSearchResponse(html);
 }
 
-export async function searchLiveWeb(query: string, signal?: AbortSignal): Promise<LiveWebSearchResult> {
+// Hard ceiling on the whole provider chain. Each individual fetch already
+// carries its own timeout, but if a hosting network silently stalls
+// connections instead of rejecting them quickly, those per-step timeouts can
+// still stack up to a very long perceived hang (previously ~49s worst case
+// across 4 sequential attempts). This bounds the total wait regardless of
+// how many attempts run or how a single step behaves.
+const LIVE_WEB_SEARCH_OVERALL_TIMEOUT_MS = 16_000;
+
+export async function searchLiveWeb(
+  query: string,
+  signal?: AbortSignal,
+  overallTimeoutMs = LIVE_WEB_SEARCH_OVERALL_TIMEOUT_MS,
+): Promise<LiveWebSearchResult> {
+  const overallSignal = withTimeoutSignal(signal, overallTimeoutMs);
   const attempts: Array<{
     provider: LiveWebSearchResult["provider"];
     engine: LiveWebSearchResult["engine"];
     search: () => Promise<WebSearchSource[]>;
   }> = [
-    { provider: "duckduckgo", engine: "duckduckgo", search: () => searchDuckDuckGo(query, signal) },
-    { provider: "web", engine: "brave", search: () => searchBrave(query, signal) },
+    { provider: "duckduckgo", engine: "duckduckgo", search: () => searchDuckDuckGo(query, overallSignal) },
+    { provider: "web", engine: "brave", search: () => searchBrave(query, overallSignal) },
   ];
 
   let emptyResultAttempt: (typeof attempts)[number] | undefined;
   const failures: Array<{ engine: string; status?: number; message: string }> = [];
   for (const attempt of attempts) {
+    if (overallSignal.aborted) break;
     try {
       const sources = await attempt.search();
       if (sources.length > 0) return { sources, provider: attempt.provider, engine: attempt.engine };
@@ -148,6 +162,7 @@ export async function searchLiveWeb(query: string, signal?: AbortSignal): Promis
         status: Number.isFinite(error?.status) ? Number(error.status) : undefined,
         message: typeof error?.message === "string" ? error.message : "Unknown search error",
       });
+      if (overallSignal.aborted) break;
     }
   }
 
