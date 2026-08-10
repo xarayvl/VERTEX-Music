@@ -2276,6 +2276,15 @@ type WebSearchSource = {
   snippet: string;
 };
 
+// Chronological trace of what happened while preparing a reply: reasoning
+// text produced by the model between tool calls, and the tool calls
+// themselves. Sent to the client so the chat UI can render a Claude-style
+// "Reasoned" + tool-activity timeline instead of a single wall of raw
+// chain-of-thought text.
+type ReasoningTimelineEntry =
+  | { type: "reasoning"; text: string }
+  | { type: "tool"; tool: "web_search"; query: string; resultCount: number };
+
 const WEB_SEARCH_TOOL = {
   type: "function",
   function: {
@@ -2648,6 +2657,7 @@ function buildNvidiaMessages(
       const searchQueries: string[] = [];
       const sourceIndexByUri = new Map<string, number>();
       const reasoningParts: string[] = [];
+      const reasoningTimeline: ReasoningTimelineEntry[] = [];
       let finalAssistantMessage: any = null;
       const maxSearchCalls = 3;
       const maxToolRounds = 5;
@@ -2668,7 +2678,10 @@ function buildNvidiaMessages(
           : Array.isArray(rawReasoning)
             ? rawReasoning.map((part: any) => typeof part?.text === "string" ? part.text : "").join("").trim()
             : "";
-        if (roundReasoning) reasoningParts.push(roundReasoning);
+        if (roundReasoning) {
+          reasoningParts.push(roundReasoning);
+          reasoningTimeline.push({ type: "reasoning", text: roundReasoning });
+        }
 
         const toolCalls: NvidiaToolCall[] = (Array.isArray(assistantMessage.tool_calls)
           ? assistantMessage.tool_calls
@@ -2771,6 +2784,7 @@ function buildNvidiaMessages(
                 : "No results were found. Say that current information could not be verified instead of guessing.",
             }),
           });
+          reasoningTimeline.push({ type: "tool", tool: "web_search", query, resultCount: labeledSources.length });
         }
 
         requestDiagnostics.stage = "nvidia-chat-after-tool";
@@ -2790,6 +2804,12 @@ function buildNvidiaMessages(
 
       const reasoningText = reasoningParts.join("\n\n").trim();
       const thinkingSeconds = Math.max(1, Math.round((Date.now() - nvidiaRequestStartedAt) / 1_000));
+      // Cap the number of timeline entries and the size of each reasoning
+      // chunk sent to the client — the UI only needs enough text to derive a
+      // short summary, not the full raw trace.
+      const trimmedTimeline = reasoningTimeline
+        .slice(0, 24)
+        .map((entry) => entry.type === "reasoning" ? { ...entry, text: entry.text.slice(0, 2_000) } : entry);
 
       return res.json({
         reply: replyText,
@@ -2799,6 +2819,7 @@ function buildNvidiaMessages(
         searchQueries,
         sources: searchSources.map(({ title, uri }) => ({ title, uri })),
         reasoning: reasoningText ? reasoningText.slice(0, 12_000) : undefined,
+        reasoningTimeline: trimmedTimeline.length > 0 ? trimmedTimeline : undefined,
         thinkingSeconds,
       });
     } catch (error: any) {

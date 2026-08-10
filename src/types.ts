@@ -116,8 +116,17 @@ export interface ChatMessage {
   searchQueries?: string[];
   sources?: ChatSource[];
   reasoning?: string;
+  reasoningTimeline?: ReasoningTimelineEntry[];
   thinkingSeconds?: number;
 }
+
+// Chronological trace of a completed reply: chunks of the model's reasoning
+// interleaved with any tool calls it made (currently just web search). Used
+// to render a "Reasoned" + tool-activity timeline instead of dumping the raw
+// chain-of-thought.
+export type ReasoningTimelineEntry =
+  | { type: 'reasoning'; text: string }
+  | { type: 'tool'; tool: 'web_search'; query: string; resultCount: number };
 
 export interface AudioEQ {
   bass: number; // -10 to 10

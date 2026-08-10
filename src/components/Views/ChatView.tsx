@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bot, Sparkles, Play, Music, Globe, Search, ChevronDown, BrainCircuit } from 'lucide-react';
-import { Track, ChatMessage } from '../../types';
+import { Bot, Sparkles, Play, Music, Globe, Search, ChevronDown, BrainCircuit, CheckCircle2 } from 'lucide-react';
+import { Track, ChatMessage, ReasoningTimelineEntry } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import { AgentPlanning, type PlanStep } from '../ui/ai-planning';
 import { AiPromptBox } from '../ui/ai-prompt-box';
@@ -99,27 +99,104 @@ const createCompletedReasoningSteps = (usedWebSearch: boolean, usedHighReasoning
   });
 };
 
-// Splits the model's real chain-of-thought (returned by the NVIDIA API as
-// `reasoning_content`) into readable chunks for the "Thought for Xs" panel,
-// instead of showing the generic simulated phase labels.
-const createRealReasoningSteps = (reasoningText: string): PlanStep[] => {
+// The NVIDIA API returns the model's real chain-of-thought as
+// `reasoning_content`. That text is often long, raw, and not meant for an
+// end user, so it's never shown as-is. Instead we condense each chunk down
+// to a short, natural sentence or two — a user-facing gist of what the
+// model was doing, not its literal internal monologue.
+const summarizeReasoningChunk = (text: string, maxLength = 170): string => {
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+
+  // Split on sentence boundaries (keeps Turkish/Latin uppercase starts too).
+  const sentences = cleaned.split(/(?<=[.!?…])\s+(?=[A-ZÇĞİÖŞÜ0-9])/).filter(Boolean);
+  let summary = sentences[0] || cleaned;
+  if (summary.length < 50 && sentences[1]) {
+    summary = `${summary} ${sentences[1]}`;
+  }
+
+  if (summary.length > maxLength) {
+    summary = `${summary.slice(0, maxLength - 1).trimEnd()}…`;
+  } else if (!/[.!?…]$/.test(summary)) {
+    summary = `${summary}…`;
+  }
+  return summary;
+};
+
+const reasoningStepContent = (summary: string) => (
+  <div className="flex items-start gap-2 rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+    <BrainCircuit className="mt-0.5 h-3.5 w-3.5 flex-none text-[#F0ABFC]" />
+    <span>{summary}</span>
+  </div>
+);
+
+const createReasonedStep = (id: string, summary: string): PlanStep => ({
+  id,
+  title: 'Reasoned',
+  status: 'success',
+  icon: <BrainCircuit className="h-3.5 w-3.5" />,
+  content: reasoningStepContent(summary),
+});
+
+// Renders a tool call as its own pair of activity lines inside the thought
+// flow (e.g. "🌐 Searched the web" followed by "✓ Found N sources"),
+// separate from the "Reasoned" summary steps around it.
+const createToolActivitySteps = (id: string, entry: Extract<ReasoningTimelineEntry, { type: 'tool' }>): PlanStep[] => {
+  if (entry.tool !== 'web_search') return [];
+  const resultLabel = entry.resultCount > 0
+    ? `Found ${entry.resultCount} source${entry.resultCount === 1 ? '' : 's'}`
+    : 'No results found';
+
+  return [
+    {
+      id: `${id}-search`,
+      title: 'Searched the web',
+      status: 'success',
+      icon: <Globe className="h-3.5 w-3.5" />,
+      content: (
+        <div className="flex items-center gap-1.5 rounded-xl border border-emerald-400/15 bg-emerald-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+          <Search className="h-3 w-3 flex-none text-emerald-300" />
+          <span className="min-w-0 break-words [overflow-wrap:anywhere]">&ldquo;{entry.query}&rdquo;</span>
+        </div>
+      ),
+    },
+    {
+      id: `${id}-result`,
+      title: resultLabel,
+      status: 'success',
+      icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+    },
+  ];
+};
+
+// Builds the "Reasoned" + tool-activity timeline shown under a completed
+// message. Prefers the structured, chronological `reasoningTimeline` from
+// the server; falls back to summarizing the flat `reasoning` string for
+// older messages that don't have one.
+const createRealReasoningSteps = (reasoningText: string, timeline?: ReasoningTimelineEntry[]): PlanStep[] => {
+  if (timeline && timeline.length > 0) {
+    const steps: PlanStep[] = [];
+    timeline.forEach((entry, index) => {
+      if (entry.type === 'reasoning') {
+        const summary = summarizeReasoningChunk(entry.text);
+        if (summary) steps.push(createReasonedStep(`reasoned-${index}`, summary));
+      } else {
+        steps.push(...createToolActivitySteps(`tool-${index}`, entry));
+      }
+    });
+    if (steps.length > 0) return steps;
+  }
+
   const chunks = reasoningText
     .split(/\n{2,}/)
     .map((chunk) => chunk.trim())
     .filter(Boolean);
-  const steps = chunks.length > 0 ? chunks : [reasoningText.trim()];
+  const rawSteps = chunks.length > 0 ? chunks : [reasoningText.trim()];
 
-  return steps.map((chunk, index) => ({
-    id: `reasoning-${index}`,
-    title: steps.length > 1 ? `Thought ${index + 1}` : 'Thought process',
-    status: 'success',
-    icon: <BrainCircuit className="h-3.5 w-3.5" />,
-    content: (
-      <div className="whitespace-pre-wrap rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
-        {chunk}
-      </div>
-    ),
-  }));
+  return rawSteps
+    .map((chunk) => summarizeReasoningChunk(chunk))
+    .filter(Boolean)
+    .map((summary, index) => createReasonedStep(`reasoning-${index}`, summary));
 };
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -260,6 +337,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         searchQueries: Array.isArray(data.searchQueries) ? data.searchQueries : undefined,
         sources: Array.isArray(data.sources) ? data.sources : undefined,
         reasoning: typeof data.reasoning === 'string' && data.reasoning.trim() ? data.reasoning.trim() : undefined,
+        reasoningTimeline: Array.isArray(data.reasoningTimeline) ? data.reasoningTimeline : undefined,
         thinkingSeconds: Number.isFinite(data.thinkingSeconds) ? Number(data.thinkingSeconds) : undefined,
       };
 
@@ -448,7 +526,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     <AgentPlanning
                       title={typeof msg.thinkingSeconds === 'number' ? `Thought for ${msg.thinkingSeconds}s` : 'How this answer was prepared'}
                       steps={msg.reasoning
-                        ? createRealReasoningSteps(msg.reasoning)
+                        ? createRealReasoningSteps(msg.reasoning, msg.reasoningTimeline)
                         : createCompletedReasoningSteps(msg.webSearchUsed === true, msg.reasoningEffort === 'high')}
                       defaultExpanded={false}
                       className="mb-3"
