@@ -81,15 +81,25 @@ export interface UserStateRecord {
   followedArtistIds: string[];
 }
 
+export type ChatReasoningTimelineEntry =
+  | { type: 'reasoning'; text: string }
+  | { type: 'tool'; tool: 'web_search'; query: string; resultCount: number };
+
 export interface ChatMessageRecord {
   id: string;
   sender: 'user' | 'ai';
   text: string;
   timestamp: string;
   matchedTracks?: any[];
+  isError?: boolean;
   webSearchUsed?: boolean;
+  searchProvider?: 'tavily';
+  reasoningEffort?: 'medium' | 'high';
   searchQueries?: string[];
   sources?: { title: string; uri: string }[];
+  reasoning?: string;
+  reasoningTimeline?: ChatReasoningTimelineEntry[];
+  thinkingSeconds?: number;
 }
 
 export interface DBData {
@@ -398,6 +408,9 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
             .map((trackId) => trackById.get(trackId)!)
         : undefined,
       webSearchUsed: message.webSearchUsed === true,
+      isError: message.isError === true ? true : undefined,
+      searchProvider: message.searchProvider === 'tavily' ? 'tavily' : undefined,
+      reasoningEffort: message.reasoningEffort === 'high' ? 'high' : message.reasoningEffort === 'medium' ? 'medium' : undefined,
       searchQueries: Array.isArray(message.searchQueries)
         ? message.searchQueries.filter((query): query is string => typeof query === 'string' && Boolean(query.trim())).map((query) => query.trim().slice(0, 500)).slice(0, 10)
         : undefined,
@@ -406,6 +419,29 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
             .filter((source): source is { title: string; uri: string } => Boolean(source && typeof source.title === 'string' && source.title.trim() && typeof source.uri === 'string' && isHttpUrl(source.uri)))
             .map((source) => ({ title: source.title.trim().slice(0, 500), uri: source.uri.trim().slice(0, 2_000) }))
             .slice(0, 10)
+        : undefined,
+      reasoning: typeof message.reasoning === 'string' && message.reasoning.trim()
+        ? message.reasoning.trim().slice(0, 12_000)
+        : undefined,
+      reasoningTimeline: Array.isArray(message.reasoningTimeline)
+        ? message.reasoningTimeline.slice(0, 24).flatMap<ChatReasoningTimelineEntry>((entry) => {
+            if (entry?.type === 'reasoning' && typeof entry.text === 'string') {
+              const text = entry.text.trim().slice(0, 2_000);
+              return text ? [{ type: 'reasoning' as const, text }] : [];
+            }
+            if (entry?.type === 'tool' && entry.tool === 'web_search' && typeof entry.query === 'string') {
+              const query = entry.query.trim().slice(0, 2_000);
+              if (!query) return [];
+              const resultCount = Number.isFinite(entry.resultCount)
+                ? Math.max(0, Math.min(1_000, Math.round(entry.resultCount)))
+                : 0;
+              return [{ type: 'tool' as const, tool: 'web_search' as const, query, resultCount }];
+            }
+            return [];
+          })
+        : undefined,
+      thinkingSeconds: Number.isFinite(message.thinkingSeconds)
+        ? Math.max(1, Math.min(600, Math.round(message.thinkingSeconds!)))
         : undefined,
     }));
   }

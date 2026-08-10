@@ -93,6 +93,29 @@ function sanitizeChatHistory(value: unknown, tracks: TrackRecord[] = []): any[] 
     if (!message || (message.sender !== "user" && message.sender !== "ai") || typeof message.text !== "string") return [];
     const text = message.text.trim().slice(0, 20_000);
     if (!text) return [];
+    const reasoning = typeof message.reasoning === "string"
+      ? message.reasoning.trim().slice(0, 12_000)
+      : "";
+    const reasoningTimeline = Array.isArray(message.reasoningTimeline)
+      ? message.reasoningTimeline.slice(0, 24).flatMap((entry: any) => {
+          if (entry?.type === "reasoning" && typeof entry.text === "string") {
+            const entryText = entry.text.trim().slice(0, 2_000);
+            return entryText ? [{ type: "reasoning", text: entryText }] : [];
+          }
+          if (entry?.type === "tool" && entry.tool === "web_search" && typeof entry.query === "string") {
+            const query = entry.query.trim().slice(0, 2_000);
+            if (!query) return [];
+            const resultCount = Number.isFinite(entry.resultCount)
+              ? Math.max(0, Math.min(1_000, Math.round(entry.resultCount)))
+              : 0;
+            return [{ type: "tool", tool: "web_search", query, resultCount }];
+          }
+          return [];
+        })
+      : [];
+    const thinkingSeconds = Number.isFinite(message.thinkingSeconds)
+      ? Math.max(1, Math.min(600, Math.round(message.thinkingSeconds)))
+      : undefined;
     return [{
       id: typeof message.id === "string" && message.id.trim() ? message.id.trim().slice(0, 160) : createEntityId("msg"),
       sender: message.sender,
@@ -115,6 +138,11 @@ function sanitizeChatHistory(value: unknown, tracks: TrackRecord[] = []): any[] 
       sources: Array.isArray(message.sources)
         ? message.sources.filter((item: any) => item && typeof item.title === "string" && typeof item.uri === "string" && isHttpUrl(item.uri)).slice(0, 10)
         : undefined,
+      // Keep the completed thought summary available after the client
+      // rehydrates chat history on a page refresh.
+      reasoning: reasoning || undefined,
+      reasoningTimeline: reasoningTimeline.length > 0 ? reasoningTimeline : undefined,
+      thinkingSeconds,
     }];
   });
 }
