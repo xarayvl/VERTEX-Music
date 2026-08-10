@@ -22,9 +22,8 @@ default. Set `NVIDIA_API_KEY` to enable chat. `NVIDIA_CHAT_MODEL` and
 
 The AI DJ receives live search as an OpenAI-compatible function tool and decides
 when current information requires it. Users can require a search for a specific
-message with the globe button. Search uses DuckDuckGo HTML as the primary
-provider, tries DuckDuckGo's HTML, Lite, and POST routes, then uses Brave Search
-only as a fallback. No separate search API credentials are required.
+message with the globe button. Live web search uses the Tavily Search API. Set
+`TAVILY_API_KEY` to enable it.
 
 ## Persistence
 

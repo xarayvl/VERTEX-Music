@@ -2,65 +2,99 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { searchLiveWeb } from "./liveWebSearch.js";
 
-const duckDuckGoResultHtml = `
-  <div class="result">
-    <a class="result__a" href="https://example.com/duck-result">Duck result</a>
-    <a class="result__snippet">Primary provider result</a>
-  </div>
-`;
+function restoreApiKey(value: string | undefined) {
+  if (value === undefined) delete process.env.TAVILY_API_KEY;
+  else process.env.TAVILY_API_KEY = value;
+}
 
-const braveResultHtml = `
-  <div class="snippet result" data-type="web">
-    <a class="result-header l1" href="https://example.com/brave-result">
-      <div class="search-snippet-title">Brave fallback result</div>
-    </a>
-    <div class="line-clamp-dynamic">Fallback provider result</div>
-  </div>
-`;
-
-test("DuckDuckGo is the primary provider and prevents a Brave request on success", async () => {
+test("Tavily is the only live web search provider", async () => {
   const originalFetch = globalThis.fetch;
-  const calls: Array<{ url: string; method: string }> = [];
+  const originalApiKey = process.env.TAVILY_API_KEY;
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  process.env.TAVILY_API_KEY = "tvly-test-key";
   globalThis.fetch = (async (input: URL | RequestInfo, init?: RequestInit) => {
-    calls.push({ url: String(input), method: init?.method || "GET" });
-    return new Response(duckDuckGoResultHtml, { status: 200, headers: { "Content-Type": "text/html" } });
+    calls.push({ url: String(input), init });
+    return new Response(JSON.stringify({
+      results: [
+        {
+          title: " New music releases ",
+          url: "https://example.com/releases",
+          content: " Albums released this week. ",
+        },
+        { title: "Invalid URL", url: "javascript:alert(1)", content: "Ignored" },
+      ],
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
   }) as typeof fetch;
 
   try {
     const result = await searchLiveWeb("new music releases");
-    assert.equal(result.provider, "duckduckgo");
-    assert.equal(result.engine, "duckduckgo");
-    assert.equal(result.sources[0]?.title, "Duck result");
+
+    assert.equal(result.provider, "tavily");
+    assert.equal(result.engine, "tavily");
+    assert.deepEqual(result.sources, [{
+      title: "New music releases",
+      uri: "https://example.com/releases",
+      snippet: "Albums released this week.",
+    }]);
     assert.equal(calls.length, 1);
-    assert.match(calls[0].url, /^https:\/\/html\.duckduckgo\.com\/html\//);
+    assert.equal(calls[0].url, "https://api.tavily.com/search");
+    assert.equal(calls[0].init?.method, "POST");
+    assert.equal(new Headers(calls[0].init?.headers).get("authorization"), "Bearer tvly-test-key");
+    assert.deepEqual(JSON.parse(String(calls[0].init?.body)), {
+      query: "new music releases",
+      max_results: 5,
+      search_depth: "basic",
+    });
   } finally {
     globalThis.fetch = originalFetch;
+    restoreApiKey(originalApiKey);
   }
 });
 
-test("Brave runs only after every DuckDuckGo route is blocked", async () => {
+test("live web search requires a Tavily API key", async () => {
   const originalFetch = globalThis.fetch;
-  const calls: Array<{ url: string; method: string }> = [];
-  globalThis.fetch = (async (input: URL | RequestInfo, init?: RequestInit) => {
-    const url = String(input);
-    calls.push({ url, method: init?.method || "GET" });
-    if (url.includes("duckduckgo.com")) {
-      return new Response('<div class="anomaly-modal">Bots use DuckDuckGo too</div>', { status: 200 });
-    }
-    return new Response(braveResultHtml, { status: 200, headers: { "Content-Type": "text/html" } });
+  const originalApiKey = process.env.TAVILY_API_KEY;
+  let fetchCalled = false;
+  delete process.env.TAVILY_API_KEY;
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    throw new Error("fetch should not be called");
   }) as typeof fetch;
 
   try {
-    const result = await searchLiveWeb("new music releases");
-    assert.equal(result.provider, "web");
-    assert.equal(result.engine, "brave");
-    assert.equal(result.sources[0]?.title, "Brave fallback result");
-    assert.deepEqual(calls.map(({ method }) => method), ["GET", "GET", "POST", "GET"]);
-    assert.match(calls[0].url, /html\.duckduckgo\.com/);
-    assert.match(calls[1].url, /lite\.duckduckgo\.com/);
-    assert.match(calls[2].url, /html\.duckduckgo\.com/);
-    assert.match(calls[3].url, /search\.brave\.com/);
+    await assert.rejects(
+      searchLiveWeb("new music releases"),
+      (error: any) => error?.configurationError === true && /TAVILY_API_KEY/.test(error.message),
+    );
+    assert.equal(fetchCalled, false);
   } finally {
     globalThis.fetch = originalFetch;
+    restoreApiKey(originalApiKey);
+  }
+});
+
+test("Tavily API failures preserve provider details", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.TAVILY_API_KEY;
+  process.env.TAVILY_API_KEY = "tvly-test-key";
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    detail: { error: "Search quota exceeded." },
+  }), {
+    status: 429,
+    headers: { "Content-Type": "application/json", "Retry-After": "30" },
+  })) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      searchLiveWeb("new music releases"),
+      (error: any) => (
+        error?.message === "Search quota exceeded."
+        && error?.status === 429
+        && error?.retryAfterSeconds === 30
+      ),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreApiKey(originalApiKey);
   }
 });

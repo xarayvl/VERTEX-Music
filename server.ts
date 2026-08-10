@@ -9,8 +9,7 @@ import { createServer as createViteServer } from "vite";
 import { OAuth2Client } from "google-auth-library";
 import { readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
 import { getPublicOrigin, injectTrackSocialMeta } from "./server/socialMeta.js";
-import { searchLiveWeb } from "./server/liveWebSearch.js";
-import type { WebSearchSource } from "./server/webSearchParsers.js";
+import { searchLiveWeb, type WebSearchSource } from "./server/liveWebSearch.js";
 
 dotenv.config();
 
@@ -109,7 +108,7 @@ function sanitizeChatHistory(value: unknown, tracks: TrackRecord[] = []): any[] 
             .map((trackId: string) => trackById.get(trackId))
         : undefined,
       webSearchUsed: message.webSearchUsed === true,
-      searchProvider: message.searchProvider === "duckduckgo" || message.searchProvider === "web" ? message.searchProvider : undefined,
+      searchProvider: message.searchProvider === "tavily" ? "tavily" : undefined,
       reasoningEffort: message.reasoningEffort === "high" ? "high" : message.reasoningEffort === "medium" ? "medium" : undefined,
       searchQueries: Array.isArray(message.searchQueries) ? message.searchQueries.filter((item: unknown): item is string => typeof item === "string").slice(0, 10) : undefined,
       sources: Array.isArray(message.sources)

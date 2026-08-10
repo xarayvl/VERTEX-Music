@@ -325,7 +325,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         text: aiReplyText,
         timestamp: new Date().toISOString(),
         webSearchUsed: !!data.webSearchUsed,
-        searchProvider: data.searchProvider === 'duckduckgo' ? 'duckduckgo' : data.searchProvider === 'web' ? 'web' : undefined,
+        searchProvider: data.searchProvider === 'tavily' ? 'tavily' : undefined,
         reasoningEffort: data.reasoningEffort === 'high' ? 'high' : 'medium',
         searchQueries: Array.isArray(data.searchQueries) ? data.searchQueries : undefined,
         sources: Array.isArray(data.sources) ? data.sources : undefined,
@@ -531,7 +531,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         className="control-press flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-300 hover:bg-emerald-500/15"
                       >
                         <Globe className="h-3 w-3" />
-                        {msg.searchProvider === 'duckduckgo' ? 'DuckDuckGo Search' : 'Web search'}{msg.sources?.length ? ` · ${msg.sources.length} sources` : ''}
+                        Tavily Search{msg.sources?.length ? ` · ${msg.sources.length} sources` : ''}
                         <ChevronDown className={`h-3 w-3 transition-transform ${expandedSources[msg.id] ? 'rotate-180' : ''}`} />
                       </button>
 
