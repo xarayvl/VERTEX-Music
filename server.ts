@@ -2496,6 +2496,25 @@ function buildNvidiaMessages(
   // NVIDIA NIM AI Chat Endpoint
   app.post("/api/chat", chatLimiter, async (req, res) => {
     const clientAbortController = new AbortController();
+    let streamingResponse = false;
+    const startActivityStream = () => {
+      if (streamingResponse) return;
+      streamingResponse = true;
+      res.status(200);
+      res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders();
+    };
+    const sendStreamEvent = (event: Record<string, unknown>) => {
+      if (!streamingResponse || res.writableEnded || res.destroyed) return;
+      res.write(`${JSON.stringify(event)}\n`);
+    };
+    const sendChatResult = (payload: Record<string, unknown>) => {
+      if (!streamingResponse) return res.json(payload);
+      sendStreamEvent({ type: "result", data: payload });
+      return res.end();
+    };
     res.once("close", () => {
       if (!res.writableEnded) clientAbortController.abort();
     });
@@ -2512,7 +2531,7 @@ function buildNvidiaMessages(
     };
 
     try {
-      const { message, history, userId, forceWebSearch, reasoningEffort } = req.body;
+      const { message, history, userId, forceWebSearch, reasoningEffort, streamActivity } = req.body;
 
       const sessionUserId = getUserIdFromToken(req);
       if (!sessionUserId) {
@@ -2564,6 +2583,8 @@ function buildNvidiaMessages(
       const ownerDB = await readDBAsync(req.method !== "GET");
       if (!ownerDB.users.some((user) => user.id === sessionUserId)) return res.status(404).json({ error: "User not found." });
 
+      if (streamActivity === true) startActivityStream();
+
       const formattedHistory = formatNvidiaHistory(history);
       const webSearchForced = forceWebSearch === true;
       const requestedReasoningEffort: "medium" | "high" = reasoningEffort === "high" ? "high" : "medium";
@@ -2574,6 +2595,12 @@ function buildNvidiaMessages(
       );
       requestDiagnostics.webSearchRequested = webSearchForced;
       requestDiagnostics.reasoningEffort = requestedReasoningEffort;
+      const searchSources: WebSearchSource[] = [];
+      const searchQueries: string[] = [];
+      const sourceIndexByUri = new Map<string, number>();
+      const reasoningParts: string[] = [];
+      const reasoningTimeline: ReasoningTimelineEntry[] = [];
+      const nvidiaRequestStartedAt = Date.now();
       const currentDateTimeRequested = asksForCurrentDateTime(cleanMessage);
       const dateTimeInstruction = currentDateTimeRequested
         ? `The current date and time in the app timezone is ${new Intl.DateTimeFormat("en-GB", {
@@ -2607,16 +2634,82 @@ function buildNvidiaMessages(
           "When web_search returns results, cite factual claims with the supplied source labels such as [1] and [2]. " +
           "Never invent sources or claim to have opened full pages beyond the returned snippets. " +
           (webSearchForced
-            ? "The user explicitly enabled web search for this message, so you must call web_search at least once before answering."
+            ? "The user explicitly enabled web search. A live search result will be supplied as a web_search tool response before you answer; use it and cite its source labels."
             : "You decide whether web_search is needed for this message.");
 
       const messages = buildNvidiaMessages(systemInstruction, formattedHistory, cleanMessage);
+
+      // For the globe button, perform the search server-side first. This avoids
+      // the provider-specific forced tool_choice path that can fail even though
+      // the same model successfully chooses web_search in auto mode.
+      if (webSearchForced) {
+        const query = cleanMessage.slice(0, 2_000);
+        requestDiagnostics.stage = "web-search-tool";
+        requestDiagnostics.webSearchCalls += 1;
+        const searchActivityId = "web-search-1";
+        sendStreamEvent({
+          type: "activity",
+          activity: {
+            id: searchActivityId,
+            kind: "web_search",
+            status: "active",
+            title: "Searching the live web",
+            detail: query,
+            query,
+          },
+        });
+        const duckDuckGoSources = await searchDuckDuckGo(query, clientAbortController.signal);
+        requestDiagnostics.searchProvider = "duckduckgo";
+        searchQueries.push(query);
+        const labeledSources = duckDuckGoSources.map((source) => {
+          searchSources.push(source);
+          const sourceIndex = searchSources.length;
+          sourceIndexByUri.set(source.uri, sourceIndex);
+          return {
+            label: `[${sourceIndex}]`,
+            title: source.title,
+            url: source.uri,
+            snippet: source.snippet || "No snippet available.",
+          };
+        });
+        const forcedToolCall: NvidiaToolCall = {
+          id: `forced_web_search_${crypto.randomUUID()}`,
+          type: "function",
+          function: { name: WEB_SEARCH_TOOL.function.name, arguments: JSON.stringify({ query }) },
+        };
+        messages.push({ role: "assistant", content: null, tool_calls: [forcedToolCall] });
+        messages.push({
+          role: "tool",
+          name: WEB_SEARCH_TOOL.function.name,
+          tool_call_id: forcedToolCall.id,
+          content: JSON.stringify({
+            query,
+            results: labeledSources,
+            note: labeledSources.length > 0
+              ? "Cite claims using the supplied [n] labels. The results are snippets, not full opened pages."
+              : "No results were found. Say that current information could not be verified instead of guessing.",
+          }),
+        });
+        reasoningTimeline.push({ type: "tool", tool: "web_search", query, resultCount: labeledSources.length });
+        sendStreamEvent({
+          type: "activity",
+          activity: {
+            id: searchActivityId,
+            kind: "web_search",
+            status: "success",
+            title: "Searched the live web",
+            detail: query,
+            query,
+            resultCount: labeledSources.length,
+          },
+        });
+      }
+
       const baseUrl = (process.env.NVIDIA_API_BASE_URL?.trim() || "https://integrate.api.nvidia.com").replace(/\/+$/, "");
       const chatCompletionsUrl = baseUrl.endsWith("/v1")
         ? `${baseUrl}/chat/completions`
         : `${baseUrl}/v1/chat/completions`;
       requestDiagnostics.stage = "nvidia-chat";
-      const nvidiaRequestStartedAt = Date.now();
       const requestNvidiaCompletion = async (toolChoice: "auto" | {
         type: "function";
         function: { name: string };
@@ -2653,24 +2746,42 @@ function buildNvidiaMessages(
         return response;
       };
 
-      const searchSources: WebSearchSource[] = [];
-      const searchQueries: string[] = [];
-      const sourceIndexByUri = new Map<string, number>();
-      const reasoningParts: string[] = [];
-      const reasoningTimeline: ReasoningTimelineEntry[] = [];
       let finalAssistantMessage: any = null;
       const maxSearchCalls = 3;
       const maxToolRounds = 5;
 
       for (let round = 0; round < maxToolRounds; round += 1) {
-        const toolChoice = webSearchForced && requestDiagnostics.webSearchCalls === 0
-          ? { type: "function" as const, function: { name: WEB_SEARCH_TOOL.function.name } }
-          : "auto" as const;
-        const response = await requestNvidiaCompletion(toolChoice);
+        const modelActivityId = `model-${round}`;
+        sendStreamEvent({
+          type: "activity",
+          activity: {
+            id: modelActivityId,
+            kind: "model",
+            status: "active",
+            title: round === 0 ? "Waiting for the AI model" : "Sending live results to the AI",
+            detail: requestedReasoningEffort === "high"
+              ? "The NVIDIA request is in progress with high reasoning effort."
+              : "The NVIDIA request is in progress.",
+          },
+        });
+        // A forced function tool_choice is rejected intermittently by some
+        // NVIDIA-hosted models. The explicit system instruction still makes
+        // search mandatory, while auto uses the same reliable path as a user
+        // writing "search the web" in their message.
+        const response = await requestNvidiaCompletion("auto");
         const assistantMessage = response?.choices?.[0]?.message;
         if (!assistantMessage || assistantMessage.role !== "assistant") {
           throw new Error("The AI provider returned an invalid assistant response.");
         }
+        sendStreamEvent({
+          type: "activity",
+          activity: {
+            id: modelActivityId,
+            kind: "model",
+            status: "success",
+            title: round === 0 ? "AI model responded" : "AI reviewed the live results",
+          },
+        });
 
         const rawReasoning = assistantMessage.reasoning_content ?? assistantMessage.reasoning;
         const roundReasoning = typeof rawReasoning === "string"
@@ -2753,6 +2864,18 @@ function buildNvidiaMessages(
           requestDiagnostics.stage = "web-search-tool";
           requestDiagnostics.webSearchRequested = true;
           requestDiagnostics.webSearchCalls += 1;
+          const searchActivityId = `web-search-${requestDiagnostics.webSearchCalls}`;
+          sendStreamEvent({
+            type: "activity",
+            activity: {
+              id: searchActivityId,
+              kind: "web_search",
+              status: "active",
+              title: "Searching the live web",
+              detail: query,
+              query,
+            },
+          });
           const duckDuckGoSources = await searchDuckDuckGo(query, clientAbortController.signal);
           requestDiagnostics.searchProvider = "duckduckgo";
           if (!searchQueries.includes(query)) searchQueries.push(query);
@@ -2785,6 +2908,18 @@ function buildNvidiaMessages(
             }),
           });
           reasoningTimeline.push({ type: "tool", tool: "web_search", query, resultCount: labeledSources.length });
+          sendStreamEvent({
+            type: "activity",
+            activity: {
+              id: searchActivityId,
+              kind: "web_search",
+              status: "success",
+              title: "Searched the live web",
+              detail: query,
+              query,
+              resultCount: labeledSources.length,
+            },
+          });
         }
 
         requestDiagnostics.stage = "nvidia-chat-after-tool";
@@ -2800,7 +2935,7 @@ function buildNvidiaMessages(
         : Array.isArray(responseContent)
           ? responseContent.map((part: any) => typeof part?.text === "string" ? part.text : "").join("").trim()
           : "";
-      if (!replyText) return res.status(404).json({ error: "The AI provider returned no text response." });
+      if (!replyText) throw new Error("The AI provider returned no text response.");
 
       const reasoningText = reasoningParts.join("\n\n").trim();
       const thinkingSeconds = Math.max(1, Math.round((Date.now() - nvidiaRequestStartedAt) / 1_000));
@@ -2811,7 +2946,7 @@ function buildNvidiaMessages(
         .slice(0, 24)
         .map((entry) => entry.type === "reasoning" ? { ...entry, text: entry.text.slice(0, 2_000) } : entry);
 
-      return res.json({
+      return sendChatResult({
         reply: replyText,
         webSearchUsed: requestDiagnostics.webSearchCalls > 0,
         searchProvider: requestDiagnostics.searchProvider,
@@ -2829,6 +2964,10 @@ function buildNvidiaMessages(
       }
       if (error?.configurationError) {
         console.error("AI Chat Configuration Error:", error.message);
+        if (streamingResponse) {
+          sendStreamEvent({ type: "error", error: error.message, configurationError: true });
+          return res.end();
+        }
         return res.status(500).json({ error: error.message, configurationError: true });
       }
       const { message: cleanMsg, providerMessage, rateLimited, quotaExhausted, retryAfterSeconds } = parseCleanErrorMessage(error);
@@ -2838,17 +2977,31 @@ function buildNvidiaMessages(
         quotaExhausted,
         message: providerMessage,
       });
-      if (rateLimited) {
+      const webSearchFailed = requestDiagnostics.stage === "web-search-tool";
+      const clientRateLimited = rateLimited && !webSearchFailed;
+      if (clientRateLimited) {
         nvidiaChatCooldownUntil = Date.now() + retryAfterSeconds * 1_000;
         nvidiaChatCooldownWasQuotaExhausted = quotaExhausted;
-        res.setHeader("Retry-After", String(retryAfterSeconds));
+        if (!streamingResponse) res.setHeader("Retry-After", String(retryAfterSeconds));
       }
-      return res.status(rateLimited ? 429 : 500).json({
-        error: cleanMsg,
-        rateLimited,
-        quotaExhausted,
-        retryAfterSeconds,
-        diagnostics: rateLimited ? {
+      if (streamingResponse) {
+        sendStreamEvent({
+          type: "error",
+          error: requestDiagnostics.stage === "web-search-tool"
+            ? "Live web search is temporarily unavailable. Please try again."
+            : cleanMsg,
+          rateLimited: clientRateLimited,
+          quotaExhausted: clientRateLimited && quotaExhausted,
+          retryAfterSeconds: clientRateLimited ? retryAfterSeconds : 0,
+        });
+        return res.end();
+      }
+      return res.status(clientRateLimited ? 429 : webSearchFailed ? 502 : 500).json({
+        error: webSearchFailed ? "Live web search is temporarily unavailable. Please try again." : cleanMsg,
+        rateLimited: clientRateLimited,
+        quotaExhausted: clientRateLimited && quotaExhausted,
+        retryAfterSeconds: clientRateLimited ? retryAfterSeconds : 0,
+        diagnostics: clientRateLimited ? {
           model: requestDiagnostics.model,
           historyMessages: requestDiagnostics.historyMessages,
           historyCharacters: requestDiagnostics.historyCharacters,

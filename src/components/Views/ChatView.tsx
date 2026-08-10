@@ -16,60 +16,14 @@ interface ChatViewProps {
   userDisplayName?: string;
 }
 
-// Pending-state labels mirror forced-search requests. For regular requests the
-// model can still decide to call web search while it is reasoning.
-const THINKING_PHASES = [
-  {
-    text: 'Understand your request',
-    detail: 'Analyzing the conversation and deciding how to respond.',
-    completedDetail: 'Identified the request and the relevant conversation context.',
-    Icon: BrainCircuit,
-  },
-  {
-    text: 'Prepare the answer',
-    detail: 'Writing a clear response for the chat.',
-    completedDetail: 'Prepared the final response for the chat.',
-    Icon: Sparkles,
-  },
-];
-
-const WEB_SEARCH_PHASES = [
-  {
-    text: 'Search the web',
-    detail: 'Finding current sources relevant to your request.',
-    completedDetail: 'Retrieved current web results relevant to the request.',
-    Icon: Globe,
-  },
-  {
-    text: 'Review the sources',
-    detail: 'Comparing the retrieved results before answering.',
-    completedDetail: 'Reviewed the returned source snippets for relevant information.',
-    Icon: BrainCircuit,
-  },
-  {
-    text: 'Prepare the answer',
-    detail: 'Writing a grounded response with source references.',
-    completedDetail: 'Prepared a response grounded in the available search results.',
-    Icon: Sparkles,
-  },
-];
-
-const HIGH_REASONING_PHASE = {
-  text: 'Reason carefully',
-  detail: 'Using NVIDIA high reasoning effort to work through the request.',
-  completedDetail: 'Used NVIDIA high reasoning effort before preparing the response.',
-  Icon: BrainCircuit,
-};
-
-const getReasoningPhases = (usedWebSearch: boolean, usedHighReasoning: boolean) => {
-  if (usedWebSearch) {
-    return usedHighReasoning
-      ? [WEB_SEARCH_PHASES[0], WEB_SEARCH_PHASES[1], HIGH_REASONING_PHASE, WEB_SEARCH_PHASES[2]]
-      : WEB_SEARCH_PHASES;
-  }
-  return usedHighReasoning
-    ? [THINKING_PHASES[0], HIGH_REASONING_PHASE, THINKING_PHASES[1]]
-    : THINKING_PHASES;
+type LiveChatActivity = {
+  id: string;
+  kind: 'model' | 'web_search';
+  status: 'active' | 'success' | 'error';
+  title: string;
+  detail?: string;
+  query?: string;
+  resultCount?: number;
 };
 
 const AI_HIGH_DEMAND_MESSAGE = 'AI is in high demand right now. Please try again later.';
@@ -77,26 +31,6 @@ const AI_HIGH_DEMAND_MESSAGE = 'AI is in high demand right now. Please try again
 const createMessageId = (prefix: 'user' | 'ai' | 'err'): string => {
   const randomId = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
   return `${prefix}_${randomId}`;
-};
-
-const createCompletedReasoningSteps = (usedWebSearch: boolean, usedHighReasoning: boolean): PlanStep[] => {
-  const phases = getReasoningPhases(usedWebSearch, usedHighReasoning);
-  return phases.map((phase, index) => {
-    const PhaseIcon = phase.Icon;
-    return {
-      id: `completed-${usedWebSearch ? 'web' : 'chat'}-${index}`,
-      title: phase.text,
-      status: 'success',
-      duration: 'Done',
-      icon: <PhaseIcon className="h-3.5 w-3.5" />,
-      content: (
-        <div className="flex items-start gap-2 rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
-          <PhaseIcon className="mt-0.5 h-3.5 w-3.5 flex-none text-[#F0ABFC]" />
-          <span>{phase.completedDetail}</span>
-        </div>
-      ),
-    };
-  });
 };
 
 // The NVIDIA API returns the model's real chain-of-thought as
@@ -211,11 +145,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [rateLimitSeconds, setRateLimitSeconds] = useState(0);
   const [quotaNotice, setQuotaNotice] = useState('');
-  const [thinkingPhaseIdx, setThinkingPhaseIdx] = useState(0);
-  const [isWebSearchPending, setIsWebSearchPending] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [highReasoningEnabled, setHighReasoningEnabled] = useState(false);
-  const [isHighReasoningPending, setIsHighReasoningPending] = useState(false);
+  const [liveActivities, setLiveActivities] = useState<LiveChatActivity[]>([]);
   const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatRequestAbortRef = useRef<AbortController | null>(null);
@@ -226,21 +158,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
-
-  // Cycle through the "thinking" status phases while a request is pending.
-  useEffect(() => {
-    if (!isLoading) {
-      setThinkingPhaseIdx(0);
-      return;
-    }
-    const phaseCount = getReasoningPhases(isWebSearchPending, isHighReasoningPending).length;
-    const interval = setInterval(() => {
-      setThinkingPhaseIdx((i) => Math.min(i + 1, phaseCount - 1));
-    }, 950);
-    return () => clearInterval(interval);
-  }, [isLoading, isWebSearchPending, isHighReasoningPending]);
-
+  }, [messages, isLoading, liveActivities]);
   useEffect(() => {
     if (rateLimitSeconds <= 0) return;
     const timeout = window.setTimeout(() => {
@@ -277,8 +195,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     const highReasoningRequested = highReasoningEnabled;
     setWebSearchEnabled(false);
     setHighReasoningEnabled(false);
-    setIsWebSearchPending(webSearchForced);
-    setIsHighReasoningPending(highReasoningRequested);
+    setLiveActivities([]);
     setIsLoading(true);
     const requestController = new AbortController();
     chatRequestAbortRef.current = requestController;
@@ -306,19 +223,63 @@ export const ChatView: React.FC<ChatViewProps> = ({
           userId,
           forceWebSearch: webSearchForced,
           reasoningEffort: highReasoningRequested ? 'high' : 'medium',
+          streamActivity: true,
         }),
         signal: requestController.signal,
       });
 
-      const data = await res.json().catch(() => ({}));
+      const createResponseError = (payload: any) => {
+        const responseError = new Error(payload?.error || 'Failed to communicate with AI');
+        (responseError as any).rateLimited = !!payload?.rateLimited;
+        (responseError as any).quotaExhausted = !!payload?.quotaExhausted;
+        (responseError as any).configurationError = !!payload?.configurationError;
+        (responseError as any).retryAfterSeconds = Number(payload?.retryAfterSeconds || res.headers.get('Retry-After') || 0);
+        return responseError;
+      };
+
+      let data: any = {};
+      const isActivityStream = res.headers.get('Content-Type')?.includes('application/x-ndjson') === true;
+
+      if (res.ok && isActivityStream) {
+        if (!res.body) throw new Error('The AI activity stream was unavailable.');
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        const processEventLine = (line: string) => {
+          if (!line.trim()) return;
+          const event = JSON.parse(line);
+          if (event?.type === 'activity' && event.activity?.id) {
+            const activity = event.activity as LiveChatActivity;
+            setLiveActivities((current) => {
+              const existingIndex = current.findIndex((item) => item.id === activity.id);
+              if (existingIndex < 0) return [...current, activity];
+              return current.map((item, index) => index === existingIndex ? { ...item, ...activity } : item);
+            });
+          } else if (event?.type === 'result') {
+            data = event.data || {};
+          } else if (event?.type === 'error') {
+            throw createResponseError(event);
+          }
+        };
+
+        while (true) {
+          const { value, done } = await reader.read();
+          buffer += decoder.decode(value, { stream: !done });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          lines.forEach(processEventLine);
+          if (done) {
+            if (buffer.trim()) processEventLine(buffer);
+            break;
+          }
+        }
+      } else {
+        data = await res.json().catch(() => ({}));
+      }
 
       if (!res.ok) {
-        const err = new Error(data.error || 'Failed to communicate with AI');
-        (err as any).rateLimited = !!data.rateLimited;
-        (err as any).quotaExhausted = !!data.quotaExhausted;
-        (err as any).configurationError = !!data.configurationError;
-        (err as any).retryAfterSeconds = Number(data.retryAfterSeconds || res.headers.get('Retry-After') || 0);
-        throw err;
+        throw createResponseError(data);
       }
 
       if (typeof data.reply !== 'string' || !data.reply.trim()) {
@@ -364,7 +325,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       const errorMsg: ChatMessage = {
         id: createMessageId('err'),
         sender: 'ai',
-        text: err?.configurationError && typeof err?.message === 'string'
+        text: typeof err?.message === 'string' && (err.configurationError || !isRateLimited)
           ? `⚠️ ${err.message}`
           : AI_HIGH_DEMAND_MESSAGE,
         timestamp: new Date().toISOString(),
@@ -373,8 +334,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
     } finally {
       if (chatRequestAbortRef.current === requestController) chatRequestAbortRef.current = null;
       setIsLoading(false);
-      setIsWebSearchPending(false);
-      setIsHighReasoningPending(false);
     }
   };
 
@@ -435,27 +394,29 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
-  const activePhases = getReasoningPhases(isWebSearchPending, isHighReasoningPending);
-  const activePhaseIndex = Math.min(thinkingPhaseIdx, activePhases.length - 1);
-  const reasoningSteps: PlanStep[] = activePhases.map((phase, index) => {
-    const status: PlanStep['status'] = index < activePhaseIndex
-      ? 'success'
-      : index === activePhaseIndex
-        ? 'active'
-        : 'pending';
-    const PhaseIcon = phase.Icon;
+  const liveReasoningSteps: PlanStep[] = liveActivities.map((activity) => {
+    const ActivityIcon = activity.kind === 'web_search' ? Globe : BrainCircuit;
+    const detail = activity.kind === 'web_search' && activity.status === 'success'
+      ? `${activity.resultCount ?? 0} live source${activity.resultCount === 1 ? '' : 's'} returned for “${activity.query || activity.detail || ''}”.`
+      : activity.detail;
 
     return {
-      id: `${isWebSearchPending ? 'web' : 'chat'}-${index}`,
-      title: phase.text,
-      status,
-      duration: status === 'success' ? 'Done' : status === 'active' ? 'Now' : undefined,
-      icon: <PhaseIcon className="h-3.5 w-3.5" />,
-      defaultExpanded: status === 'active',
-      content: status === 'active' ? (
-        <div className="flex items-start gap-2 rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
-          <PhaseIcon className="mt-0.5 h-3.5 w-3.5 flex-none animate-pulse text-[#E879F9]" />
-          <span>{phase.detail}</span>
+      id: activity.id,
+      title: activity.title,
+      status: activity.status,
+      duration: activity.status === 'success' ? 'Done' : activity.status === 'active' ? 'Now' : undefined,
+      icon: <ActivityIcon className="h-3.5 w-3.5" />,
+      defaultExpanded: activity.status === 'active',
+      content: detail ? (
+        <div className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400 ${
+          activity.kind === 'web_search'
+            ? 'border-emerald-400/15 bg-emerald-500/[0.06]'
+            : 'border-[#D946EF]/15 bg-[#D946EF]/[0.06]'
+        }`}>
+          <ActivityIcon className={`mt-0.5 h-3.5 w-3.5 flex-none ${
+            activity.kind === 'web_search' ? 'text-emerald-300' : 'text-[#F0ABFC]'
+          } ${activity.status === 'active' ? 'animate-pulse' : ''}`} />
+          <span className="min-w-0 break-words [overflow-wrap:anywhere]">{detail}</span>
         </div>
       ) : undefined,
     };
@@ -522,12 +483,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       : 'rounded-tl-md border-white/[0.08] bg-[#202020] text-zinc-100'
                   }`}
                 >
-                  {msg.sender === 'ai' && msg.text !== AI_HIGH_DEMAND_MESSAGE && !/^(?:⚠️|⏳)/.test(msg.text) && (
+                  {msg.sender === 'ai' && (Boolean(msg.reasoning?.trim()) || Boolean(msg.reasoningTimeline?.length)) && (
                     <AgentPlanning
                       title={typeof msg.thinkingSeconds === 'number' ? `Thought for ${msg.thinkingSeconds}s` : 'How this answer was prepared'}
-                      steps={msg.reasoning
-                        ? createRealReasoningSteps(msg.reasoning, msg.reasoningTimeline)
-                        : createCompletedReasoningSteps(msg.webSearchUsed === true, msg.reasoningEffort === 'high')}
+                      steps={createRealReasoningSteps(msg.reasoning || '', msg.reasoningTimeline)}
                       defaultExpanded={false}
                       className="mb-3"
                     />
@@ -637,12 +596,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   <span className="absolute -inset-1 animate-ping rounded-2xl border border-[#D946EF]/35" />
                 </div>
                 <div className="min-w-0 max-w-[calc(100%_-_40px)] flex-1 sm:max-w-lg sm:flex-none">
-                  <AgentPlanning
-                    title={isWebSearchPending
-                      ? isHighReasoningPending ? 'Searching with high reasoning' : 'Searching and reasoning'
-                      : isHighReasoningPending ? 'High reasoning' : 'Thinking'}
-                    steps={reasoningSteps}
-                  />
+                  {liveReasoningSteps.length > 0 ? (
+                    <AgentPlanning title="Live activity" steps={liveReasoningSteps} />
+                  ) : (
+                    <div className="rounded-2xl border border-white/[0.08] bg-[#202020] px-4 py-3 text-[13px] font-black text-zinc-300">
+                      Connecting to the AI…
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
