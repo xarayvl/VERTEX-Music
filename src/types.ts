@@ -110,6 +110,7 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   matchedTracks?: Track[];
+  isError?: boolean;
   webSearchUsed?: boolean;
   searchProvider?: 'tavily';
   reasoningEffort?: 'medium' | 'high';

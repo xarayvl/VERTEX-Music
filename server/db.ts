@@ -571,7 +571,7 @@ export async function initUpstashDB(): Promise<DBData> {
         return localData;
       }
     } catch (err) {
-      console.error('⚠️ Failed to communicate with Upstash Redis, falling back to local disk:', err);
+      console.error('Failed to communicate with Upstash Redis, falling back to local disk:', err);
     }
   }
 

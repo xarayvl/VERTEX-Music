@@ -108,6 +108,7 @@ function sanitizeChatHistory(value: unknown, tracks: TrackRecord[] = []): any[] 
             .map((trackId: string) => trackById.get(trackId))
         : undefined,
       webSearchUsed: message.webSearchUsed === true,
+      isError: message.isError === true ? true : undefined,
       searchProvider: message.searchProvider === "tavily" ? "tavily" : undefined,
       reasoningEffort: message.reasoningEffort === "high" ? "high" : message.reasoningEffort === "medium" ? "medium" : undefined,
       searchQueries: Array.isArray(message.searchQueries) ? message.searchQueries.filter((item: unknown): item is string => typeof item === "string").slice(0, 10) : undefined,

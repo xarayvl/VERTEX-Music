@@ -235,7 +235,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
     try {
       // Build conversation history for API
       const historyPayload = messages
-        .filter((message) => !(message.sender === 'ai' && /^(?:⚠️|⏳)/.test(message.text)))
+        .filter((message) => !(
+          message.sender === 'ai'
+          && (message.isError === true || /^(?:⚠️|⏳)/.test(message.text))
+        ))
         .slice(-20)
         .map((message) => ({
           role: message.sender === 'user' ? 'user' : 'assistant',
@@ -341,8 +344,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
         const cancelledMsg: ChatMessage = {
           id: createMessageId('err'),
           sender: 'ai',
-          text: '⏳ Request cancelled.',
+          text: 'Request cancelled.',
           timestamp: new Date().toISOString(),
+          isError: true,
         };
         onUpdateMessages((prev) => [...prev, cancelledMsg]);
         return;
@@ -358,9 +362,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
         id: createMessageId('err'),
         sender: 'ai',
         text: typeof err?.message === 'string' && (err.configurationError || !isRateLimited)
-          ? `⚠️ ${err.message}`
+          ? err.message
           : AI_HIGH_DEMAND_MESSAGE,
         timestamp: new Date().toISOString(),
+        isError: true,
       };
       onUpdateMessages((prev) => [...prev, errorMsg]);
     } finally {
@@ -531,7 +536,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         className="control-press flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-300 hover:bg-emerald-500/15"
                       >
                         <Globe className="h-3 w-3" />
-                        Tavily Search{msg.sources?.length ? ` · ${msg.sources.length} sources` : ''}
+                        Web Search{msg.sources?.length ? ` · ${msg.sources.length} sources` : ''}
                         <ChevronDown className={`h-3 w-3 transition-transform ${expandedSources[msg.id] ? 'rotate-180' : ''}`} />
                       </button>
 
