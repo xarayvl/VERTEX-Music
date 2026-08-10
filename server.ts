@@ -2590,6 +2590,7 @@ function buildNvidiaMessages(
         ? `${baseUrl}/chat/completions`
         : `${baseUrl}/v1/chat/completions`;
       requestDiagnostics.stage = "nvidia-chat";
+      const nvidiaRequestStartedAt = Date.now();
       const providerResponse = await fetch(chatCompletionsUrl, {
         method: "POST",
         headers: {
@@ -2626,6 +2627,17 @@ function buildNvidiaMessages(
           : "";
       if (!replyText) return res.status(404).json({ error: "The AI provider returned no text response." });
 
+      // gpt-oss-style reasoning models return the chain-of-thought separately
+      // from the final answer, either as `reasoning_content` or `reasoning`.
+      const rawReasoning = response?.choices?.[0]?.message?.reasoning_content
+        ?? response?.choices?.[0]?.message?.reasoning;
+      const reasoningText = typeof rawReasoning === "string"
+        ? rawReasoning.trim()
+        : Array.isArray(rawReasoning)
+          ? rawReasoning.map((part: any) => typeof part?.text === "string" ? part.text : "").join("").trim()
+          : "";
+      const thinkingSeconds = Math.max(1, Math.round((Date.now() - nvidiaRequestStartedAt) / 1_000));
+
       return res.json({
         reply: replyText,
         webSearchUsed: webSearchRequested,
@@ -2633,6 +2645,8 @@ function buildNvidiaMessages(
         reasoningEffort: requestedReasoningEffort,
         searchQueries: webSearchRequested ? [cleanMessage] : [],
         sources: searchSources.map(({ title, uri }) => ({ title, uri })),
+        reasoning: reasoningText ? reasoningText.slice(0, 12_000) : undefined,
+        thinkingSeconds,
       });
     } catch (error: any) {
       if (clientAbortController.signal.aborted || res.destroyed) {

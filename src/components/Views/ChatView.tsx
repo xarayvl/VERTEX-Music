@@ -132,6 +132,29 @@ const createCompletedReasoningSteps = (usedWebSearch: boolean, usedHighReasoning
   });
 };
 
+// Splits the model's real chain-of-thought (returned by the NVIDIA API as
+// `reasoning_content`) into readable chunks for the "Thought for Xs" panel,
+// instead of showing the generic simulated phase labels.
+const createRealReasoningSteps = (reasoningText: string): PlanStep[] => {
+  const chunks = reasoningText
+    .split(/\n{2,}/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  const steps = chunks.length > 0 ? chunks : [reasoningText.trim()];
+
+  return steps.map((chunk, index) => ({
+    id: `reasoning-${index}`,
+    title: steps.length > 1 ? `Thought ${index + 1}` : 'Thought process',
+    status: 'success',
+    icon: <BrainCircuit className="h-3.5 w-3.5" />,
+    content: (
+      <div className="whitespace-pre-wrap rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+        {chunk}
+      </div>
+    ),
+  }));
+};
+
 export const ChatView: React.FC<ChatViewProps> = ({
   messages,
   onUpdateMessages,
@@ -269,6 +292,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
         reasoningEffort: data.reasoningEffort === 'high' ? 'high' : 'medium',
         searchQueries: Array.isArray(data.searchQueries) ? data.searchQueries : undefined,
         sources: Array.isArray(data.sources) ? data.sources : undefined,
+        reasoning: typeof data.reasoning === 'string' && data.reasoning.trim() ? data.reasoning.trim() : undefined,
+        thinkingSeconds: Number.isFinite(data.thinkingSeconds) ? Number(data.thinkingSeconds) : undefined,
       };
 
       onUpdateMessages((prev) => [...prev, aiMsg]);
@@ -454,8 +479,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 >
                   {msg.sender === 'ai' && msg.text !== AI_HIGH_DEMAND_MESSAGE && !/^(?:⚠️|⏳)/.test(msg.text) && (
                     <AgentPlanning
-                      title="How this answer was prepared"
-                      steps={createCompletedReasoningSteps(msg.webSearchUsed === true, msg.reasoningEffort === 'high')}
+                      title={typeof msg.thinkingSeconds === 'number' ? `Thought for ${msg.thinkingSeconds}s` : 'How this answer was prepared'}
+                      steps={msg.reasoning
+                        ? createRealReasoningSteps(msg.reasoning)
+                        : createCompletedReasoningSteps(msg.webSearchUsed === true, msg.reasoningEffort === 'high')}
                       defaultExpanded={false}
                       className="mb-3"
                     />

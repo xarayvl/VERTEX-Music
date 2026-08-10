@@ -115,6 +115,8 @@ export interface ChatMessage {
   reasoningEffort?: 'medium' | 'high';
   searchQueries?: string[];
   sources?: ChatSource[];
+  reasoning?: string;
+  thinkingSeconds?: number;
 }
 
 export interface AudioEQ {
