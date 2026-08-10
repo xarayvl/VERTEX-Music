@@ -115,9 +115,6 @@ export default function App() {
   // Device & Audio Engine State
   const [activeDeviceName, setActiveDeviceName] = useState<string>('Web Player (This Browser)');
 
-  // Interactive Background Mouse Glow Position State
-  const [mousePos, setMousePos] = useState<{ x: number; y: number }>({ x: 500, y: 300 });
-
   // Modals & Overlay States
   const [isEQOpen, setIsEQOpen] = useState<boolean>(false);
   const [isNewPlaylistOpen, setIsNewPlaylistOpen] = useState<boolean>(false);
@@ -856,15 +853,6 @@ export default function App() {
       setHistoryIndex(historyIndex + 1);
     }
   };
-
-  // Track Mouse Movement for Interactive Ambient Spotlight
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
 
   // Initialize Audio Engine callbacks
   useEffect(() => {
@@ -2025,11 +2013,13 @@ export default function App() {
       onContextMenu={handleContextMenu}
       className="vertex-app-shell relative flex h-[100dvh] w-full max-w-full flex-col gap-0 overflow-hidden bg-black p-0 font-sans text-zinc-100 select-none md:h-screen md:gap-2 md:p-2"
     >
-      {/* Interactive Radial Spotlight following mouse cursor & current track accent color */}
+      {/* Static ambient color from the current track. Keeping this layer still
+          avoids GPU paint seams over the player and prevents app-wide renders
+          on every mouse movement. */}
       <div
         className="fixed inset-0 pointer-events-none transition-opacity duration-300 z-0 opacity-25"
         style={{
-          background: `radial-gradient(650px circle at ${mousePos.x}px ${mousePos.y}px, ${currentTrack?.accentColor || '#A855F7'} 0%, transparent 80%)`,
+          background: `radial-gradient(900px circle at 50% 100%, ${currentTrack?.accentColor || '#A855F7'} 0%, transparent 75%)`,
         }}
       />
 
