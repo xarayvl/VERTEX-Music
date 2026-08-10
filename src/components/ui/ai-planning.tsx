@@ -109,7 +109,7 @@ export const AgentPlanning: React.FC<AgentPlanningProps> = ({
                     <span className="relative z-10 mt-0.5 h-6 w-6 flex-none">
                       <span className={`flex h-full w-full items-center justify-center rounded-full ring-4 ring-[#1A1A1A] ${statusClasses[step.status]}`}>
                         {step.status === 'success' ? (
-                          <Check className="h-3.5 w-3.5" />
+                          step.icon || <Check className="h-3.5 w-3.5" />
                         ) : step.status === 'active' ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : step.status === 'error' ? (

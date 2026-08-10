@@ -109,17 +109,109 @@ const createRealReasoningSteps = (reasoningText: string): PlanStep[] => {
     .filter(Boolean);
   const steps = chunks.length > 0 ? chunks : [reasoningText.trim()];
 
-  return steps.map((chunk, index) => ({
-    id: `reasoning-${index}`,
-    title: steps.length > 1 ? `Thought ${index + 1}` : 'Thought process',
+  return steps.map((chunk, index) => {
+    const normalizedChunk = chunk.toLocaleLowerCase('tr-TR');
+    const icon = /\b(search|web|source|browser|browse|url|duckduckgo)\b|arama|kaynak/.test(normalizedChunk)
+      ? <Globe className="h-3.5 w-3.5" />
+      : /\b(music|song|artist|track|playlist|album|genre)\b|müzik|şarkı|sanatçı|çalma listesi/.test(normalizedChunk)
+        ? <Music className="h-3.5 w-3.5" />
+        : /\b(answer|response|respond|final|write|compose)\b|yanıt|cevap/.test(normalizedChunk)
+          ? <Sparkles className="h-3.5 w-3.5" />
+          : <BrainCircuit className="h-3.5 w-3.5" />;
+
+    return {
+      id: `reasoning-${index}`,
+      title: steps.length > 1 ? `Thought ${index + 1}` : 'Thought process',
+      status: 'success',
+      icon,
+      content: (
+        <div className="whitespace-pre-wrap rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+          {chunk}
+        </div>
+      ),
+    };
+  });
+};
+
+const createMessageActionSteps = (message: ChatMessage): PlanStep[] => {
+  if (!message.webSearchUsed) return [];
+
+  const providerName = message.searchProvider === 'duckduckgo' ? 'DuckDuckGo' : 'the web';
+  const searchSteps = (message.searchQueries || []).map((query, index): PlanStep => ({
+    id: `action-search-${index}`,
+    title: 'Searched on web',
     status: 'success',
-    icon: <BrainCircuit className="h-3.5 w-3.5" />,
+    duration: 'Done',
+    icon: <Globe className="h-3.5 w-3.5" />,
     content: (
-      <div className="whitespace-pre-wrap rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
-        {chunk}
+      <div className="flex items-start gap-2 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+        <Search className="mt-0.5 h-3.5 w-3.5 flex-none text-emerald-300" />
+        <span className="min-w-0">
+          <span className="block text-[9px] font-black uppercase tracking-[0.14em] text-emerald-300/80">{providerName}</span>
+          <span className="mt-0.5 block break-words text-zinc-300 [overflow-wrap:anywhere]">{query}</span>
+        </span>
       </div>
     ),
   }));
+
+  const sourceCount = message.sources?.length || 0;
+  if (sourceCount > 0) {
+    searchSteps.push({
+      id: 'action-review-sources',
+      title: `Reviewed ${sourceCount} source${sourceCount === 1 ? '' : 's'}`,
+      status: 'success',
+      duration: 'Done',
+      icon: <Search className="h-3.5 w-3.5" />,
+      content: (
+        <div className="rounded-xl border border-sky-400/15 bg-sky-400/[0.05] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+          <div className="space-y-1.5">
+            {message.sources?.map((source, index) => (
+              <div key={`${source.uri}-${index}`} className="flex min-w-0 items-center gap-2">
+                <span className="h-1.5 w-1.5 flex-none rounded-full bg-sky-300" />
+                <span className="truncate">{source.title}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  return searchSteps;
+};
+
+const createPreparedAnswerStep = (usedWebSearch: boolean): PlanStep => ({
+  id: 'action-prepared-answer',
+  title: 'Prepared the answer',
+  status: 'success',
+  duration: 'Done',
+  icon: <Sparkles className="h-3.5 w-3.5" />,
+  content: (
+    <div className="flex items-start gap-2 rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+      <Sparkles className="mt-0.5 h-3.5 w-3.5 flex-none text-[#F0ABFC]" />
+      <span>{usedWebSearch ? 'Prepared a response grounded in the returned sources.' : 'Prepared the final response for the chat.'}</span>
+    </div>
+  ),
+});
+
+const createMessagePlanningSteps = (message: ChatMessage): PlanStep[] => {
+  const actionSteps = createMessageActionSteps(message);
+  if (message.reasoning) {
+    return [
+      ...actionSteps,
+      ...createRealReasoningSteps(message.reasoning),
+      createPreparedAnswerStep(message.webSearchUsed === true),
+    ];
+  }
+
+  if (actionSteps.length > 0) {
+    const preActionSteps = message.reasoningEffort === 'high'
+      ? createCompletedReasoningSteps(false, true).slice(0, -1)
+      : createCompletedReasoningSteps(false, false).slice(0, -1);
+    return [...preActionSteps, ...actionSteps, createPreparedAnswerStep(true)];
+  }
+
+  return createCompletedReasoningSteps(false, message.reasoningEffort === 'high');
 };
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -447,9 +539,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   {msg.sender === 'ai' && msg.text !== AI_HIGH_DEMAND_MESSAGE && !/^(?:⚠️|⏳)/.test(msg.text) && (
                     <AgentPlanning
                       title={typeof msg.thinkingSeconds === 'number' ? `Thought for ${msg.thinkingSeconds}s` : 'How this answer was prepared'}
-                      steps={msg.reasoning
-                        ? createRealReasoningSteps(msg.reasoning)
-                        : createCompletedReasoningSteps(msg.webSearchUsed === true, msg.reasoningEffort === 'high')}
+                      steps={createMessagePlanningSteps(msg)}
                       defaultExpanded={false}
                       className="mb-3"
                     />
