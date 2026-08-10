@@ -200,9 +200,9 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   const formattedReleaseDate = albumTrack.createdAt ? new Date(albumTrack.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : `Released ${effectiveYear}`;
 
   return (
-    <div className="no-button-lift flex min-h-full min-w-0 flex-col space-y-2 overflow-x-hidden animate-in fade-in duration-500 sm:space-y-8">
+    <div className="no-button-lift flex min-h-full min-w-0 flex-col space-y-2 overflow-x-hidden px-3 animate-in fade-in duration-500 sm:space-y-8 sm:px-6">
       {/* Dynamic Header mimicking Spotify Release Page */}
-      <div className="relative -mx-3 -mt-3 flex flex-col items-center gap-4 overflow-hidden px-4 pb-2 pt-5 text-center sm:-mx-6 sm:-mt-4 sm:gap-5 sm:p-8 md:flex-row md:items-end md:gap-6 md:text-left">
+      <div className="relative -mx-3 flex flex-col items-center gap-4 overflow-hidden px-4 pb-2 pt-5 text-center sm:-mx-6 sm:gap-5 sm:p-8 md:flex-row md:items-end md:gap-6 md:text-left">
         {/* Background Blur */}
         <div
           className="absolute inset-0 opacity-40 blur-[100px] z-0 saturate-200"
