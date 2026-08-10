@@ -20,11 +20,10 @@ The AI DJ uses NVIDIA's OpenAI-compatible API with `openai/gpt-oss-120b` by
 default. Set `NVIDIA_API_KEY` to enable chat. `NVIDIA_CHAT_MODEL` and
 `NVIDIA_API_BASE_URL` can override the model or endpoint.
 
-To let the AI DJ answer from current web results, set `TAVILY_API_KEY`. Existing
-Google Custom Search JSON API customers can instead set both
-`GOOGLE_SEARCH_API_KEY` and `GOOGLE_SEARCH_ENGINE_ID`; Google is preferred when
-both are present. Search runs automatically for current-information questions,
-or users can enable it for a message with the globe button.
+The AI DJ receives keyless DuckDuckGo HTML search as an OpenAI-compatible
+function tool and decides when current information requires it. Users can require
+a search for a specific message with the globe button. Search results are parsed
+from DuckDuckGo's non-JavaScript HTML page, so no search API key is required.
 
 ## Persistence
 

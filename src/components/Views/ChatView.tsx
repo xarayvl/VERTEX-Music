@@ -16,8 +16,8 @@ interface ChatViewProps {
   userDisplayName?: string;
 }
 
-// Pending-state labels mirror the request flow. Web-assisted requests search
-// first, then the model reasons over the returned source snippets.
+// Pending-state labels mirror forced-search requests. For regular requests the
+// model can still decide to call web search while it is reasoning.
 const THINKING_PHASES = [
   {
     text: 'Understand your request',
@@ -73,39 +73,6 @@ const getReasoningPhases = (usedWebSearch: boolean, usedHighReasoning: boolean) 
 };
 
 const AI_HIGH_DEMAND_MESSAGE = 'AI is in high demand right now. Please try again later.';
-
-const shouldRequestWebSearch = (message: string): boolean => {
-  const normalized = message.toLocaleLowerCase('tr-TR').replace(/[’`]/g, "'");
-  const explicitSearchPhrases = [
-    'search the web',
-    'search online',
-    'browse the web',
-    'look it up',
-    'google it',
-    'research this',
-    'internette ara',
-    'internette arama',
-    'internette araştır',
-    'internetten ara',
-    'internetten bak',
-    'internetten araştır',
-    "web'de ara",
-    'webde ara',
-    'web üzerinde ara',
-    "google'da ara",
-    'googleda ara',
-    'online ara',
-    'araştır',
-  ];
-
-  const currentInformationPatterns = [
-    /\b(latest|current|today|tonight|yesterday|now|recent|new releases?|news|charts?|rankings?|tours?|concerts?|schedule|prices?|weather|scores?|standings|exchange rates?|what (?:date|day|time) is it|202[4-9])\b/i,
-    /(?:bugün(?:ün|kü|de|den|e)?|bugunun|bugunku|dün(?:ün|kü|de|den)?|şu an|şimdiki|güncel|en son|son durum|son dakika|bu hafta|bu ay|bu yıl|hangi gündeyiz|hangi tarihteyiz|bugün günlerden|bugün ayın kaçı|saat kaç|hava durumu|döviz kuru|maç sonucu|skor|puan durumu|yeni çıkan|haber|liste|sıralama|turne|konser|program)/i,
-  ];
-
-  return explicitSearchPhrases.some((phrase) => normalized.includes(phrase))
-    || currentInformationPatterns.some((pattern) => pattern.test(normalized));
-};
 
 const createMessageId = (prefix: 'user' | 'ai' | 'err'): string => {
   const randomId = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -229,11 +196,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
     onUpdateMessages((prev) => [...prev, userMsg]);
     if (!customText) setInput('');
-    const webSearchRequested = webSearchEnabled || shouldRequestWebSearch(textToSend);
+    const webSearchForced = webSearchEnabled;
     const highReasoningRequested = highReasoningEnabled;
     setWebSearchEnabled(false);
     setHighReasoningEnabled(false);
-    setIsWebSearchPending(webSearchRequested);
+    setIsWebSearchPending(webSearchForced);
     setIsHighReasoningPending(highReasoningRequested);
     setIsLoading(true);
     const requestController = new AbortController();
@@ -260,7 +227,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           message: textToSend.trim(),
           history: historyPayload,
           userId,
-          forceWebSearch: webSearchRequested,
+          forceWebSearch: webSearchForced,
           reasoningEffort: highReasoningRequested ? 'high' : 'medium',
         }),
         signal: requestController.signal,
@@ -288,7 +255,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         text: aiReplyText,
         timestamp: new Date().toISOString(),
         webSearchUsed: !!data.webSearchUsed,
-        searchProvider: data.searchProvider === 'google' ? 'google' : data.searchProvider === 'web' ? 'web' : undefined,
+        searchProvider: data.searchProvider === 'duckduckgo' ? 'duckduckgo' : data.searchProvider === 'web' ? 'web' : undefined,
         reasoningEffort: data.reasoningEffort === 'high' ? 'high' : 'medium',
         searchQueries: Array.isArray(data.searchQueries) ? data.searchQueries : undefined,
         sources: Array.isArray(data.sources) ? data.sources : undefined,
@@ -495,7 +462,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         className="control-press flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-300 hover:bg-emerald-500/15"
                       >
                         <Globe className="h-3 w-3" />
-                        {msg.searchProvider === 'google' ? 'Google Search' : 'Web search'}{msg.sources?.length ? ` · ${msg.sources.length} sources` : ''}
+                        {msg.searchProvider === 'duckduckgo' ? 'DuckDuckGo Search' : 'Web search'}{msg.sources?.length ? ` · ${msg.sources.length} sources` : ''}
                         <ChevronDown className={`h-3 w-3 transition-transform ${expandedSources[msg.id] ? 'rotate-180' : ''}`} />
                       </button>
 

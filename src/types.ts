@@ -111,7 +111,7 @@ export interface ChatMessage {
   timestamp: string;
   matchedTracks?: Track[];
   webSearchUsed?: boolean;
-  searchProvider?: 'google' | 'web';
+  searchProvider?: 'duckduckgo' | 'web';
   reasoningEffort?: 'medium' | 'high';
   searchQueries?: string[];
   sources?: ChatSource[];
