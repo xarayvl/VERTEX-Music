@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bot, Sparkles, Play, Music, Globe, Search, ChevronDown, BrainCircuit, CheckCircle2 } from 'lucide-react';
+import { Bot, Sparkles, Play, Music, Globe, Search, ChevronDown, BrainCircuit } from 'lucide-react';
 import { Track, ChatMessage, ReasoningTimelineEntry } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import { AgentPlanning, type PlanStep } from '../ui/ai-planning';
@@ -38,15 +38,42 @@ const createMessageId = (prefix: 'user' | 'ai' | 'err'): string => {
 // end user, so it's never shown as-is. Instead we condense each chunk down
 // to a short, natural sentence or two — a user-facing gist of what the
 // model was doing, not its literal internal monologue.
-const summarizeReasoningChunk = (text: string, maxLength = 170): string => {
-  const cleaned = text.replace(/\s+/g, ' ').trim();
+const summarizeReasoningChunk = (text: string, relatedAction = '', maxLength = 220): string => {
+  const cleaned = text
+    .replace(/<\/?(?:think|analysis)>/gi, ' ')
+    .replace(/(?:^|\s)[*-]\s+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!cleaned) return '';
 
-  // Split on sentence boundaries (keeps Turkish/Latin uppercase starts too).
+  // Prefer sentences describing a decision, data check, calculation, search,
+  // or response action. Raw reasoning often opens by merely restating what
+  // the user said; showing only that sentence makes the summary misleading.
   const sentences = cleaned.split(/(?<=[.!?…])\s+(?=[A-ZÇĞİÖŞÜ0-9])/).filter(Boolean);
-  let summary = sentences[0] || cleaned;
-  if (summary.length < 50 && sentences[1]) {
-    summary = `${summary} ${sentences[1]}`;
+  const actionPattern = /\b(?:need(?:s|ed)?|should|will|plan(?:s|ned)?|decid(?:e|ed|ing)|search(?:ed|ing)?|browse|look(?:ed|ing)? up|check(?:ed|ing)?|verif(?:y|ied|ying)|compar(?:e|ed|ing)|review(?:ed|ing)?|use(?:d|ing)?|calculat(?:e|ed|ing)|determin(?:e|ed|ing)|answer(?:ed|ing)?|respond(?:ed|ing)?|cite(?:d|ing)?|gerek(?:iyor|ti)?|arama|ara(?:yacağım|mak|dı|yor)|kontrol|doğrula|karşılaştır|incele|hesapla|belirle|yanıtla|cevapla|kullan)\b/i;
+  const decisionPattern = /\b(?:so|therefore|because|however|instead|then|next|bu yüzden|dolayısıyla|çünkü|ancak|yerine|ardından|sonra)\b/i;
+  const restatementPattern = /^(?:the\s+)?user\b|^kullanıcı\b/i;
+  const scored = sentences.map((sentence, index) => ({
+    sentence,
+    index,
+    score: (actionPattern.test(sentence) ? 4 : 0)
+      + (decisionPattern.test(sentence) ? 2 : 0)
+      - (restatementPattern.test(sentence) ? 3 : 0),
+  }));
+  const selected = scored
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, 2)
+    .sort((left, right) => left.index - right.index)
+    .map((item) => item.sentence);
+  const fallback = sentences.filter((sentence) => !restatementPattern.test(sentence)).slice(0, 2);
+  let summary = (selected.length > 0 ? selected : fallback.length > 0 ? fallback : sentences.slice(0, 1)).join(' ') || cleaned;
+  if (relatedAction && !/\b(?:search(?:ed|ing)?|web|arama|ara(?:dı|yor|mak))\b/i.test(summary)) {
+    const contextLimit = Math.max(40, maxLength - relatedAction.length - 2);
+    const context = summary.length > contextLimit
+      ? `${summary.slice(0, contextLimit - 1).trimEnd()}…`
+      : summary;
+    summary = `${context} ${relatedAction}`;
   }
 
   if (summary.length > maxLength) {
@@ -66,15 +93,13 @@ const reasoningStepContent = (summary: string) => (
 
 const createReasonedStep = (id: string, summary: string): PlanStep => ({
   id,
-  title: 'Reasoned',
+  title: 'Reasoning summary',
   status: 'success',
   icon: <BrainCircuit className="h-3.5 w-3.5" />,
   content: reasoningStepContent(summary),
 });
 
-// Renders a tool call as its own pair of activity lines inside the thought
-// flow (e.g. "🌐 Searched the web" followed by "✓ Found N sources"),
-// separate from the "Reasoned" summary steps around it.
+// Renders a real tool call as one activity line inside the thought flow.
 const createToolActivitySteps = (id: string, entry: Extract<ReasoningTimelineEntry, { type: 'tool' }>): PlanStep[] => {
   if (entry.tool !== 'web_search') return [];
   const resultLabel = entry.resultCount > 0
@@ -84,21 +109,15 @@ const createToolActivitySteps = (id: string, entry: Extract<ReasoningTimelineEnt
   return [
     {
       id: `${id}-search`,
-      title: 'Searched the web',
+      title: `Searched the web · ${resultLabel}`,
       status: 'success',
-      icon: <Globe className="h-3.5 w-3.5" />,
+      icon: <Search className="h-3.5 w-3.5" />,
       content: (
         <div className="flex items-center gap-1.5 rounded-xl border border-emerald-400/15 bg-emerald-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
           <Search className="h-3 w-3 flex-none text-emerald-300" />
           <span className="min-w-0 break-words [overflow-wrap:anywhere]">&ldquo;{entry.query}&rdquo;</span>
         </div>
       ),
-    },
-    {
-      id: `${id}-result`,
-      title: resultLabel,
-      status: 'success',
-      icon: <CheckCircle2 className="h-3.5 w-3.5" />,
     },
   ];
 };
@@ -112,7 +131,20 @@ const createRealReasoningSteps = (reasoningText: string, timeline?: ReasoningTim
     const steps: PlanStep[] = [];
     timeline.forEach((entry, index) => {
       if (entry.type === 'reasoning') {
-        const summary = summarizeReasoningChunk(entry.text);
+        const previousEntry = timeline[index - 1];
+        const nextEntry = timeline[index + 1];
+        const nextQuery = nextEntry?.type === 'tool'
+          ? `${nextEntry.query.slice(0, 90)}${nextEntry.query.length > 90 ? '…' : ''}`
+          : '';
+        const previousQuery = previousEntry?.type === 'tool'
+          ? `${previousEntry.query.slice(0, 90)}${previousEntry.query.length > 90 ? '…' : ''}`
+          : '';
+        const relatedAction = nextEntry?.type === 'tool' && nextEntry.tool === 'web_search'
+          ? `I then searched the live web for “${nextQuery}”.`
+          : previousEntry?.type === 'tool' && previousEntry.tool === 'web_search'
+            ? `I used the live results for “${previousQuery}” to prepare the answer.`
+            : '';
+        const summary = summarizeReasoningChunk(entry.text, relatedAction);
         if (summary) steps.push(createReasonedStep(`reasoned-${index}`, summary));
       } else {
         steps.push(...createToolActivitySteps(`tool-${index}`, entry));
@@ -395,7 +427,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   const liveReasoningSteps: PlanStep[] = liveActivities.map((activity) => {
-    const ActivityIcon = activity.kind === 'web_search' ? Globe : BrainCircuit;
+    const ActivityIcon = activity.kind === 'web_search' ? Search : BrainCircuit;
     const detail = activity.kind === 'web_search' && activity.status === 'success'
       ? `${activity.resultCount ?? 0} live source${activity.resultCount === 1 ? '' : 's'} returned for “${activity.query || activity.detail || ''}”.`
       : activity.detail;
