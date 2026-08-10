@@ -2465,6 +2465,7 @@ async function fetchDuckDuckGoHtml(
   url: string,
   init: RequestInit,
   signal?: AbortSignal,
+  timeoutMs = 12_000,
 ): Promise<string> {
   const response = await fetch(url, {
     ...init,
@@ -2475,7 +2476,7 @@ async function fetchDuckDuckGoHtml(
       ...init.headers,
     },
     redirect: "follow",
-    signal: withTimeoutSignal(signal, 12_000),
+    signal: withTimeoutSignal(signal, timeoutMs),
   });
   const html = await response.text();
   if (!response.ok) {
@@ -2497,30 +2498,56 @@ async function fetchDuckDuckGoHtml(
 
 async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<WebSearchSource[]> {
   const trimmedQuery = query.trim().slice(0, 2_000);
-  let primaryError: unknown;
+  const searchParams = new URLSearchParams({ q: trimmedQuery, kl: "wt-wt", kp: "1" });
+  let firstError: unknown;
+  let receivedSearchPage = false;
 
+  // DuckDuckGo's POST endpoint can take longer than the normal search-tool
+  // timeout even when it eventually returns a valid page. Its HTML GET route
+  // serves the same results much faster, so use that as the primary path.
   try {
-    const html = await fetchDuckDuckGoHtml("https://html.duckduckgo.com/html/", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ q: trimmedQuery, kl: "wt-wt", kp: "1" }),
-    }, signal);
+    const htmlUrl = new URL("https://html.duckduckgo.com/html/");
+    htmlUrl.search = searchParams.toString();
+    const html = await fetchDuckDuckGoHtml(htmlUrl.toString(), { method: "GET" }, signal);
+    receivedSearchPage = true;
     const results = parseDuckDuckGoResults(html);
     if (results.length > 0) return results;
   } catch (error) {
     if (signal?.aborted) throw error;
-    primaryError = error;
+    firstError = error;
   }
 
   try {
     const liteUrl = new URL("https://lite.duckduckgo.com/lite/");
-    liteUrl.search = new URLSearchParams({ q: trimmedQuery, kl: "wt-wt", kp: "1" }).toString();
+    liteUrl.search = searchParams.toString();
     const liteHtml = await fetchDuckDuckGoHtml(liteUrl.toString(), { method: "GET" }, signal);
-    return parseDuckDuckGoLiteResults(liteHtml);
-  } catch (fallbackError) {
-    if (signal?.aborted) throw fallbackError;
-    throw primaryError || fallbackError;
+    receivedSearchPage = true;
+    const results = parseDuckDuckGoLiteResults(liteHtml);
+    if (results.length > 0) return results;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    firstError ||= error;
   }
+
+  // Keep the historically working POST request as a final compatibility
+  // fallback, but allow enough time for its currently slower response.
+  try {
+    const html = await fetchDuckDuckGoHtml("https://html.duckduckgo.com/html/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: searchParams,
+    }, signal, 20_000);
+    receivedSearchPage = true;
+    return parseDuckDuckGoResults(html);
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    firstError ||= error;
+  }
+
+  // An empty, valid results page is not a service failure. Let the model
+  // explain that nothing was found instead of surfacing an availability error.
+  if (receivedSearchPage) return [];
+  throw firstError || new Error("DuckDuckGo Search is unavailable.");
 }
 
 function buildNvidiaMessages(
