@@ -11,7 +11,6 @@ import {
   SkipBack,
   SkipForward,
   SlidersHorizontal,
-  Sparkles,
   Waves,
 } from 'lucide-react';
 import { Track } from '../../types';
@@ -94,14 +93,14 @@ export const SongScreenModal: React.FC<SongScreenModalProps> = ({
         <header className="song-screen-header workspace-header flex flex-shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-2.5 md:gap-4 md:pb-3">
           <div className="flex min-w-0 items-center gap-3 md:gap-4">
             <div
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] shadow-[0_12px_34px_rgba(168,85,247,0.28)] md:h-12 md:w-12 md:rounded-2xl"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] md:h-12 md:w-12 md:rounded-2xl"
               style={{ background: `linear-gradient(135deg, ${palette.accent}, ${palette.secondary})` }}
             >
               <Radio className="h-5 w-5 md:h-6 md:w-6" />
             </div>
             <div className="min-w-0">
-              <div className="mb-0.5 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] md:mb-1 md:gap-2 md:text-[10px] md:tracking-[0.24em]">
-                <Sparkles className="h-3.5 w-3.5" /> Now playing
+              <div className="mb-0.5 flex items-center text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] md:mb-1 md:text-[10px] md:tracking-[0.24em]">
+                Now playing
               </div>
               <h1 data-track-id={currentTrack.id} data-context-type="track" className="truncate text-lg font-black tracking-tight md:text-3xl">{releaseName}</h1>
             </div>
