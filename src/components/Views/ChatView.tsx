@@ -93,7 +93,7 @@ const reasoningStepContent = (summary: string) => (
 
 const createReasonedStep = (id: string, summary: string): PlanStep => ({
   id,
-  title: 'Reasoning summary',
+  title: 'Reasoning',
   status: 'success',
   icon: <BrainCircuit className="h-3.5 w-3.5" />,
   content: reasoningStepContent(summary),
