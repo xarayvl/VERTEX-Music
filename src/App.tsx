@@ -38,6 +38,27 @@ const LEFT_SIDEBAR_MIN_WIDTH = 96;
 const LEFT_SIDEBAR_MAX_WIDTH = 520;
 const LEFT_SIDEBAR_COMPACT_THRESHOLD = 200;
 
+// Shuffle picks aren't a security boundary, but Math.random() is a
+// non-cryptographic, seed-predictable PRNG that static analysis (and some
+// browser fingerprinting/prediction techniques) flags regardless of context.
+// crypto.getRandomValues is available in every browser this app targets, so
+// there's no downside to using it here instead.
+const getSecureRandomInt = (exclusiveMax: number): number => {
+  if (exclusiveMax <= 0) return 0;
+  const cryptoObj = typeof window !== 'undefined' ? window.crypto : undefined;
+  if (cryptoObj?.getRandomValues) {
+    const range = Math.floor(0xFFFFFFFF / exclusiveMax) * exclusiveMax;
+    const buffer = new Uint32Array(1);
+    let value: number;
+    do {
+      cryptoObj.getRandomValues(buffer);
+      value = buffer[0];
+    } while (value >= range);
+    return value % exclusiveMax;
+  }
+  return Math.floor(Math.random() * exclusiveMax);
+};
+
 const normalizePublicArtist = (raw: any): Artist => ({
   id: String(raw?.id || ''),
   name: String(raw?.name || raw?.artistName || raw?.displayName || raw?.username || ''),
@@ -1122,7 +1143,7 @@ export default function App() {
     if (isShuffle) {
       const candidates = activeList.filter((track) => track.id !== currentTrack.id);
       const preparedCandidate = candidates.find((track) => track.id === preloadedNextTrackIdRef.current);
-      nextTrack = preparedCandidate || candidates[Math.floor(Math.random() * candidates.length)];
+      nextTrack = preparedCandidate || candidates[getSecureRandomInt(candidates.length)];
       if (!nextTrack && repeatMode === 'all') nextTrack = currentTrack;
     } else {
       let nextIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
@@ -1152,7 +1173,7 @@ export default function App() {
           .map((_, index) => index)
           .filter((index) => index !== currentIndex);
         nextIdx = candidateIndexes.length > 0
-          ? candidateIndexes[Math.floor(Math.random() * candidateIndexes.length)]
+          ? candidateIndexes[getSecureRandomInt(candidateIndexes.length)]
           : currentIndex;
       }
     }
@@ -1442,7 +1463,7 @@ export default function App() {
     }
     const shuffledTracks = [...playlistTracks];
     for (let index = shuffledTracks.length - 1; index > 0; index -= 1) {
-      const swapIndex = Math.floor(Math.random() * (index + 1));
+      const swapIndex = getSecureRandomInt(index + 1);
       [shuffledTracks[index], shuffledTracks[swapIndex]] = [shuffledTracks[swapIndex], shuffledTracks[index]];
     }
     setIsShuffle(true);

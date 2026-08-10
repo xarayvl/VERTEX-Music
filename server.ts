@@ -412,8 +412,25 @@ async function startServer() {
     next();
   }, express.static(uploadsRootDir));
 
+  // Rate limiters are defined here (rather than further down, where the rest
+  // of the /api routes are registered) so that every route which is wired up
+  // before that point — like the R2 file proxy below — can also be guarded.
+  // A route registered ahead of `app.use('/api', generalApiLimiter)` would
+  // otherwise send its response before that middleware ever runs, leaving it
+  // completely unrateLimited.
+  const generalApiLimiter = createRateLimiter({ windowMs: 5 * 60_000, max: 600, name: 'api' });
+  const mutationLimiter = createRateLimiter({ windowMs: 60_000, max: 120, name: 'mutation' });
+  const authLimiter = createRateLimiter({ windowMs: 15 * 60_000, max: 20, name: 'auth' });
+  const usernameAvailabilityLimiter = createRateLimiter({ windowMs: 60_000, max: 60, name: 'username-availability' });
+  const chatLimiter = createRateLimiter({ windowMs: 60_000, max: 12, name: 'chat' });
+  const trackPlayLimiter = createRateLimiter({ windowMs: 60_000, max: 30, name: 'track-play' });
+  // Also used for full-page/document requests below (SPA fallback, shared
+  // track pages) which sit outside the /api prefix and so aren't covered by
+  // the app.use('/api', ...) wiring further down either.
+  const pageLimiter = createRateLimiter({ windowMs: 60_000, max: 120, name: 'page' });
+
   // Serve files stored in Cloudflare R2 directly or via proxy endpoint
-  app.all("/api/r2-file/*", async (req, res) => {
+  app.all("/api/r2-file/*", generalApiLimiter, async (req, res) => {
     const key = String(req.params[0] || "").replace(/^\/+/, "");
     const r2UploadsRoot = path.resolve(process.cwd(), "data", "uploads");
     const localPathForKey = path.resolve(r2UploadsRoot, key);
@@ -517,12 +534,6 @@ async function startServer() {
   // request body is parsed or reaches Upstash, R2, bcrypt, or Gemini.
   // Immutable media streaming is intentionally excluded because the R2 route
   // is registered above.
-  const generalApiLimiter = createRateLimiter({ windowMs: 5 * 60_000, max: 600, name: 'api' });
-  const mutationLimiter = createRateLimiter({ windowMs: 60_000, max: 120, name: 'mutation' });
-  const authLimiter = createRateLimiter({ windowMs: 15 * 60_000, max: 20, name: 'auth' });
-  const usernameAvailabilityLimiter = createRateLimiter({ windowMs: 60_000, max: 60, name: 'username-availability' });
-  const chatLimiter = createRateLimiter({ windowMs: 60_000, max: 12, name: 'chat' });
-  const trackPlayLimiter = createRateLimiter({ windowMs: 60_000, max: 30, name: 'track-play' });
   app.use('/api', generalApiLimiter);
   app.use('/api', (req, res, next) => {
     if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') {
@@ -638,7 +649,13 @@ async function startServer() {
       if (!/^[a-zA-Z0-9_.-]{3,32}$/.test(cleanUsername)) {
         return res.status(400).json({ error: "Username must be 3-32 characters and may only contain letters, numbers, dot, underscore, or hyphen." });
       }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) || cleanEmail.length > 254) {
+      // Note: avoid the classic ^[^\s@]+@[^\s@]+\.[^\s@]+$ pattern — because the
+      // character class before the "@" and the one before the final "." both
+      // allow the same characters, a malicious string can be matched in many
+      // overlapping ways, giving an attacker polynomial-time backtracking
+      // (ReDoS) on attacker-controlled input. This version has no ambiguous
+      // overlap between segments, so matching stays linear in input length.
+      if (!/^[^\s@]{1,64}@[^\s@.]{1,253}(?:\.[^\s@.]{1,63})+$/.test(cleanEmail) || cleanEmail.length > 254) {
         return res.status(400).json({ error: "A valid email address is required." });
       }
       if (password.length < 8 || password.length > 128) {
@@ -2527,7 +2544,13 @@ function buildNvidiaMessages(
           configurationError: true,
         });
       }
-      requestDiagnostics.keyFingerprint = crypto.createHash("sha256").update(apiKey).digest("hex").slice(0, 10);
+      // Diagnostics only need enough to tell which configured key was used,
+      // never a derivative of the secret itself. A single fast hash round
+      // over a low-entropy-ish credential is brute-forceable, so mask the
+      // key instead of hashing it.
+      requestDiagnostics.keyFingerprint = apiKey.length > 8
+        ? `${apiKey.slice(0, 4)}…${apiKey.slice(-4)}`
+        : "****";
 
       const ownerDB = await readDBAsync(req.method !== "GET");
       if (!ownerDB.users.some((user) => user.id === sessionUserId)) return res.status(404).json({ error: "User not found." });
@@ -2712,7 +2735,7 @@ function buildNvidiaMessages(
       server: { middlewareMode: true },
       appType: "spa",
     });
-    app.get("/track/:trackId", sendTrackPage(async (requestUrl) => {
+    app.get("/track/:trackId", pageLimiter, sendTrackPage(async (requestUrl) => {
       const template = await fs.promises.readFile(path.join(process.cwd(), "index.html"), "utf8");
       return vite.transformIndexHtml(requestUrl, template);
     }));
@@ -2720,10 +2743,12 @@ function buildNvidiaMessages(
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("/track/:trackId", sendTrackPage(async () =>
+    app.get("/track/:trackId", pageLimiter, sendTrackPage(async () =>
       fs.promises.readFile(path.join(distPath, "index.html"), "utf8")
     ));
-    app.get("*", (req, res) => {
+    // Unrated wildcard fallbacks are an easy DoS target (every unmatched GET
+    // triggers a disk read), so this needs the same guard as the API routes.
+    app.get("*", pageLimiter, (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
