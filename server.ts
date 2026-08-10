@@ -2461,6 +2461,36 @@ function parseDuckDuckGoLiteResults(html: string): WebSearchSource[] {
   }).slice(0, 5);
 }
 
+function parseBraveSearchResults(html: string): WebSearchSource[] {
+  const resultPattern = /<div\b(?=[^>]*\bclass=["'][^"']*\bsnippet\b[^"']*["'])(?=[^>]*\bdata-type=["']web["'])[^>]*>/gi;
+  const resultMatches = Array.from(html.matchAll(resultPattern));
+  const seen = new Set<string>();
+
+  return resultMatches.flatMap((match, index) => {
+    const resultEnd = index + 1 < resultMatches.length ? resultMatches[index + 1].index : html.length;
+    const resultHtml = html.slice(match.index ?? 0, resultEnd);
+    const linkMatch = resultHtml.match(
+      /<a\b(?=[^>]*\bclass=["'][^"']*\bl1\b[^"']*["'])[^>]*\bhref=["']([^"']+)["'][^>]*>/i,
+    );
+    const uri = linkMatch ? decodeSearchHtml(linkMatch[1]).trim() : "";
+    const titleMatch = resultHtml.match(
+      /<div\b[^>]*\bclass=["'][^"']*\bsearch-snippet-title\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    );
+    const snippetMatch = resultHtml.match(
+      /<div\b[^>]*\bclass=["'][^"']*\bline-clamp-dynamic\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    );
+    const title = titleMatch ? searchHtmlToText(titleMatch[1]) : "";
+    if (!isHttpUrl(uri) || !title || seen.has(uri)) return [];
+
+    seen.add(uri);
+    return [{
+      title: title.slice(0, 300),
+      uri: new URL(uri).toString(),
+      snippet: snippetMatch ? searchHtmlToText(snippetMatch[1]).slice(0, 1_000) : "",
+    }];
+  }).slice(0, 5);
+}
+
 async function fetchDuckDuckGoHtml(
   url: string,
   init: RequestInit,
@@ -2529,25 +2559,61 @@ async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<We
     firstError ||= error;
   }
 
-  // Keep the historically working POST request as a final compatibility
-  // fallback, but allow enough time for its currently slower response.
-  try {
-    const html = await fetchDuckDuckGoHtml("https://html.duckduckgo.com/html/", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: searchParams,
-    }, signal, 20_000);
-    receivedSearchPage = true;
-    return parseDuckDuckGoResults(html);
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    firstError ||= error;
-  }
-
   // An empty, valid results page is not a service failure. Let the model
   // explain that nothing was found instead of surfacing an availability error.
   if (receivedSearchPage) return [];
   throw firstError || new Error("DuckDuckGo Search is unavailable.");
+}
+
+async function searchBrave(query: string, signal?: AbortSignal): Promise<WebSearchSource[]> {
+  const searchUrl = new URL("https://search.brave.com/search");
+  searchUrl.search = new URLSearchParams({ q: query.trim().slice(0, 2_000), source: "web" }).toString();
+  const response = await fetch(searchUrl, {
+    method: "GET",
+    headers: {
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "en-US,en;q=0.9",
+      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+    },
+    redirect: "follow",
+    signal: withTimeoutSignal(signal, 10_000),
+  });
+  const html = await response.text();
+  if (!response.ok) throw new Error(`Brave Search request failed (${response.status}).`);
+  if (html.length > 2_000_000) throw new Error("Brave Search returned an unexpectedly large response.");
+  if (/captcha|challenge-form|verify you are human/i.test(html)) {
+    throw new Error("Brave Search returned a verification challenge.");
+  }
+  return parseBraveSearchResults(html);
+}
+
+async function searchLiveWeb(
+  query: string,
+  signal?: AbortSignal,
+): Promise<{ sources: WebSearchSource[]; provider: "duckduckgo" | "web" }> {
+  const attempts: Array<{
+    provider: "duckduckgo" | "web";
+    search: () => Promise<WebSearchSource[]>;
+  }> = [
+    { provider: "web", search: () => searchBrave(query, signal) },
+    { provider: "duckduckgo", search: () => searchDuckDuckGo(query, signal) },
+  ];
+
+  let firstError: unknown;
+  let emptyResultProvider: "duckduckgo" | "web" | undefined;
+  for (const attempt of attempts) {
+    try {
+      const sources = await attempt.search();
+      if (sources.length > 0) return { sources, provider: attempt.provider };
+      emptyResultProvider ||= attempt.provider;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      firstError ||= error;
+    }
+  }
+
+  if (emptyResultProvider) return { sources: [], provider: emptyResultProvider };
+  throw firstError || new Error("Live web search is unavailable.");
 }
 
 function buildNvidiaMessages(
@@ -2708,20 +2774,83 @@ function buildNvidiaMessages(
           "When web_search returns results, cite factual claims with the supplied source labels such as [1] and [2]. " +
           "Never invent sources or claim to have opened full pages beyond the returned snippets. " +
           (webSearchForced
-            ? "The user explicitly enabled web search for this message. You must call web_search before answering."
+            ? "The user explicitly enabled web search. A live web_search result will be supplied before you answer; use it and cite its source labels."
             : "You decide whether web_search is needed for this message.");
 
       const messages = buildNvidiaMessages(systemInstruction, formattedHistory, cleanMessage);
+
+      // The globe button already expresses an explicit search decision. Run
+      // that search once on the server and seed its tool result so the model
+      // cannot spend extra rounds deciding whether to call the same tool.
+      if (webSearchForced) {
+        const query = cleanMessage.slice(0, 2_000);
+        requestDiagnostics.stage = "web-search-tool";
+        requestDiagnostics.webSearchCalls = 1;
+        const searchActivityId = "web-search-1";
+        sendStreamEvent({
+          type: "activity",
+          activity: {
+            id: searchActivityId,
+            kind: "web_search",
+            status: "active",
+            title: "Searching the live web",
+            detail: query,
+            query,
+          },
+        });
+        const liveSearch = await searchLiveWeb(query, clientAbortController.signal);
+        requestDiagnostics.searchProvider = liveSearch.provider;
+        searchQueries.push(query);
+        const labeledSources = liveSearch.sources.map((source) => {
+          searchSources.push(source);
+          const sourceIndex = searchSources.length;
+          sourceIndexByUri.set(source.uri, sourceIndex);
+          return {
+            label: `[${sourceIndex}]`,
+            title: source.title,
+            url: source.uri,
+            snippet: source.snippet || "No snippet available.",
+          };
+        });
+        const forcedToolCall: NvidiaToolCall = {
+          id: `forced_web_search_${crypto.randomUUID()}`,
+          type: "function",
+          function: { name: WEB_SEARCH_TOOL.function.name, arguments: JSON.stringify({ query }) },
+        };
+        messages.push({ role: "assistant", content: null, tool_calls: [forcedToolCall] });
+        messages.push({
+          role: "tool",
+          name: WEB_SEARCH_TOOL.function.name,
+          tool_call_id: forcedToolCall.id,
+          content: JSON.stringify({
+            query,
+            results: labeledSources,
+            note: labeledSources.length > 0
+              ? "Cite claims using the supplied [n] labels. The results are snippets, not full opened pages."
+              : "No results were found. Say that current information could not be verified instead of guessing.",
+          }),
+        });
+        reasoningTimeline.push({ type: "tool", tool: "web_search", query, resultCount: labeledSources.length });
+        sendStreamEvent({
+          type: "activity",
+          activity: {
+            id: searchActivityId,
+            kind: "web_search",
+            status: "success",
+            title: "Searched the live web",
+            detail: query,
+            query,
+            resultCount: labeledSources.length,
+          },
+        });
+      }
 
       const baseUrl = (process.env.NVIDIA_API_BASE_URL?.trim() || "https://integrate.api.nvidia.com").replace(/\/+$/, "");
       const chatCompletionsUrl = baseUrl.endsWith("/v1")
         ? `${baseUrl}/chat/completions`
         : `${baseUrl}/v1/chat/completions`;
       requestDiagnostics.stage = "nvidia-chat";
-      const requestNvidiaCompletion = async (toolChoice: "auto" | {
-        type: "function";
-        function: { name: string };
-      }): Promise<any> => {
+      const requestNvidiaCompletion = async (allowWebSearchTool: boolean): Promise<any> => {
         const providerResponse = await fetch(chatCompletionsUrl, {
           method: "POST",
           headers: {
@@ -2732,8 +2861,7 @@ function buildNvidiaMessages(
           body: JSON.stringify({
             model: requestDiagnostics.model,
             messages,
-            tools: [WEB_SEARCH_TOOL],
-            tool_choice: toolChoice,
+            ...(allowWebSearchTool ? { tools: [WEB_SEARCH_TOOL], tool_choice: "auto" } : {}),
             max_tokens: 4_096,
             reasoning_effort: requestedReasoningEffort,
             stream: false,
@@ -2755,9 +2883,8 @@ function buildNvidiaMessages(
       };
 
       let finalAssistantMessage: any = null;
-      let forcedSearchReminderSent = false;
-      const maxSearchCalls = 3;
-      const maxToolRounds = 5;
+      const maxSearchCalls = 1;
+      const maxToolRounds = 3;
 
       for (let round = 0; round < maxToolRounds; round += 1) {
         const modelActivityId = `model-${round}`;
@@ -2770,11 +2897,10 @@ function buildNvidiaMessages(
             title: "Connecting",
           },
         });
-        // A forced function tool_choice is rejected intermittently by some
-        // NVIDIA-hosted models. The explicit system instruction still makes
-        // search mandatory, while auto uses the same reliable path as a user
-        // writing "search the web" in their message.
-        const response = await requestNvidiaCompletion("auto");
+        // After one search, omit the tool definition from subsequent model
+        // calls. This makes the next response final instead of allowing the
+        // model to enter another search/review/search cycle.
+        const response = await requestNvidiaCompletion(requestDiagnostics.webSearchCalls === 0);
         const assistantMessage = response?.choices?.[0]?.message;
         if (!assistantMessage || assistantMessage.role !== "assistant") {
           throw new Error("The AI provider returned an invalid assistant response.");
@@ -2816,21 +2942,6 @@ function buildNvidiaMessages(
         });
 
         if (toolCalls.length === 0) {
-          if (webSearchForced && requestDiagnostics.webSearchCalls === 0 && !forcedSearchReminderSent) {
-            messages.push({
-              role: "assistant",
-              content: typeof assistantMessage.content === "string" ? assistantMessage.content : null,
-              reasoning_content: typeof assistantMessage.reasoning_content === "string"
-                ? assistantMessage.reasoning_content
-                : undefined,
-            });
-            messages.push({
-              role: "user",
-              content: "Web search is enabled for this request. Do not answer yet: call web_search with a concise query first, then answer from its results.",
-            });
-            forcedSearchReminderSent = true;
-            continue;
-          }
           finalAssistantMessage = assistantMessage;
           break;
         }
@@ -2897,11 +3008,11 @@ function buildNvidiaMessages(
               query,
             },
           });
-          const duckDuckGoSources = await searchDuckDuckGo(query, clientAbortController.signal);
-          requestDiagnostics.searchProvider = "duckduckgo";
+          const liveSearch = await searchLiveWeb(query, clientAbortController.signal);
+          requestDiagnostics.searchProvider = liveSearch.provider;
           if (!searchQueries.includes(query)) searchQueries.push(query);
 
-          const labeledSources = duckDuckGoSources.map((source) => {
+          const labeledSources = liveSearch.sources.map((source) => {
             let sourceIndex = sourceIndexByUri.get(source.uri);
             if (sourceIndex === undefined) {
               searchSources.push(source);
