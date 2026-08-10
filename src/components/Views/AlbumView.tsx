@@ -202,10 +202,10 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   return (
     <div className="no-button-lift flex min-h-full min-w-0 flex-col space-y-2 overflow-x-hidden animate-in fade-in duration-500 sm:space-y-8">
       {/* Dynamic Header mimicking Spotify Release Page */}
-      <div className="relative -mx-3 -mt-3 flex flex-col items-center gap-4 overflow-hidden px-4 pb-2 pt-5 text-center sm:-mx-6 sm:-mt-4 sm:gap-5 sm:p-8 md:flex-row md:items-end md:gap-6 md:text-left">
+      <div className="relative flex min-h-[22rem] flex-col items-center justify-end gap-5 overflow-hidden rounded-[2rem] border border-white/[0.08] px-5 py-7 text-center shadow-[0_24px_70px_rgba(0,0,0,0.35)] sm:min-h-[24rem] sm:gap-6 sm:p-8 md:min-h-[26rem] md:flex-row md:items-end md:gap-8 md:p-10 md:text-left">
         {/* Background Blur */}
         <div
-          className="absolute inset-0 opacity-40 blur-[100px] z-0 saturate-200"
+          className="absolute -inset-12 z-0 scale-110 opacity-55 blur-[90px] saturate-200"
           style={{
             backgroundImage: `url(${albumTrack.coverUrl})`,
             backgroundSize: 'cover',
@@ -213,7 +213,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
           }}
         />
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-[#121212]/80 to-transparent z-0" />
+        <div className="absolute inset-0 z-0 bg-gradient-to-t from-[#121212]/95 via-[#121212]/70 to-black/15" />
 
         <img
           data-track-id={albumTrack.id}
@@ -221,10 +221,10 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
           src={albumTrack.coverUrl}
           alt={albumTrack.album}
           referrerPolicy="no-referrer"
-          className="z-10 h-44 w-44 flex-shrink-0 rounded-2xl object-cover shadow-2xl sm:h-48 sm:w-48 md:h-56 md:w-56 md:rounded-lg"
+          className="z-10 h-48 w-48 flex-shrink-0 rounded-2xl object-cover shadow-2xl sm:h-56 sm:w-56 md:h-64 md:w-64"
         />
 
-        <div className="z-10 flex w-full min-w-0 flex-col items-center space-y-2 pb-1 md:items-start md:space-y-3 md:pb-2">
+        <div className="z-10 flex w-full min-w-0 flex-col items-center space-y-2 pb-1 md:items-start md:space-y-3 md:pb-3">
           <p className="text-sm font-semibold uppercase tracking-widest text-white/80">
             {albumTrack.releaseType ? albumTrack.releaseType.toUpperCase() : (albumTrack.album === 'Single' ? 'SINGLE' : 'ALBUM')}
           </p>
