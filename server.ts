@@ -2555,7 +2555,7 @@ function buildNvidiaMessages(
             id: searchActivityId,
             kind: "web_search",
             status: "active",
-            title: "Searching the live web",
+            title: "Searching the web",
             detail: query,
             query,
           },
@@ -2600,7 +2600,7 @@ function buildNvidiaMessages(
             id: searchActivityId,
             kind: "web_search",
             status: "success",
-            title: "Searched the live web",
+            title: "Searched the web",
             detail: query,
             query,
             resultCount: labeledSources.length,
@@ -2657,7 +2657,7 @@ function buildNvidiaMessages(
             id: modelActivityId,
             kind: "model",
             status: "active",
-            title: "Connecting",
+            title: "Thinking",
           },
         });
         // After one search, omit the tool definition from subsequent model
@@ -2766,7 +2766,7 @@ function buildNvidiaMessages(
               id: searchActivityId,
               kind: "web_search",
               status: "active",
-              title: "Searching the live web",
+              title: "Searching the web",
               detail: query,
               query,
             },
@@ -2810,7 +2810,7 @@ function buildNvidiaMessages(
               id: searchActivityId,
               kind: "web_search",
               status: "success",
-              title: "Searched the live web",
+              title: "Searched the web",
               detail: query,
               query,
               resultCount: labeledSources.length,
@@ -2884,7 +2884,7 @@ function buildNvidiaMessages(
         sendStreamEvent({
           type: "error",
           error: requestDiagnostics.stage === "web-search-tool"
-            ? "Live web search is temporarily unavailable. Please try again."
+            ? "Web search is temporarily unavailable. Please try again."
             : cleanMsg,
           rateLimited: clientRateLimited,
           quotaExhausted: clientRateLimited && quotaExhausted,
@@ -2893,7 +2893,7 @@ function buildNvidiaMessages(
         return res.end();
       }
       return res.status(clientRateLimited ? 429 : webSearchFailed ? 502 : 500).json({
-        error: webSearchFailed ? "Live web search is temporarily unavailable. Please try again." : cleanMsg,
+        error: webSearchFailed ? "Web search is temporarily unavailable. Please try again." : cleanMsg,
         rateLimited: clientRateLimited,
         quotaExhausted: clientRateLimited && quotaExhausted,
         retryAfterSeconds: clientRateLimited ? retryAfterSeconds : 0,

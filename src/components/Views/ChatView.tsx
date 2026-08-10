@@ -113,8 +113,8 @@ const createToolActivitySteps = (id: string, entry: Extract<ReasoningTimelineEnt
       status: 'success',
       icon: <Search className="h-3.5 w-3.5" />,
       content: (
-        <div className="flex items-center gap-1.5 rounded-xl border border-emerald-400/15 bg-emerald-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-          <Search className="h-3 w-3 flex-none text-emerald-300" />
+        <div className="flex items-center gap-1.5 rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+          <Search className="h-3 w-3 flex-none text-[#F0ABFC]" />
           <span className="min-w-0 break-words [overflow-wrap:anywhere]">&ldquo;{entry.query}&rdquo;</span>
         </div>
       ),
@@ -445,14 +445,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
       icon: <ActivityIcon className="h-3.5 w-3.5" />,
       defaultExpanded: activity.status === 'active',
       content: detail ? (
-        <div className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400 ${
-          activity.kind === 'web_search'
-            ? 'border-emerald-400/15 bg-emerald-500/[0.06]'
-            : 'border-[#D946EF]/15 bg-[#D946EF]/[0.06]'
-        }`}>
-          <ActivityIcon className={`mt-0.5 h-3.5 w-3.5 flex-none ${
-            activity.kind === 'web_search' ? 'text-emerald-300' : 'text-[#F0ABFC]'
-          } ${activity.status === 'active' ? 'animate-pulse' : ''}`} />
+        <div className="flex items-start gap-2 rounded-xl border border-[#D946EF]/15 bg-[#D946EF]/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+          <ActivityIcon className={`mt-0.5 h-3.5 w-3.5 flex-none text-[#F0ABFC] ${
+            activity.status === 'active' ? 'animate-pulse' : ''
+          }`} />
           <span className="min-w-0 break-words [overflow-wrap:anywhere]">{detail}</span>
         </div>
       ) : undefined,
@@ -582,7 +578,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     </div>
                   )}
 
-                  <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{renderFormattedText(msg.text)}</div>
+                  <div className={`min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${msg.sender === 'ai' ? 'text-[14px]' : ''}`}>{renderFormattedText(msg.text)}</div>
 
                   {msg.matchedTracks && msg.matchedTracks.length > 0 && (
                     <div className="mt-4 space-y-2 border-t border-white/10 pt-4">

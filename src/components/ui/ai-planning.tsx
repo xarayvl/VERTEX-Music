@@ -21,7 +21,7 @@ interface AgentPlanningProps {
 }
 
 const statusClasses: Record<PlanStepStatus, string> = {
-  success: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20',
+  success: 'bg-[#D946EF]/20 text-[#F0ABFC] ring-[#D946EF]/25',
   active: 'bg-[#D946EF]/20 text-[#F0ABFC] ring-[#D946EF]/25',
   error: 'bg-rose-500/15 text-rose-300 ring-rose-400/20',
   pending: 'bg-white/[0.05] text-zinc-600 ring-white/[0.06]',
@@ -71,7 +71,7 @@ export const AgentPlanning: React.FC<AgentPlanningProps> = ({
               {hasActive ? (
                 <Loader2 className="h-4 w-4 animate-spin text-[#E879F9]" />
               ) : allSuccess ? (
-                <Check className="h-4 w-4 text-emerald-300" />
+                <Check className="h-4 w-4 text-[#F0ABFC]" />
               ) : (
                 <BrainCircuit className="h-4 w-4 text-zinc-500" />
               )}
