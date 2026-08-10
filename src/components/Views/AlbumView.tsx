@@ -202,7 +202,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   return (
     <div className="no-button-lift flex min-h-full min-w-0 flex-col space-y-2 overflow-x-hidden px-3 animate-in fade-in duration-500 sm:space-y-8 sm:px-6">
       {/* Dynamic Header mimicking Spotify Release Page */}
-      <div className="relative -mx-3 flex flex-col items-center gap-4 overflow-hidden px-4 pb-2 pt-5 text-center sm:-mx-6 sm:gap-5 sm:p-8 md:flex-row md:items-end md:gap-6 md:text-left">
+      <div className="relative -mx-3 flex flex-col items-center gap-4 overflow-hidden px-4 pb-2 pt-5 text-center sm:-mx-6 sm:gap-5 sm:p-8 md:flex-row md:items-start md:gap-6 md:text-left">
         {/* Background Blur */}
         <div
           className="absolute inset-0 opacity-40 blur-[100px] z-0 saturate-200"
@@ -224,7 +224,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
           className="z-10 h-44 w-44 flex-shrink-0 rounded-2xl object-cover shadow-2xl sm:h-48 sm:w-48 md:h-56 md:w-56 md:rounded-lg"
         />
 
-        <div className="z-10 flex w-full min-w-0 flex-col items-center space-y-2 pb-1 md:items-start md:space-y-3 md:pb-2">
+        <div className="z-10 flex w-full min-w-0 flex-col items-center space-y-2 pb-1 md:items-start md:space-y-3 md:pb-0">
           <p className="text-sm font-semibold uppercase tracking-widest text-white/80">
             {albumTrack.releaseType ? albumTrack.releaseType.toUpperCase() : (albumTrack.album === 'Single' ? 'SINGLE' : 'ALBUM')}
           </p>
