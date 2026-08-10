@@ -2438,20 +2438,42 @@ function parseDuckDuckGoResults(html: string): WebSearchSource[] {
   }).slice(0, 5);
 }
 
-async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<WebSearchSource[]> {
-  const response = await fetch("https://html.duckduckgo.com/html/", {
-    method: "POST",
+function parseDuckDuckGoLiteResults(html: string): WebSearchSource[] {
+  const resultLinkPattern = /<a\b([^>]*\bclass=["'][^"']*\bresult-link\b[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi;
+  const linkMatches = Array.from(html.matchAll(resultLinkPattern));
+  const seen = new Set<string>();
+
+  return linkMatches.flatMap((match, index) => {
+    const hrefMatch = (match[1] || "").match(/\bhref=["']([^"']+)["']/i);
+    const uri = hrefMatch ? resolveDuckDuckGoResultUrl(hrefMatch[1]) : null;
+    const title = searchHtmlToText(match[2] || "");
+    if (!uri || !title || seen.has(uri)) return [];
+
+    const resultEnd = index + 1 < linkMatches.length ? linkMatches[index + 1].index : html.length;
+    const followingHtml = html.slice((match.index ?? 0) + match[0].length, resultEnd);
+    const snippetMatch = followingHtml.match(
+      /<td\b[^>]*\bclass=["'][^"']*\bresult-snippet\b[^"']*["'][^>]*>([\s\S]*?)<\/td>/i,
+    );
+    const snippet = snippetMatch ? searchHtmlToText(snippetMatch[1]) : "";
+
+    seen.add(uri);
+    return [{ title: title.slice(0, 300), uri, snippet: snippet.slice(0, 1_000) }];
+  }).slice(0, 5);
+}
+
+async function fetchDuckDuckGoHtml(
+  url: string,
+  init: RequestInit,
+  signal?: AbortSignal,
+): Promise<string> {
+  const response = await fetch(url, {
+    ...init,
     headers: {
       Accept: "text/html,application/xhtml+xml",
       "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
-      "Content-Type": "application/x-www-form-urlencoded",
       "User-Agent": "Mozilla/5.0 (compatible; VERTEXMusic/1.0)",
+      ...init.headers,
     },
-    body: new URLSearchParams({
-      q: query.slice(0, 2_000),
-      kl: "wt-wt",
-      kp: "1",
-    }),
     redirect: "follow",
     signal: withTimeoutSignal(signal, 12_000),
   });
@@ -2463,17 +2485,42 @@ async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<We
     if (retryAfter > 0) error.retryAfterSeconds = retryAfter;
     throw error;
   }
-  if (html.length > 2_000_000) {
-    throw new Error("DuckDuckGo Search returned an unexpectedly large response.");
-  }
+  if (html.length > 2_000_000) throw new Error("DuckDuckGo Search returned an unexpectedly large response.");
   if (/unfortunately, bots use duckduckgo too|anomaly-modal/i.test(html)) {
     const error: any = new Error("DuckDuckGo Search rate limit reached.");
     error.status = 429;
     error.retryAfterSeconds = 30;
     throw error;
   }
+  return html;
+}
 
-  return parseDuckDuckGoResults(html);
+async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<WebSearchSource[]> {
+  const trimmedQuery = query.trim().slice(0, 2_000);
+  let primaryError: unknown;
+
+  try {
+    const html = await fetchDuckDuckGoHtml("https://html.duckduckgo.com/html/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ q: trimmedQuery, kl: "wt-wt", kp: "1" }),
+    }, signal);
+    const results = parseDuckDuckGoResults(html);
+    if (results.length > 0) return results;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    primaryError = error;
+  }
+
+  try {
+    const liteUrl = new URL("https://lite.duckduckgo.com/lite/");
+    liteUrl.search = new URLSearchParams({ q: trimmedQuery, kl: "wt-wt", kp: "1" }).toString();
+    const liteHtml = await fetchDuckDuckGoHtml(liteUrl.toString(), { method: "GET" }, signal);
+    return parseDuckDuckGoLiteResults(liteHtml);
+  } catch (fallbackError) {
+    if (signal?.aborted) throw fallbackError;
+    throw primaryError || fallbackError;
+  }
 }
 
 function buildNvidiaMessages(
@@ -2568,7 +2615,7 @@ function buildNvidiaMessages(
       const apiKey = process.env.NVIDIA_API_KEY?.trim();
       if (!apiKey) {
         return res.status(500).json({
-          error: "NVIDIA_API_KEY is missing. Please configure your API key in Secrets.",
+          error: "The AI service is not configured. Please configure the server API key.",
           configurationError: true,
         });
       }
@@ -2634,76 +2681,10 @@ function buildNvidiaMessages(
           "When web_search returns results, cite factual claims with the supplied source labels such as [1] and [2]. " +
           "Never invent sources or claim to have opened full pages beyond the returned snippets. " +
           (webSearchForced
-            ? "The user explicitly enabled web search. A live search result will be supplied as a web_search tool response before you answer; use it and cite its source labels."
+            ? "The user explicitly enabled web search for this message. You must call web_search before answering."
             : "You decide whether web_search is needed for this message.");
 
       const messages = buildNvidiaMessages(systemInstruction, formattedHistory, cleanMessage);
-
-      // For the globe button, perform the search server-side first. This avoids
-      // the provider-specific forced tool_choice path that can fail even though
-      // the same model successfully chooses web_search in auto mode.
-      if (webSearchForced) {
-        const query = cleanMessage.slice(0, 2_000);
-        requestDiagnostics.stage = "web-search-tool";
-        requestDiagnostics.webSearchCalls += 1;
-        const searchActivityId = "web-search-1";
-        sendStreamEvent({
-          type: "activity",
-          activity: {
-            id: searchActivityId,
-            kind: "web_search",
-            status: "active",
-            title: "Searching the live web",
-            detail: query,
-            query,
-          },
-        });
-        const duckDuckGoSources = await searchDuckDuckGo(query, clientAbortController.signal);
-        requestDiagnostics.searchProvider = "duckduckgo";
-        searchQueries.push(query);
-        const labeledSources = duckDuckGoSources.map((source) => {
-          searchSources.push(source);
-          const sourceIndex = searchSources.length;
-          sourceIndexByUri.set(source.uri, sourceIndex);
-          return {
-            label: `[${sourceIndex}]`,
-            title: source.title,
-            url: source.uri,
-            snippet: source.snippet || "No snippet available.",
-          };
-        });
-        const forcedToolCall: NvidiaToolCall = {
-          id: `forced_web_search_${crypto.randomUUID()}`,
-          type: "function",
-          function: { name: WEB_SEARCH_TOOL.function.name, arguments: JSON.stringify({ query }) },
-        };
-        messages.push({ role: "assistant", content: null, tool_calls: [forcedToolCall] });
-        messages.push({
-          role: "tool",
-          name: WEB_SEARCH_TOOL.function.name,
-          tool_call_id: forcedToolCall.id,
-          content: JSON.stringify({
-            query,
-            results: labeledSources,
-            note: labeledSources.length > 0
-              ? "Cite claims using the supplied [n] labels. The results are snippets, not full opened pages."
-              : "No results were found. Say that current information could not be verified instead of guessing.",
-          }),
-        });
-        reasoningTimeline.push({ type: "tool", tool: "web_search", query, resultCount: labeledSources.length });
-        sendStreamEvent({
-          type: "activity",
-          activity: {
-            id: searchActivityId,
-            kind: "web_search",
-            status: "success",
-            title: "Searched the live web",
-            detail: query,
-            query,
-            resultCount: labeledSources.length,
-          },
-        });
-      }
 
       const baseUrl = (process.env.NVIDIA_API_BASE_URL?.trim() || "https://integrate.api.nvidia.com").replace(/\/+$/, "");
       const chatCompletionsUrl = baseUrl.endsWith("/v1")
@@ -2747,6 +2728,7 @@ function buildNvidiaMessages(
       };
 
       let finalAssistantMessage: any = null;
+      let forcedSearchReminderSent = false;
       const maxSearchCalls = 3;
       const maxToolRounds = 5;
 
@@ -2758,10 +2740,7 @@ function buildNvidiaMessages(
             id: modelActivityId,
             kind: "model",
             status: "active",
-            title: round === 0 ? "Waiting for the AI model" : "Sending live results to the AI",
-            detail: requestedReasoningEffort === "high"
-              ? "The NVIDIA request is in progress with high reasoning effort."
-              : "The NVIDIA request is in progress.",
+            title: "Connecting",
           },
         });
         // A forced function tool_choice is rejected intermittently by some
@@ -2810,6 +2789,21 @@ function buildNvidiaMessages(
         });
 
         if (toolCalls.length === 0) {
+          if (webSearchForced && requestDiagnostics.webSearchCalls === 0 && !forcedSearchReminderSent) {
+            messages.push({
+              role: "assistant",
+              content: typeof assistantMessage.content === "string" ? assistantMessage.content : null,
+              reasoning_content: typeof assistantMessage.reasoning_content === "string"
+                ? assistantMessage.reasoning_content
+                : undefined,
+            });
+            messages.push({
+              role: "user",
+              content: "Web search is enabled for this request. Do not answer yet: call web_search with a concise query first, then answer from its results.",
+            });
+            forcedSearchReminderSent = true;
+            continue;
+          }
           finalAssistantMessage = assistantMessage;
           break;
         }

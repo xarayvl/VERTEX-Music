@@ -632,7 +632,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     <AgentPlanning title="Live activity" steps={liveReasoningSteps} />
                   ) : (
                     <div className="rounded-2xl border border-white/[0.08] bg-[#202020] px-4 py-3 text-[13px] font-black text-zinc-300">
-                      Connecting to the AI…
+                      Connecting
                     </div>
                   )}
                 </div>
@@ -681,7 +681,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             isLoading={isLoading}
             disabled={rateLimitSeconds > 0}
             placeholder={rateLimitSeconds > 0
-              ? `NVIDIA AI paused · retry in ${rateLimitSeconds}s`
+              ? `AI paused · retry in ${rateLimitSeconds}s`
               : 'Ask about music, artists, genres or your next playlist...'}
             webSearchEnabled={webSearchEnabled}
             onWebSearchChange={setWebSearchEnabled}

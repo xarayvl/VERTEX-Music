@@ -132,7 +132,7 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
             onClick={() => onHighReasoningChange(!highReasoningEnabled)}
             disabled={controlsDisabled}
             aria-pressed={highReasoningEnabled}
-            title="Use NVIDIA high reasoning effort"
+            title="Use high reasoning effort"
             className={`flex h-8 flex-none items-center gap-1 overflow-hidden rounded-full border px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               highReasoningEnabled
                 ? 'border-[#D946EF]/55 bg-[#D946EF]/15 text-[#F0ABFC]'
