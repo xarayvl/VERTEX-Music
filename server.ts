@@ -17,7 +17,7 @@ dotenv.config();
 // frontend and as the audience the tokens must have been issued for.
 const GOOGLE_CLIENT_ID =
   process.env.GOOGLE_CLIENT_ID ||
-  "266806941595-ecv3f1f5pah0nrni31e9a4huevruv8i6.apps.googleusercontent.com";
+  "944259967990-m3iuuoqnkp1jr16drpau1f0kdn27ppcp.apps.googleusercontent.com";
 const googleOAuthClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 const DEFAULT_AVATAR_URL =

@@ -59,7 +59,7 @@ const AUTH_LOOP_ITEMS = [
 // Public OAuth client id — safe to expose in frontend code, Google's Sign-In
 // flow relies on the ID token being verified server-side, not on this value
 // being secret.
-const GOOGLE_CLIENT_ID = '266806941595-ecv3f1f5pah0nrni31e9a4huevruv8i6.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '944259967990-m3iuuoqnkp1jr16drpau1f0kdn27ppcp.apps.googleusercontent.com';
 
 const GoogleMark = () => (
   <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
