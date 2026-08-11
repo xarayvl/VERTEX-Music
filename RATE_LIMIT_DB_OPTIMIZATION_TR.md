@@ -2,7 +2,7 @@
 
 ## Bulunan başlıca sorunlar
 
-- Upstash açıksa her API isteği Redis'ten bütün veritabanını yeniden okuyordu.
+- Önceki sürümde her API isteği Redis'ten bütün veritabanını yeniden okuyordu.
 - Tek bir kullanıcı istatistiği değiştiğinde bile ana DB, yedek DB, bütün indeksler ve bütün entity anahtarları tekrar yazılıyordu.
 - Her DB yazımında dört ayrı wildcard `KEYS` taraması yapılıyordu.
 - Katalog 20 saniyede bir yenileniyor; `focus` ve `visibilitychange` aynı anda ek istekler başlatabiliyordu.
@@ -29,7 +29,7 @@
   - Mutation: dakikada 120 istek
   - Login/register: 15 dakikada 20 istek
   - Gemini chat: dakikada 12 istek
-- R2 medya streaming endpoint'i rate limit dışında tutuldu; ses oynatma etkilenmez.
+- R2 medya streaming endpoint'i geniş genel API limitiyle korunuyor; normal ses oynatma trafiği için ayrı mutation limiti uygulanmıyor.
 - Gemini chat endpoint'i için aktif oturum zorunlu hale getirildi; API anahtarı anonim çağrılarla tüketilemez.
 
 ## Kontroller

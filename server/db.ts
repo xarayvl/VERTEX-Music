@@ -1,9 +1,5 @@
-import fs from 'fs';
-import path from 'path';
-import crypto from 'crypto';
 import { Redis } from '@upstash/redis';
 
-const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
 const UPSTASH_DB_KEY = 'app:spotify:db_v1';
 const UPSTASH_DB_BACKUP_KEY = 'app:spotify:db_v1:previous';
 
@@ -124,10 +120,10 @@ function isHttpUrl(value: string): boolean {
 }
 
 function isPersistedMediaUrl(value: string, expected: 'audio' | 'image'): boolean {
-  if (value.startsWith('/uploads/') || value.startsWith('/api/r2-file/') || isHttpUrl(value)) return true;
-  return expected === 'audio'
-    ? /^data:audio\/[^;]+;base64,/i.test(value)
-    : /^data:image\/[^;]+;base64,/i.test(value) || /^data:image\/svg\+xml/i.test(value);
+  if (value.startsWith('/api/r2-file/') || isHttpUrl(value)) return true;
+  // The built-in placeholder avatar is an inline SVG. User-uploaded base64
+  // audio and images must be converted to R2 objects before database writes.
+  return expected === 'image' && /^data:image\/svg\+xml(?:;|,)/i.test(value);
 }
 
 function normalizedIsoDate(value: unknown): string {
@@ -462,19 +458,19 @@ function getRemoteCacheTtlMs(): number {
 
 let redisClient: Redis | null = null;
 
-export function getUpstashClient(): Redis | null {
+export function getUpstashClient(): Redis {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (url && token) {
-    if (!redisClient) {
-      redisClient = new Redis({
-        url: url.trim(),
-        token: token.trim(),
-      });
-    }
-    return redisClient;
+  if (!url?.trim() || !token?.trim()) {
+    throw new Error('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required.');
   }
-  return null;
+  if (!redisClient) {
+    redisClient = new Redis({
+      url: url.trim(),
+      token: token.trim(),
+    });
+  }
+  return redisClient;
 }
 
 export function isUpstashConfigured(): boolean {
@@ -575,153 +571,74 @@ export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<vo
     }
   } catch (err) {
     console.error('Failed syncing indices to Upstash Redis:', err);
+    throw err;
   }
 }
 
 /**
- * Initializes DB by pulling initial dataset from Upstash Redis if available.
+ * Initializes the canonical database exclusively from Upstash Redis.
  */
 export async function initUpstashDB(): Promise<DBData> {
   const redis = getUpstashClient();
-  if (redis) {
-    try {
-      console.log('⚡ Upstash Redis detected! Syncing database from Upstash...');
-      const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
-      if (remoteData && typeof remoteData === 'object') {
-        const validated = sanitizeDBData(remoteData);
-        cachedDB = validated;
-        cachedDBFetchedAt = Date.now();
-        lastPersistedJson = JSON.stringify(validated);
-        // Also mirror to local disk as secondary fallback
-        saveToLocalDisk(validated);
-        await syncUpstashIndices(redis, validated);
-        console.log(`✅ Loaded ${validated.users.length} users, ${validated.tracks.length} tracks from Upstash Redis.`);
-        return validated;
-      } else {
-        console.log('ℹ️ Upstash Redis key empty. Initializing from the canonical local database...');
-        const localData = readFromLocalDisk();
-        cachedDB = localData;
-        cachedDBFetchedAt = Date.now();
-        lastPersistedJson = JSON.stringify(localData);
-        await syncUpstashIndices(redis, localData);
-        return localData;
-      }
-    } catch (err) {
-      console.error('Failed to communicate with Upstash Redis, falling back to local disk:', err);
-    }
+  console.log('⚡ Loading canonical database from Upstash Redis...');
+  const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
+  const data = remoteData && typeof remoteData === 'object'
+    ? sanitizeDBData(remoteData)
+    : sanitizeDBData({});
+
+  if (!remoteData || typeof remoteData !== 'object') {
+    console.log('ℹ️ Upstash database is empty. Initializing a new canonical database in Redis...');
+    await syncUpstashIndices(redis, data);
   }
 
-  const diskData = readFromLocalDisk();
-  cachedDB = diskData;
-  cachedDBFetchedAt = Date.now();
-  lastPersistedJson = JSON.stringify(diskData);
-  return diskData;
-}
-
-function readFromLocalDisk(): DBData {
-  try {
-    const dir = path.dirname(DB_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    if (!fs.existsSync(DB_FILE)) {
-      const defaultData: DBData = {
-        users: [],
-        playlists: [],
-        tracks: [],
-        userStates: {},
-        chatHistories: {},
-      };
-      saveToLocalDisk(defaultData);
-      return defaultData;
-    }
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    if (!raw || !raw.trim()) {
-      const defaultData: DBData = {
-        users: [],
-        playlists: [],
-        tracks: [],
-        userStates: {},
-        chatHistories: {},
-      };
-      saveToLocalDisk(defaultData);
-      return defaultData;
-    }
-    const parsed = JSON.parse(raw);
-    return sanitizeDBData(parsed);
-  } catch (err) {
-    console.error('Error reading db.json:', err);
-    return { users: [], playlists: [], tracks: [], userStates: {}, chatHistories: {} };
-  }
-}
-
-function saveToLocalDisk(data: DBData): void {
-  try {
-    const dir = path.dirname(DB_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    const tempFile = `${DB_FILE}.tmp.${crypto.randomUUID()}`;
-    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tempFile, DB_FILE);
-  } catch (err) {
-    console.error('Error writing db.json:', err);
-  }
-}
-
-export function readDB(): DBData {
-  if (cachedDB) {
-    return cachedDB;
-  }
-  const data = readFromLocalDisk();
   cachedDB = data;
+  cachedDBFetchedAt = Date.now();
+  lastPersistedJson = JSON.stringify(data);
+  console.log(`✅ Loaded ${data.users.length} users and ${data.tracks.length} tracks from Upstash Redis.`);
   return data;
 }
 
 export async function readDBAsync(forceRemote = false): Promise<DBData> {
   await writeChain.catch(() => undefined);
   const redis = getUpstashClient();
-  if (redis && (forceRemote || !cachedDB || Date.now() - cachedDBFetchedAt >= getRemoteCacheTtlMs())) {
-    try {
-      const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
-      if (remoteData && typeof remoteData === 'object') {
-        const validated = sanitizeDBData(remoteData);
-        cachedDB = validated;
-        cachedDBFetchedAt = Date.now();
-        lastPersistedJson = JSON.stringify(validated);
-        saveToLocalDisk(validated);
-        return validated;
-      }
-    } catch (err) {
-      console.error('Async Upstash read error:', err);
-    }
+  if (!forceRemote && cachedDB && Date.now() - cachedDBFetchedAt < getRemoteCacheTtlMs()) {
+    return cachedDB;
   }
-  return readDB();
+
+  const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
+  if (!remoteData || typeof remoteData !== 'object') {
+    cachedDB = null;
+    cachedDBFetchedAt = 0;
+    throw new Error('Canonical Upstash database is missing or invalid.');
+  }
+
+  const validated = sanitizeDBData(remoteData);
+  cachedDB = validated;
+  cachedDBFetchedAt = Date.now();
+  lastPersistedJson = JSON.stringify(validated);
+  return validated;
 }
 
 function enqueueDatabaseWrite(input: DBData): Promise<void> {
   const data = sanitizeDBData(input);
   const serialized = JSON.stringify(data);
   if (serialized === lastPersistedJson) return writeChain;
-  cachedDB = data;
-  cachedDBFetchedAt = Date.now();
   writeChain = writeChain
     .catch(() => undefined)
     .then(async () => {
-      saveToLocalDisk(data);
       const redis = getUpstashClient();
-      if (redis) await syncUpstashIndices(redis, data);
+      await syncUpstashIndices(redis, data);
+      cachedDB = data;
+      cachedDBFetchedAt = Date.now();
       lastPersistedJson = serialized;
     })
     .catch((error) => {
+      cachedDB = null;
+      cachedDBFetchedAt = 0;
       console.error('Failed to persist database write:', error);
       throw error;
     });
   return writeChain;
-}
-
-export function writeDB(data: DBData): void {
-  void enqueueDatabaseWrite(data).catch(() => undefined);
 }
 
 export async function writeDBAsync(data: DBData): Promise<void> {
@@ -729,7 +646,7 @@ export async function writeDBAsync(data: DBData): Promise<void> {
 }
 
 // ==========================================
-// SESSION PERSISTENCE (Upstash-backed, in-memory fallback)
+// SESSION PERSISTENCE (Upstash required)
 // ==========================================
 // Sessions are kept in an in-memory Map for fast synchronous lookups on every
 // request, but are also mirrored to Upstash Redis (a single hash) so that:
@@ -739,41 +656,23 @@ export async function writeDBAsync(data: DBData): Promise<void> {
 const SESSIONS_HASH_KEY = 'app:sessions';
 
 /**
- * Loads all persisted sessions from Upstash Redis (if configured) so the
- * in-memory session Map can be hydrated once at server startup.
- * Returns an empty object if Upstash isn't configured or the call fails.
+ * Loads all persisted sessions from Upstash Redis so the in-memory session
+ * lookup cache can be hydrated once at server startup.
  */
 export async function loadSessionsFromRedis(): Promise<Record<string, string>> {
   const redis = getUpstashClient();
-  if (!redis) return {};
-  try {
-    const sessions = await redis.hgetall<Record<string, string>>(SESSIONS_HASH_KEY);
-    return sessions && typeof sessions === 'object' ? sessions : {};
-  } catch (err) {
-    console.error('Failed to load sessions from Upstash Redis:', err);
-    return {};
-  }
+  const sessions = await redis.hgetall<Record<string, string>>(SESSIONS_HASH_KEY);
+  return sessions && typeof sessions === 'object' ? sessions : {};
 }
 
-/**
- * Fire-and-forget persistence of a single session token -> userId mapping.
- * Does not block the caller; safe to call from a synchronous code path.
- */
-export function persistSessionToRedis(token: string, userId: string): void {
+export async function persistSessionToRedis(token: string, userId: string): Promise<void> {
+  if (!token || !userId) throw new Error('A session token and user ID are required.');
   const redis = getUpstashClient();
-  if (!redis || !token || !userId) return;
-  redis.hset(SESSIONS_HASH_KEY, { [token]: userId }).catch((err) => {
-    console.error('Failed to persist session to Upstash Redis:', err);
-  });
+  await redis.hset(SESSIONS_HASH_KEY, { [token]: userId });
 }
 
-/**
- * Fire-and-forget removal of a session token (e.g. on logout).
- */
-export function deleteSessionFromRedis(token: string): void {
+export async function deleteSessionFromRedis(token: string): Promise<void> {
+  if (!token) return;
   const redis = getUpstashClient();
-  if (!redis || !token) return;
-  redis.hdel(SESSIONS_HASH_KEY, token).catch((err) => {
-    console.error('Failed to delete session from Upstash Redis:', err);
-  });
+  await redis.hdel(SESSIONS_HASH_KEY, token);
 }

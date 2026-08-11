@@ -27,9 +27,14 @@ message with the globe button. Live web search uses the Tavily Search API. Set
 
 ## Persistence
 
-- Without Upstash, canonical application data is stored in `data/db.json`.
-- Without Cloudflare R2, uploaded media is stored under `data/uploads`.
-- Upstash and R2 credentials are optional but recommended for deployed environments.
+- Upstash Redis is the only canonical database and session store. The server
+  refuses to start when its URL or token is missing and does not fall back to
+  local JSON or in-memory-only sessions.
+- Cloudflare R2 is the only managed upload store. Uploads, reads, and deletions
+  fail when R2 is unavailable; media is never copied to local application disk.
+- Set every required Upstash and R2 variable shown in `.env.example` before
+  starting the application. `R2_PUBLIC_DOMAIN` remains optional because media
+  can be served through the application's rate-limited R2 proxy route.
 
 ## Shared track previews
 
@@ -40,4 +45,7 @@ track title, artist and cover art. If the app is behind a proxy, set
 `https://music.example.com`) so canonical and image URLs are always generated
 with the correct domain.
 
-The repository ships with an empty database. It does not create demo users, tracks, artists, playlists, likes, follows, listening history, or chat history.
+The repository ships with no local database. If the configured Upstash database
+has no canonical key, the server initializes an empty remote database; it never
+creates demo users, tracks, artists, playlists, likes, follows, listening
+history, or chat history.

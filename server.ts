@@ -47,7 +47,7 @@ function isHttpUrl(value: string): boolean {
 }
 
 function isStoredMediaUrl(value: string): boolean {
-  return value.startsWith("/uploads/") || value.startsWith("/api/r2-file/") || isHttpUrl(value);
+  return value.startsWith("/api/r2-file/") || isHttpUrl(value);
 }
 
 function normalizeCopyright(value: unknown, fallback: string): string {
@@ -192,46 +192,37 @@ function sanitizeUserId(userId: string): string {
 
 let r2ClientInstance: S3Client | null = null;
 
-function getR2Client(): S3Client | null {
+function getR2Client(): S3Client {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
 
-  if (accountId && accessKeyId && secretAccessKey) {
-    if (!r2ClientInstance) {
-      r2ClientInstance = new S3Client({
-        region: "auto",
-        endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-        credentials: {
-          accessKeyId,
-          secretAccessKey,
-        },
-      });
-    }
-    return r2ClientInstance;
+  if (!accountId?.trim() || !accessKeyId?.trim() || !secretAccessKey?.trim()) {
+    throw new Error("R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY are required.");
   }
-  return null;
+  if (!r2ClientInstance) {
+    r2ClientInstance = new S3Client({
+      region: "auto",
+      endpoint: `https://${accountId.trim()}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: accessKeyId.trim(),
+        secretAccessKey: secretAccessKey.trim(),
+      },
+    });
+  }
+  return r2ClientInstance;
 }
 
-function saveBufferToLocalDisk(buffer: Buffer, safeUserId: string, filename: string): string {
-  const uploadsRootDir = path.resolve(process.cwd(), "data", "uploads");
-  const userUploadDir = path.resolve(uploadsRootDir, safeUserId);
-  const localFilePath = path.resolve(userUploadDir, filename);
-
-  if (!userUploadDir.startsWith(`${uploadsRootDir}${path.sep}`) || !localFilePath.startsWith(`${userUploadDir}${path.sep}`)) {
-    throw new Error("Invalid target directory path");
-  }
-
-  fs.mkdirSync(userUploadDir, { recursive: true });
-  fs.writeFileSync(localFilePath, buffer);
-  return `/uploads/${safeUserId}/${filename}`;
+function getR2BucketName(): string {
+  const bucketName = process.env.R2_BUCKET_NAME?.trim();
+  if (!bucketName) throw new Error("R2_BUCKET_NAME is required.");
+  return bucketName;
 }
 
 function getManagedStorageKey(mediaUrl: string): string | null {
   try {
     let key = '';
-    if (mediaUrl.startsWith('/uploads/')) key = mediaUrl.slice('/uploads/'.length);
-    else if (mediaUrl.startsWith('/api/r2-file/')) key = mediaUrl.slice('/api/r2-file/'.length);
+    if (mediaUrl.startsWith('/api/r2-file/')) key = mediaUrl.slice('/api/r2-file/'.length);
     else if (isHttpUrl(mediaUrl) && process.env.R2_PUBLIC_DOMAIN) {
       const media = new URL(mediaUrl);
       const configured = new URL(
@@ -254,25 +245,9 @@ async function deleteManagedFile(mediaUrl: string): Promise<void> {
   const key = getManagedStorageKey(mediaUrl);
   if (!key) return;
 
-  const uploadsRoot = path.resolve(process.cwd(), 'data', 'uploads');
-  const target = path.resolve(uploadsRoot, key);
-  if (target.startsWith(`${uploadsRoot}${path.sep}`)) {
-    try {
-      if (fs.existsSync(target) && fs.statSync(target).isFile()) fs.rmSync(target, { force: true });
-    } catch (error) {
-      console.error('Failed to delete local managed media file:', error);
-    }
-  }
-
   const r2 = getR2Client();
-  const bucketName = process.env.R2_BUCKET_NAME;
-  if (r2 && bucketName) {
-    try {
-      await r2.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
-    } catch (error) {
-      console.error('Failed to delete Cloudflare R2 media object:', error);
-    }
-  }
+  const bucketName = getR2BucketName();
+  await r2.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
 }
 
 function collectReferencedMediaUrls(db: { users: UserRecord[]; tracks: TrackRecord[]; playlists: PlaylistRecord[] }): Set<string> {
@@ -371,49 +346,39 @@ async function saveUploadedFile(base64Data: string, mimeType: string, folderUser
     else cleanMime = filePrefix.includes('audio') ? 'audio/mpeg' : 'image/jpeg';
   }
 
-  // Persist the exact same object key locally. The previous implementation
-  // generated a second random filename and returned a path that did not exist.
-  const localUrl = saveBufferToLocalDisk(buffer, safeUserId, filename);
-
   const r2 = getR2Client();
-  const bucketName = process.env.R2_BUCKET_NAME;
+  const bucketName = getR2BucketName();
+  await r2.send(
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: buffer,
+      ContentType: cleanMime,
+    })
+  );
 
-  if (r2 && bucketName) {
-    try {
-      await r2.send(
-        new PutObjectCommand({
-          Bucket: bucketName,
-          Key: key,
-          Body: buffer,
-          ContentType: cleanMime,
-        })
-      );
-
-      const publicDomain = process.env.R2_PUBLIC_DOMAIN;
-      if (publicDomain && publicDomain.trim() && !publicDomain.includes('.r2.dev')) {
-        const cleanDomain = publicDomain.trim().replace(/\/+$/, "");
-        return `${cleanDomain}/${key}`;
-      } else {
-        return `/api/r2-file/${key}`;
-      }
-    } catch (r2Error) {
-      console.error("Cloudflare R2 Upload failed, using local disk fallback:", r2Error);
-    }
+  const publicDomain = process.env.R2_PUBLIC_DOMAIN?.trim();
+  if (publicDomain && !publicDomain.includes('.r2.dev')) {
+    const cleanDomain = (publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`).replace(/\/+$/, "");
+    return `${cleanDomain}/${key}`;
   }
-
-  return localUrl;
+  return `/api/r2-file/${key}`;
 }
 
 
 async function startServer() {
+  // Refuse to start without the required remote persistence configuration.
+  getR2Client();
+  getR2BucketName();
+
   const app = express();
   const PORT = 3000;
   app.set('trust proxy', 1);
 
-  // Initialize Upstash Redis database sync (if UPSTASH_REDIS_REST_URL is present)
+  // Initialize the required Upstash Redis database.
   await initUpstashDB();
 
-  // Hydrate active login sessions from Upstash Redis (if configured) so that
+  // Hydrate active login sessions from the required Upstash Redis store so that
   // logged-in users stay authenticated across server restarts/redeploys and
   // across multiple server instances, instead of losing their session every
   // time the process restarts.
@@ -422,25 +387,6 @@ async function startServer() {
   if (persistedSessionCount > 0) {
     console.log(`⚡ Restored ${persistedSessionCount} active session(s) from Upstash Redis.`);
   }
-
-  // Ensure uploads root directory exists
-  const uploadsRootDir = path.join(process.cwd(), "data", "uploads");
-  if (!fs.existsSync(uploadsRootDir)) {
-    fs.mkdirSync(uploadsRootDir, { recursive: true });
-  }
-
-  // Serve music & cover upload files statically with CORS & Accept-Ranges headers
-  app.use("/uploads", (req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Authorization, X-Requested-With, *");
-    res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type");
-    res.setHeader("Accept-Ranges", "bytes");
-    if (req.method === "OPTIONS") {
-      return res.status(200).end();
-    }
-    next();
-  }, express.static(uploadsRootDir, { maxAge: "1y", immutable: true }));
 
   // Rate limiters are defined here (rather than further down, where the rest
   // of the /api routes are registered) so that every route which is wired up
@@ -461,10 +407,7 @@ async function startServer() {
 
   // Serve files stored in Cloudflare R2 directly or via proxy endpoint
   app.all("/api/r2-file/*", generalApiLimiter, async (req, res) => {
-    const key = String(req.params[0] || "").replace(/^\/+/, "");
-    const r2UploadsRoot = path.resolve(process.cwd(), "data", "uploads");
-    const localPathForKey = path.resolve(r2UploadsRoot, key);
-    const keyIsSafe = Boolean(key) && localPathForKey.startsWith(`${r2UploadsRoot}${path.sep}`);
+    const key = getManagedStorageKey(`/api/r2-file/${String(req.params[0] || "").replace(/^\/+/, "")}`);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Authorization, X-Requested-With, *");
@@ -478,18 +421,10 @@ async function startServer() {
 
     try {
       const r2 = getR2Client();
-      const bucketName = process.env.R2_BUCKET_NAME;
+      const bucketName = getR2BucketName();
 
-      if (!keyIsSafe) {
+      if (!key) {
         return res.status(404).send("File not found.");
-      }
-
-      // Check local disk first as fast fallback if R2 is not configured
-      if (!r2 || !bucketName) {
-        if (fs.existsSync(localPathForKey) && fs.statSync(localPathForKey).isFile()) {
-          return res.sendFile(localPathForKey);
-        }
-        return res.status(404).send("File not found and R2 storage not configured.");
       }
 
       const rangeHeader = req.headers.range;
@@ -548,14 +483,9 @@ async function startServer() {
         }
       }
     } catch (err: any) {
-      // Local disk fallback on R2 fetch failure (e.g. NoSuchKey or network error)
-      if (keyIsSafe) {
-        if (fs.existsSync(localPathForKey) && fs.statSync(localPathForKey).isFile()) {
-          return res.sendFile(localPathForKey);
-        }
-      }
       console.error("R2 File Express Route Error:", err);
-      return res.status(404).send("File not found");
+      const status = err?.name === 'NoSuchKey' || err?.$metadata?.httpStatusCode === 404 ? 404 : 502;
+      return res.status(status).send(status === 404 ? "File not found" : "R2 storage unavailable");
     }
   });
 
@@ -606,17 +536,15 @@ async function startServer() {
   // AUTHENTICATION & SESSION MANAGEMENT
   // ==========================================
   // token -> userId. Hydrated from Upstash Redis at startup (see persistedSessions
-  // above), and mirrored back to Redis on every new token issuance so sessions
-  // survive restarts and are shared across instances. Falls back to
-  // in-memory-only behavior automatically if Upstash isn't configured.
+  // above), and persisted to Redis before a token is returned to the client.
   const activeSessions = new Map<string, string>(Object.entries(persistedSessions));
   const recentPlayEvents = new Map<string, number>();
 
-  function issueSessionToken(userId: string): string {
+  async function issueSessionToken(userId: string): Promise<string> {
     if (!userId) return "";
     const token = `sess_${crypto.randomBytes(32).toString("hex")}`;
+    await persistSessionToRedis(token, userId);
     activeSessions.set(token, userId);
-    persistSessionToRedis(token, userId); // fire-and-forget, doesn't block the request
     return token;
   }
 
@@ -632,10 +560,10 @@ async function startServer() {
     return null;
   }
 
-  function revokeSessionToken(token: string): void {
+  async function revokeSessionToken(token: string): Promise<void> {
     if (!token) return;
+    await deleteSessionFromRedis(token);
     activeSessions.delete(token);
-    deleteSessionFromRedis(token); // fire-and-forget
   }
 
   // Lightweight preflight for the registration form. Registration still
@@ -733,7 +661,7 @@ async function startServer() {
       db.userStates[newUser.id] = { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
       await writeDBAsync(db);
 
-      const token = issueSessionToken(newUser.id);
+      const token = await issueSessionToken(newUser.id);
       // Omit password from returned user object
       const { password: _, ...userWithoutPassword } = newUser;
       return res.json({ success: true, user: userWithoutPassword, token });
@@ -783,7 +711,7 @@ async function startServer() {
         return res.status(401).json({ error: "Invalid username/email or password." });
       }
 
-      const token = issueSessionToken(user.id);
+      const token = await issueSessionToken(user.id);
       const { password: _, ...userWithoutPassword } = user;
       return res.json({ success: true, user: userWithoutPassword, token });
     } catch (error: any) {
@@ -879,7 +807,7 @@ async function startServer() {
         user = newUser;
       }
 
-      const token = issueSessionToken(user.id);
+      const token = await issueSessionToken(user.id);
       const { password: _pw, ...userWithoutPassword } = user;
       return res.json({ success: true, user: userWithoutPassword, token, isNewUser });
     } catch (error: any) {
@@ -889,11 +817,16 @@ async function startServer() {
   });
 
   // Revoke the current session token on logout.
-  app.post("/api/auth/logout", (req, res) => {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    if (token) revokeSessionToken(token);
-    return res.json({ success: true });
+  app.post("/api/auth/logout", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization || "";
+      const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+      if (token) await revokeSessionToken(token);
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Logout Error:", error);
+      return res.status(503).json({ error: "Session storage is unavailable." });
+    }
   });
 
   // Fetch Application Data (Tracks, Playlists, User State, Chat History)
@@ -1989,9 +1922,7 @@ async function startServer() {
         .filter((u) => u.isArtist || db.tracks.some((track) => track.userId === u.id))
         .map((u) => u.id);
 
-      if (redis) {
-        await syncUpstashIndices(redis, db);
-      }
+      await syncUpstashIndices(redis, db);
 
       return res.json({
         success: true,
@@ -2956,4 +2887,7 @@ function buildNvidiaMessages(
   });
 }
 
-startServer();
+startServer().catch((error) => {
+  console.error("Server startup failed:", error);
+  process.exitCode = 1;
+});
