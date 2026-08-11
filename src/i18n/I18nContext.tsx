@@ -592,7 +592,7 @@ const turkishTranslations: Record<string, string> = {
   'Public profile': 'Herkese açık profil',
   'PROFILE': 'PROFİL',
   'Reading photo…': 'Fotoğraf okunuyor…',
-  'Reasoning': 'Akıl yürütme',
+  'Reasoning': 'Düşünüyor',
   'Recently Played': 'Son Çalınanlar',
   'Recently played artists': 'Son dinlenen sanatçılar',
   'Recently played tracks': 'Son çalınan parçalar',
