@@ -160,7 +160,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
     const link = `${window.location.origin}/track/${albumTrack.id}`;
     try {
       await navigator.clipboard.writeText(link);
-      showToast?.('Copied release link to clipboard!');
+      showToast?.(t('Copied release link to clipboard!'));
     } catch {
       const input = document.createElement('textarea');
       input.value = link;
@@ -170,7 +170,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
       input.select();
       const copied = document.execCommand('copy');
       input.remove();
-      showToast?.(copied ? 'Copied release link to clipboard!' : 'Could not copy the release link.');
+      showToast?.(t(copied ? 'Copied release link to clipboard!' : 'Could not copy the release link.'));
     }
     closeMenu();
   };
@@ -182,15 +182,13 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
     try {
       const succeeded = await onSetReleaseLiked(albumTracks.map((track) => track.id), shouldLike);
       if (succeeded) {
-        showToast?.(
-          shouldLike
-            ? albumTracks.length > 1
-              ? `Saved ${albumTracks.length} songs from this release to Liked Songs`
-              : `Added "${primaryTrack.title}" to Liked Songs`
-            : albumTracks.length > 1
-              ? `Removed this release from Liked Songs`
-              : `Removed "${primaryTrack.title}" from Liked Songs`
-        );
+        showToast?.(shouldLike
+          ? albumTracks.length > 1
+            ? t('Saved {{count}} songs from this release to Liked Songs', { count: albumTracks.length })
+            : t('Added "{{title}}" to Liked Songs', { title: primaryTrack.title })
+          : albumTracks.length > 1
+            ? t('Removed this release from Liked Songs')
+            : t('Removed "{{title}}" from Liked Songs', { title: primaryTrack.title }));
       }
     } finally {
       setIsLikePending(false);
@@ -228,7 +226,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
 
         <div className="z-10 flex w-full min-w-0 flex-col items-center space-y-2 pb-1 md:items-start md:space-y-3 md:pb-0">
           <p className="text-sm font-semibold uppercase tracking-widest text-white/80">
-            {albumTrack.releaseType ? albumTrack.releaseType.toUpperCase() : (albumTrack.album === 'Single' ? 'SINGLE' : 'ALBUM')}
+            {t(albumTrack.releaseType ? albumTrack.releaseType.toUpperCase() : (albumTrack.album === 'Single' ? 'SINGLE' : 'ALBUM'))}
           </p>
           <h1 data-track-id={albumTrack.id} data-context-type="track" className="max-w-full break-words py-1 text-3xl font-black leading-[1.05] tracking-tighter text-white drop-shadow-lg [overflow-wrap:anywhere] sm:text-4xl md:text-6xl lg:text-7xl">
             {albumTrack.releaseTitle || (albumTrack.album === 'Single' ? albumTrack.title : albumTrack.album)}
@@ -248,7 +246,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
             <span>{albumTracks.length} {t(albumTracks.length === 1 ? 'song' : 'songs')}</span>
             <span>•</span>
             <span>
-              {Math.floor(albumTracks.reduce((acc, t) => acc + t.duration, 0) / 60)} min
+              {Math.floor(albumTracks.reduce((acc, track) => acc + track.duration, 0) / 60)} {t('min')}
             </span>
           </div>
         </div>
@@ -341,7 +339,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                   onClick={() => {
                     if (onAddTracksToQueue) onAddTracksToQueue(albumTracks);
                     else albumTracks.forEach((track) => onAddToQueue?.(track));
-                    showToast?.(albumTracks.length > 1 ? `Added ${albumTracks.length} release tracks to queue` : `Added "${albumTracks[0]?.title || albumTrack.title}" to queue`);
+                    showToast?.(albumTracks.length > 1 ? t('Added {{count}} release tracks to queue', { count: albumTracks.length }) : t('Added "{{title}}" to queue', { title: albumTracks[0]?.title || albumTrack.title }));
                     closeMenu();
                   }}
                   className="w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl hover:bg-white/10 hover:text-white transition-colors text-left"
@@ -384,7 +382,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
                               const succeeded = onAddTracksToPlaylist
                                 ? await onAddTracksToPlaylist(pl.id, albumTracks.map((track) => track.id))
                                 : await onAddToPlaylist?.(pl.id, (albumTracks[0] || albumTrack).id);
-                              if (succeeded !== false) showToast?.(albumTracks.length > 1 ? `Added release to "${pl.title}"` : `Added to "${pl.title}"`);
+                              if (succeeded !== false) showToast?.(albumTracks.length > 1 ? t('Added release to "{{title}}"', { title: pl.title }) : t('Added to "{{title}}"', { title: pl.title }));
                               closeMenu();
                             }}
                             className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-zinc-300 hover:text-white text-left truncate"
@@ -542,8 +540,8 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
           <p className="break-words text-[11px] text-zinc-500 [overflow-wrap:anywhere]">{albumTrack.copyright}</p>
         ) : (
           <>
-            <p className="text-[11px] text-zinc-500">© {effectiveYear} {albumTrack.artist} Records</p>
-            <p className="text-[11px] text-zinc-500">℗ {effectiveYear} {albumTrack.artist} Records</p>
+            <p className="text-[11px] text-zinc-500">© {effectiveYear} {albumTrack.artist} {t('Records')}</p>
+            <p className="text-[11px] text-zinc-500">℗ {effectiveYear} {albumTrack.artist} {t('Records')}</p>
           </>
         )}
       </div>

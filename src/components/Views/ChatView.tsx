@@ -39,7 +39,14 @@ const createMessageId = (prefix: 'user' | 'ai' | 'err'): string => {
 // end user, so it's never shown as-is. Instead we condense each chunk down
 // to a short, natural sentence or two — a user-facing gist of what the
 // model was doing, not its literal internal monologue.
-const summarizeReasoningChunk = (text: string, relatedAction = '', maxLength = 220): string => {
+type Translate = (source: string, values?: Record<string, string | number>) => string;
+
+const summarizeReasoningChunk = (
+  text: string,
+  relatedAction = '',
+  maxLength = 220,
+  fallback = 'Analyzed the request and focused on the details most relevant to the answer.',
+): string => {
   const cleaned = text
     .replace(/<\/?(?:think|analysis)>/gi, ' ')
     .replace(/(?:^|\s)(?:[*-]|\d+[.)])\s+/g, ' ')
@@ -83,7 +90,7 @@ const summarizeReasoningChunk = (text: string, relatedAction = '', maxLength = 2
   // When a chunk contains only boilerplate, show a clean activity summary
   // instead of leaking that boilerplate back through a fallback.
   if (!summary) {
-    summary = relatedAction || 'Analyzed the request and focused on the details most relevant to the answer.';
+    summary = relatedAction || fallback;
   }
   if (relatedAction && !/\b(?:search(?:ed|ing)?|web|arama|ara(?:dı|yor|mak))\b/i.test(summary)) {
     const contextLimit = Math.max(40, maxLength - relatedAction.length - 2);
@@ -101,12 +108,12 @@ const summarizeReasoningChunk = (text: string, relatedAction = '', maxLength = 2
   return summary;
 };
 
-const getReasoningStepTitle = (summary: string): string => {
-  if (/\b(?:search|web|source|result|arama|kaynak|sonuç)\b/i.test(summary)) return 'Reviewing current information';
-  if (/\b(?:compar|instead|difference|karşılaştır|fark)\b/i.test(summary)) return 'Comparing the options';
-  if (/\b(?:check|verif|confirm|doğrula|kontrol)\b/i.test(summary)) return 'Verifying the details';
-  if (/\b(?:select|chose|recommend|match|fit|seç|öner|eşleş)\b/i.test(summary)) return 'Choosing the best matches';
-  return 'Analyzing the request';
+const getReasoningStepTitle = (summary: string, t: Translate): string => {
+  if (/\b(?:search|web|source|result|arama|kaynak|sonuç)\b/i.test(summary)) return t('Reviewing current information');
+  if (/\b(?:compar|instead|difference|karşılaştır|fark)\b/i.test(summary)) return t('Comparing the options');
+  if (/\b(?:check|verif|confirm|doğrula|kontrol)\b/i.test(summary)) return t('Verifying the details');
+  if (/\b(?:select|chose|recommend|match|fit|seç|öner|eşleş)\b/i.test(summary)) return t('Choosing the best matches');
+  return t('Analyzing the request');
 };
 
 const reasoningStepContent = (summary: string) => (
@@ -116,25 +123,25 @@ const reasoningStepContent = (summary: string) => (
   </div>
 );
 
-const createReasonedStep = (id: string, summary: string): PlanStep => ({
+const createReasonedStep = (id: string, summary: string, t: Translate): PlanStep => ({
   id,
-  title: getReasoningStepTitle(summary),
+  title: getReasoningStepTitle(summary, t),
   status: 'success',
   icon: <BrainCircuit className="h-3.5 w-3.5" />,
   content: reasoningStepContent(summary),
 });
 
 // Renders a real tool call as one activity line inside the thought flow.
-const createToolActivitySteps = (id: string, entry: Extract<ReasoningTimelineEntry, { type: 'tool' }>): PlanStep[] => {
+const createToolActivitySteps = (id: string, entry: Extract<ReasoningTimelineEntry, { type: 'tool' }>, t: Translate): PlanStep[] => {
   if (entry.tool !== 'web_search') return [];
   const resultLabel = entry.resultCount > 0
-    ? `Found ${entry.resultCount} source${entry.resultCount === 1 ? '' : 's'}`
-    : 'No results found';
+    ? t(entry.resultCount === 1 ? 'Found {{count}} source' : 'Found {{count}} sources', { count: entry.resultCount })
+    : t('No results found');
 
   return [
     {
       id: `${id}-search`,
-      title: `Searched the web · ${resultLabel}`,
+      title: t('Searched the web · {{result}}', { result: resultLabel }),
       status: 'success',
       icon: <Search className="h-3.5 w-3.5" />,
       content: (
@@ -151,7 +158,7 @@ const createToolActivitySteps = (id: string, entry: Extract<ReasoningTimelineEnt
 // message. Prefers the structured, chronological `reasoningTimeline` from
 // the server; falls back to summarizing the flat `reasoning` string for
 // older messages that don't have one.
-const createRealReasoningSteps = (reasoningText: string, timeline?: ReasoningTimelineEntry[]): PlanStep[] => {
+const createRealReasoningSteps = (reasoningText: string, t: Translate, timeline?: ReasoningTimelineEntry[]): PlanStep[] => {
   if (timeline && timeline.length > 0) {
     const steps: PlanStep[] = [];
     timeline.forEach((entry, index) => {
@@ -165,14 +172,14 @@ const createRealReasoningSteps = (reasoningText: string, timeline?: ReasoningTim
           ? `${previousEntry.query.slice(0, 90)}${previousEntry.query.length > 90 ? '…' : ''}`
           : '';
         const relatedAction = nextEntry?.type === 'tool' && nextEntry.tool === 'web_search'
-          ? `Searched the live web for “${nextQuery}” to verify current information.`
+          ? t('Searched the live web for “{{query}}” to verify current information.', { query: nextQuery })
           : previousEntry?.type === 'tool' && previousEntry.tool === 'web_search'
-            ? `Reviewed the live results for “${previousQuery}” and used the strongest findings in the answer.`
+            ? t('Reviewed the live results for “{{query}}” and used the strongest findings in the answer.', { query: previousQuery })
             : '';
-        const summary = summarizeReasoningChunk(entry.text, relatedAction);
-        if (summary) steps.push(createReasonedStep(`reasoned-${index}`, summary));
+        const summary = summarizeReasoningChunk(entry.text, relatedAction, 220, t('Analyzed the request and focused on the details most relevant to the answer.'));
+        if (summary) steps.push(createReasonedStep(`reasoned-${index}`, summary, t));
       } else {
-        steps.push(...createToolActivitySteps(`tool-${index}`, entry));
+        steps.push(...createToolActivitySteps(`tool-${index}`, entry, t));
       }
     });
     if (steps.length > 0) return steps;
@@ -185,9 +192,9 @@ const createRealReasoningSteps = (reasoningText: string, timeline?: ReasoningTim
   const rawSteps = chunks.length > 0 ? chunks : [reasoningText.trim()];
 
   return rawSteps
-    .map((chunk) => summarizeReasoningChunk(chunk))
+    .map((chunk) => summarizeReasoningChunk(chunk, '', 220, t('Analyzed the request and focused on the details most relevant to the answer.')))
     .filter(Boolean)
-    .map((summary, index) => createReasonedStep(`reasoning-${index}`, summary));
+    .map((summary, index) => createReasonedStep(`reasoning-${index}`, summary, t));
 };
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -290,7 +297,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       });
 
       const createResponseError = (payload: any) => {
-        const responseError = new Error(payload?.error || 'Failed to communicate with AI');
+        const responseError = new Error(payload?.error ? t(payload.error) : t('Failed to communicate with AI'));
         (responseError as any).rateLimited = !!payload?.rateLimited;
         (responseError as any).quotaExhausted = !!payload?.quotaExhausted;
         (responseError as any).configurationError = !!payload?.configurationError;
@@ -302,7 +309,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       const isActivityStream = res.headers.get('Content-Type')?.includes('application/x-ndjson') === true;
 
       if (res.ok && isActivityStream) {
-        if (!res.body) throw new Error('The AI activity stream was unavailable.');
+        if (!res.body) throw new Error(t('The AI activity stream was unavailable.'));
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -344,7 +351,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       }
 
       if (typeof data.reply !== 'string' || !data.reply.trim()) {
-        throw new Error('The AI provider returned no text response.');
+        throw new Error(t('The AI provider returned no text response.'));
       }
       const aiReplyText = data.reply.trim();
 
@@ -370,7 +377,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         const cancelledMsg: ChatMessage = {
           id: createMessageId('err'),
           sender: 'ai',
-          text: 'Request cancelled.',
+          text: t('Request cancelled.'),
           timestamp: new Date().toISOString(),
           isError: true,
         };
@@ -382,14 +389,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
       const retryAfterSeconds = Math.max(0, Math.min(300, Math.ceil(Number(err?.retryAfterSeconds || 0))));
       if (isRateLimited) {
         setRateLimitSeconds(retryAfterSeconds || 15);
-        if (err?.quotaExhausted) setQuotaNotice(AI_HIGH_DEMAND_MESSAGE);
+        if (err?.quotaExhausted) setQuotaNotice(t(AI_HIGH_DEMAND_MESSAGE));
       }
       const errorMsg: ChatMessage = {
         id: createMessageId('err'),
         sender: 'ai',
         text: typeof err?.message === 'string' && (err.configurationError || !isRateLimited)
-          ? err.message
-          : AI_HIGH_DEMAND_MESSAGE,
+          ? t(err.message)
+          : t(AI_HIGH_DEMAND_MESSAGE),
         timestamp: new Date().toISOString(),
         isError: true,
       };
@@ -460,12 +467,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const liveReasoningSteps: PlanStep[] = liveActivities.map((activity) => {
     const ActivityIcon = activity.kind === 'web_search' ? Search : BrainCircuit;
     const detail = activity.kind === 'web_search' && activity.status === 'success'
-      ? `${activity.resultCount ?? 0} live source${activity.resultCount === 1 ? '' : 's'} returned for “${activity.query || activity.detail || ''}”.`
-      : activity.detail;
+      ? t(activity.resultCount === 1 ? '{{count}} live source returned for “{{query}}”.' : '{{count}} live sources returned for “{{query}}”.', { count: activity.resultCount ?? 0, query: activity.query || activity.detail || '' })
+      : t(activity.detail);
 
     return {
       id: activity.id,
-      title: activity.title,
+      title: t(activity.title),
       status: activity.status,
       duration: activity.status === 'success' ? t('Done') : activity.status === 'active' ? t('Now') : undefined,
       icon: <ActivityIcon className="h-3.5 w-3.5" />,
@@ -544,8 +551,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 >
                   {msg.sender === 'ai' && (Boolean(msg.reasoning?.trim()) || Boolean(msg.reasoningTimeline?.length)) && (
                     <AgentPlanning
-                      title={typeof msg.thinkingSeconds === 'number' ? `${msg.thinkingSeconds} ${t('seconds of thought')}` : t('How this answer was prepared')}
-                      steps={createRealReasoningSteps(msg.reasoning || '', msg.reasoningTimeline)}
+                      title={typeof msg.thinkingSeconds === 'number' ? `${t('Thought for')} ${msg.thinkingSeconds}s')}` : t('How this answer was prepared')}
+                      steps={createRealReasoningSteps(msg.reasoning || '', t, msg.reasoningTimeline)}
                       defaultExpanded={false}
                       className="mb-3"
                     />

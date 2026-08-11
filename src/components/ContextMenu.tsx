@@ -478,7 +478,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
         {/* Quick Tabs Navigation */}
         <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-500 font-bold">
-          Quick Jump
+          {t('Quick jump')}
         </div>
 
         <button

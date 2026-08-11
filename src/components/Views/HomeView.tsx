@@ -353,7 +353,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div className="min-w-0">
             <span className="flex items-center gap-2 text-[10px] font-mono font-bold uppercase tracking-wider text-[#D946EF] sm:text-xs sm:tracking-widest">
               <span className="w-2 h-2 rounded-full bg-[#D946EF] animate-ping" />
-              VERTEX Music Audio Engine
+              {t('VERTEX Music Audio Engine')}
             </span>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mt-1">
               {getGreeting()}
@@ -361,7 +361,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
           {selectedCategory !== 'All' && (
             <span className="max-w-full break-words rounded-full border border-[#A855F7]/40 bg-[#A855F7]/20 px-3 py-1 text-xs font-bold text-[#C084FC]">
-              Category: {selectedCategory}
+              {t('Category')}: {t(selectedCategory)}
             </span>
           )}
         </div>

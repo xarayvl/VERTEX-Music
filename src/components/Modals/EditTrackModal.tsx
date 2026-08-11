@@ -141,7 +141,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (loadEvent) => setCoverUrl(String(loadEvent.target?.result || ''));
-    reader.onerror = () => setError('Cover artwork could not be read.');
+    reader.onerror = () => setError(t('Cover artwork could not be read.'));
     reader.readAsDataURL(file);
   };
 
@@ -150,7 +150,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
     if (!file) return;
     const mimeType = inferAudioMimeType(file);
     if (!mimeType) {
-      setError('Please select a valid audio file (MP3, WAV, OGG, M4A, AAC, or FLAC).');
+      setError(t('Please select a valid audio file (MP3, WAV, OGG, M4A, AAC, or FLAC).'));
       return;
     }
 
@@ -175,7 +175,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
       setIsReadingFile(false);
     };
     reader.onerror = () => {
-      setError('The replacement audio file could not be read.');
+      setError(t('The replacement audio file could not be read.'));
       setIsReadingFile(false);
     };
     const readableFile = file.type.startsWith('audio/') ? file : new Blob([file], { type: mimeType });
@@ -185,11 +185,11 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (trackDrafts.length === 0 || trackDrafts.some((draft) => !draft.title.trim())) {
-      setError('Every track needs a title.');
+      setError(t('Every track needs a title.'));
       return;
     }
     if (releaseType !== 'Single' && !releaseTitle.trim()) {
-      setError('The release needs an album or EP title.');
+      setError(t('The release needs an album or EP title.'));
       return;
     }
 
@@ -221,9 +221,9 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
         });
         const payload = await response.json().catch(() => null);
         if (!response.ok || !payload?.success) {
-          if (response.status === 401) throw new Error('Your session expired. Please log in again.');
-          if (response.status === 403) throw new Error('You do not have permission to edit this release.');
-          throw new Error(payload?.error || 'Failed to update the release.');
+          if (response.status === 401) throw new Error(t('Your session expired. Please log in again.'));
+          if (response.status === 403) throw new Error(t('You do not have permission to edit this release.'));
+          throw new Error(payload?.error ? t(payload.error) : t('Failed to update the release.'));
         }
         updatedTracks = Array.isArray(payload.tracks) ? payload.tracks : [];
       } else {
@@ -250,9 +250,9 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
         });
         const payload = await response.json().catch(() => null);
         if (!response.ok || !payload?.success) {
-          if (response.status === 401) throw new Error('Your session expired. Please log in again.');
-          if (response.status === 403) throw new Error('You do not have permission to edit this track.');
-          throw new Error(payload?.error || `Failed to update "${draft.title}".`);
+          if (response.status === 401) throw new Error(t('Your session expired. Please log in again.'));
+          if (response.status === 403) throw new Error(t('You do not have permission to edit this track.'));
+          throw new Error(payload?.error ? t(payload.error) : t('Failed to update "{{title}}".', { title: draft.title }));
         }
         updatedTracks = [payload.track];
       }
@@ -262,7 +262,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
       onClose();
     } catch (submitError: any) {
       console.error('Release update error:', submitError);
-      setError(submitError?.message || 'An unexpected error occurred while saving the release.');
+      setError(t(submitError?.message || 'An unexpected error occurred while saving the release.'));
     } finally {
       setLoading(false);
       setSaveProgress(0);
@@ -279,10 +279,10 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
             </div>
             <div className="min-w-0">
               <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-[#D8B4FE] sm:gap-2 sm:text-[10px] sm:tracking-[0.24em]">
-                <Sparkles className="h-3.5 w-3.5" /> Artist workspace
+                <Sparkles className="h-3.5 w-3.5" /> {t('Artist workspace')}
               </div>
-              <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">{isCollection ? 'Edit release' : 'Edit track'}</h1>
-              <p className="mt-1 hidden text-xs text-zinc-400 sm:block">{isCollection ? 'Update the album and every song in its tracklist from one place.' : 'Refresh the song metadata, artwork, or audio source.'}</p>
+              <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">{t(isCollection ? 'Edit release' : 'Edit track')}</h1>
+              <p className="mt-1 hidden text-xs text-zinc-400 sm:block">{t(isCollection ? 'Update the album and every song in its tracklist from one place.' : 'Refresh the song metadata, artwork, or audio source.')}</p>
             </div>
           </div>
           <button type="button" onClick={onClose} disabled={loading} className="control-press rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40" aria-label={t('Close editor')}>
@@ -316,8 +316,8 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                   return (
                     <button key={type} type="button" onClick={() => setReleaseType(type as 'Single' | 'EP' | 'Album')} className={`control-press flex min-h-16 items-center justify-between gap-3 rounded-2xl border px-4 text-left transition-colors ${active ? 'border-[#D946EF]/65 bg-[#D946EF]/12 text-white shadow-[0_10px_30px_rgba(217,70,239,0.12)]' : 'border-white/[0.08] bg-white/[0.035] text-zinc-400 hover:bg-white/[0.07]'}`}>
                       <div className="min-w-0 flex-1">
-                        <p className={`text-sm font-black ${active ? 'text-white' : 'text-zinc-300'}`}>{type}</p>
-                        <p className={`mt-1 break-words text-[10px] font-semibold leading-4 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>{type === 'Single' ? 'One song' : type === 'EP' ? 'Short release' : 'Full release'}</p>
+                        <p className={`text-sm font-black ${active ? 'text-white' : 'text-zinc-300'}`}>{t(type)}</p>
+                        <p className={`mt-1 break-words text-[10px] font-semibold leading-4 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>{t(type === 'Single' ? 'One song' : type === 'EP' ? 'Short release' : 'Full release')}</p>
                       </div>
                       <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-[#D946EF] text-white' : 'bg-white/5 text-zinc-500'}`}>
                         {type === 'Single' ? <FileAudio className="h-4 w-4" /> : <Disc3 className="h-4 w-4" />}
@@ -332,8 +332,8 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
               <div className="min-w-0 space-y-5 sm:space-y-6">
                 <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#1f1728] to-[#181818] p-4 sm:p-7">
                   <div className="mb-5 flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
-                    <div><p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{isCollection ? 'Tracklist' : 'Song details'}</p><h2 className="mt-1 text-xl font-black">{isCollection ? 'Edit every track' : 'Track metadata'}</h2></div>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-400">{trackDrafts.length} track{trackDrafts.length === 1 ? '' : 's'} · {formatDuration(totalDuration)}</span>
+                    <div><p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t(isCollection ? 'Tracklist' : 'Song details')}</p><h2 className="mt-1 text-xl font-black">{t(isCollection ? 'Edit every track' : 'Track metadata')}</h2></div>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-400">{t(trackDrafts.length === 1 ? '{{count}} track' : '{{count}} tracks', { count: trackDrafts.length })} · {formatDuration(totalDuration)}</span>
                   </div>
 
                   <div className="space-y-2.5">
@@ -351,7 +351,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                         </div>
                         <div className="mt-2 grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                           <select value={draft.genre} onChange={(event) => updateDraft(draft.id, { genre: event.target.value })} className={compactFieldClass}>
-                            {genreOptions.map((option) => <option key={option || 'none'} value={option}>{option || 'No genre selected'}</option>)}
+                            {genreOptions.map((option) => <option key={option || 'none'} value={option}>{option ? t(option) : t('No genre selected')}</option>)}
                           </select>
                           <span className="px-1 text-right font-mono text-[10px] text-zinc-600">{formatDuration(releaseTracks.find((item) => item.id === draft.id)?.duration || 0)}</span>
                         </div>
@@ -363,9 +363,9 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                     <div className="mt-5 rounded-3xl border border-dashed border-white/15 bg-black/20 p-4">
                       <div className="flex min-w-0 flex-wrap items-center gap-3">
                         <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${audioUrl ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/5 text-zinc-500'}`}>{audioUrl ? <Check className="h-5 w-5" /> : <Music2 className="h-5 w-5" />}</div>
-                        <div className="min-w-0 flex-1"><p className="truncate text-xs font-black">{newFileName || 'Keep current audio file'}</p><p className="mt-1 text-[10px] text-zinc-600">{newFileName ? `${newFileSize} · replacement ready` : 'Optional — choose a file only if the audio must change.'}</p></div>
+                        <div className="min-w-0 flex-1"><p className="truncate text-xs font-black">{newFileName || t('Keep current audio file')}</p><p className="mt-1 text-[10px] text-zinc-600">{newFileName ? `${newFileSize} · ${t('replacement ready')}` : t('Optional — choose a file only if the audio must change.')}</p></div>
                         <label className="control-press cursor-pointer rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black text-zinc-300 hover:bg-white/10">
-                          {isReadingFile ? 'Reading...' : 'Replace audio'}
+                          {t(isReadingFile ? 'Reading...' : 'Replace audio')}
                           <input type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" onChange={handleAudioFileUpload} disabled={isReadingFile} className="hidden" />
                         </label>
                       </div>
@@ -377,9 +377,9 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
               <aside className="min-w-0 space-y-5 sm:space-y-6 lg:sticky lg:top-24">
                 <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
                   <div className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#101010] shadow-2xl">
-                    {coverUrl ? <img src={coverUrl} alt="Release cover preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827]"><Image className="h-16 w-16 text-white/30" /></div>}
+                    {coverUrl ? <img src={coverUrl} alt={t('Release cover preview')} className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827]"><Image className="h-16 w-16 text-white/30" /></div>}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
-                    <div className="absolute inset-x-0 bottom-0 p-5"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E9D5FF]">{releaseType}</p><h2 className="mt-1 truncate text-2xl font-black">{releaseType === 'Single' ? trackDrafts[0]?.title || track.title : releaseTitle || 'Untitled release'}</h2><p className="mt-1 truncate text-xs font-semibold text-zinc-300">{track.artist}</p></div>
+                    <div className="absolute inset-x-0 bottom-0 p-5"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E9D5FF]">{releaseType}</p><h2 className="mt-1 truncate text-2xl font-black">{releaseType === 'Single' ? trackDrafts[0]?.title || track.title : releaseTitle || t('Untitled release')}</h2><p className="mt-1 truncate text-xs font-semibold text-zinc-300">{track.artist}</p></div>
                   </div>
                 </section>
 

@@ -241,7 +241,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     try {
       const result = await onChangePassword(currentPassword, newPassword);
       if (!result.success) {
-        setPasswordStatus({ type: 'error', message: result.error || t('Could not update your password.') });
+        setPasswordStatus({ type: 'error', message: result.error ? t(result.error) : t('Could not update your password.') });
         return;
       }
       setCurrentPassword('');
@@ -504,14 +504,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     <Music className="w-8 h-8 mx-auto text-zinc-500" />
                     <p className="text-sm font-bold text-white">{t('No uploaded songs yet')}</p>
                     <p className="text-[11px] text-zinc-400 max-w-sm mx-auto">
-                      Upload your MP3 / WAV audio files directly. They will be stored in your folder and featured on your Spotify artist profile.
+                      {t('Upload your MP3 / WAV audio files directly. They will be stored in your folder and featured on your artist profile.')}
                     </p>
                     {onOpenAddTrackModal && (
                       <button
                         onClick={onOpenAddTrackModal}
                         className="mt-2 px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold"
                       >
-                        Upload First Track
+                        {t('Upload first track')}
                       </button>
                     )}
                   </div>
@@ -547,11 +547,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               {isCollection ? <Disc3 className="h-3.5 w-3.5 shrink-0 text-[#D946EF]" /> : <Music className="h-3.5 w-3.5 shrink-0 text-[#D946EF]" />}
-                              <span className="text-[9px] font-black uppercase tracking-[0.16em] text-[#D8B4FE]">{release.releaseType}</span>
+                              <span className="text-[9px] font-black uppercase tracking-[0.16em] text-[#D8B4FE]">{t(release.releaseType)}</span>
                             </div>
                             <p className="mt-1 truncate text-sm font-black text-white">{release.title}</p>
                             <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold text-zinc-500">
-                              <span>{release.tracks.length} track{release.tracks.length === 1 ? '' : 's'}</span>
+                              <span>{t(release.tracks.length === 1 ? '{{count}} track' : '{{count}} tracks', { count: release.tracks.length })}</span>
                               <span>•</span>
                               <span>{representative.releaseYear || new Date(representative.createdAt || Date.now()).getFullYear()}</span>
                             </div>
@@ -566,7 +566,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                                 title={t(isCollection ? 'Edit release and tracklist' : 'Edit track')}
                               >
                                 <Edit3 className="h-3.5 w-3.5" />
-                                <span className="hidden sm:inline">{isCollection ? 'Edit release' : 'Edit'}</span>
+                                <span className="hidden sm:inline">{t(isCollection ? 'Edit release' : 'Edit')}</span>
                               </button>
                             )}
                             {!isCollection && onDeleteTrack && (
@@ -580,17 +580,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         {isCollection && (
                           <div className="border-t border-white/[0.06] bg-black/15 px-2 py-2 sm:px-3">
                             <div className="mb-1 flex items-center gap-2 px-2 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-zinc-600">
-                              <ListMusic className="h-3 w-3" /> Tracklist
+                              <ListMusic className="h-3 w-3" /> {t('Tracklist')}
                             </div>
                             {release.tracks.map((releaseTrack, trackIndex) => (
                               <div key={releaseTrack.id} data-track-id={releaseTrack.id} data-context-type="track" className="group flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-white/[0.055]">
-                                <button type="button" onClick={() => onPlayTrack(releaseTrack)} className="control-press flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-zinc-400 hover:bg-[#D946EF]/15 hover:text-[#F0ABFC]" aria-label={`Play ${releaseTrack.title}`}>
+                                <button type="button" onClick={() => onPlayTrack(releaseTrack)} className="control-press flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.055] text-zinc-400 hover:bg-[#D946EF]/15 hover:text-[#F0ABFC]" aria-label={t('Play {{title}}', { title: releaseTrack.title })}>
                                   <Play className="h-3 w-3 fill-current" />
                                 </button>
                                 <span className="w-5 shrink-0 text-center font-mono text-[10px] text-zinc-600">{releaseTrack.trackNumber || trackIndex + 1}</span>
                                 <div className="min-w-0 flex-1">
                                   <p className="truncate text-sm font-bold text-zinc-200">{releaseTrack.title}</p>
-                                  <p className="truncate text-[9px] text-zinc-600">{releaseTrack.genre || 'No genre'}</p>
+                                  <p className="truncate text-[9px] text-zinc-600">{releaseTrack.genre || t('No genre')}</p>
                                 </div>
                                 <span className="hidden font-mono text-[10px] text-zinc-600 sm:block">{Math.floor(releaseTrack.duration / 60)}:{Math.floor(releaseTrack.duration % 60).toString().padStart(2, '0')}</span>
                                 {onDeleteTrack && (
@@ -621,7 +621,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
             {personalTopTracks.length === 0 ? (
               <p className="text-xs text-zinc-400 italic bg-white/5 p-4 rounded-xl border border-white/5">
-                Play some songs and they'll show up here — this list is personal to your account.
+                {t("Play some songs and they'll show up here — this list is personal to your account.")}
               </p>
             ) : (
             <div className="bg-[#181818]/60 rounded-xl overflow-hidden border border-white/5">
@@ -657,7 +657,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
                     <div className="flex shrink-0 items-center gap-2 sm:gap-6">
                       <span className="hidden sm:inline text-xs font-mono text-zinc-400">
-                        {track.plays ? `${Number(track.plays).toLocaleString()} plays` : '0 plays'}
+                        {t('{{count}} plays', { count: Number(track.plays || 0).toLocaleString(locale) })}
                       </span>
 
                       <button
@@ -695,7 +695,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               if (personalTopArtists.length === 0) {
                 return (
                   <p className="text-xs text-zinc-400 italic bg-white/5 p-4 rounded-xl border border-white/5">
-                    Play some songs to see your personal top artists here!
+                    {t('Play some songs to see your personal top artists here!')}
                   </p>
                 );
               }
@@ -923,6 +923,49 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
               <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
                 <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#A855F7]/15 text-[#E879F9]">
+                    <Languages className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-sm font-black text-white">{t('App language')}</h3>
+                      <span className="rounded-full border border-[#D946EF]/20 bg-[#D946EF]/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-[#F0ABFC]">
+                        {language === 'tr' ? 'Türkçe' : 'English'}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">{t('Choose the language used throughout VERTEX. Your choice is saved on this device.')}</p>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-2.5" role="group" aria-label={t('App language')}>
+                  {([
+                    { code: 'en', label: 'English', shortCode: 'EN' },
+                    { code: 'tr', label: 'Türkçe', shortCode: 'TR' },
+                  ] as const).map((option) => {
+                    const isSelected = language === option.code;
+                    return (
+                      <button
+                        key={option.code}
+                        type="button"
+                        onClick={() => setLanguage(option.code)}
+                        aria-pressed={isSelected}
+                        className={`stagger-item control-press flex min-h-14 min-w-0 items-center justify-center gap-2 rounded-2xl border px-3 text-xs font-black transition-all ${
+                          isSelected
+                            ? 'border-[#C084FC]/70 bg-[#A855F7]/20 text-[#F0ABFC] shadow-[0_10px_28px_rgba(168,85,247,0.12)]'
+                            : 'border-white/[0.08] bg-white/[0.035] text-zinc-400 hover:bg-white/[0.07] hover:text-white'
+                        }`}
+                      >
+                        <span className="shrink-0 font-mono text-[10px] opacity-70">{option.shortCode}</span>
+                        <span className="truncate">{option.label}</span>
+                        {isSelected && <Check className="h-4 w-4 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="workspace-card section-reveal rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
+                <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/10 text-emerald-300"><Laptop2 className="h-5 w-5" /></div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-black text-white">{t('This browser')}</h3><span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-300">{t('Active now')}</span></div>
@@ -991,56 +1034,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </form>
           </div>
 
-          <section className="workspace-card section-reveal overflow-hidden rounded-3xl border border-white/10 bg-[#181818] shadow-[0_24px_70px_rgba(0,0,0,0.24)]">
-            <div className="flex flex-col gap-5 border-b border-white/10 bg-gradient-to-r from-[#24182d] via-[#201723] to-[#181818] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
-              <div className="flex min-w-0 items-start gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#A855F7]/15 text-[#E879F9]">
-                  <Languages className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D8B4FE]">{t('Language')}</p>
-                  <h3 className="mt-1 text-xl font-black tracking-tight text-white">{t('Your account language')}</h3>
-                  <p className="mt-1 max-w-2xl text-xs leading-5 text-zinc-500">{t('Personalize the app language. Your choice is saved on this device.')}</p>
-                </div>
-              </div>
-              <span className="w-fit rounded-full border border-[#D946EF]/20 bg-[#D946EF]/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-[#F0ABFC]">
-                {language === 'tr' ? 'Türkçe' : 'English'}
-              </span>
-            </div>
-
-            <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-7">
-              {([
-                { code: 'en', label: 'English', detail: 'English (US)', shortCode: 'EN' },
-                { code: 'tr', label: 'Türkçe', detail: 'Türkçe (TR)', shortCode: 'TR' },
-              ] as const).map((option) => {
-                const isSelected = language === option.code;
-                return (
-                  <button
-                    key={option.code}
-                    type="button"
-                    onClick={() => setLanguage(option.code)}
-                    aria-pressed={isSelected}
-                    className={`control-press flex min-w-0 items-center gap-4 rounded-2xl border p-4 text-left transition-all ${
-                      isSelected
-                        ? 'border-[#C084FC]/55 bg-gradient-to-r from-[#A855F7]/20 to-[#D946EF]/10 shadow-[0_12px_34px_rgba(168,85,247,0.12)]'
-                        : 'border-white/[0.08] bg-white/[0.035] hover:border-white/15 hover:bg-white/[0.06]'
-                    }`}
-                  >
-                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xs font-black ${isSelected ? 'bg-gradient-to-br from-[#A855F7] to-[#D946EF] text-white' : 'bg-white/[0.06] text-zinc-400'}`}>
-                      {option.shortCode}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-black text-white">{option.label}</span>
-                      <span className="mt-0.5 block truncate text-xs text-zinc-500">{option.detail}</span>
-                    </span>
-                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${isSelected ? 'border-[#E879F9]/40 bg-[#D946EF]/15 text-[#F0ABFC]' : 'border-white/10 text-transparent'}`}>
-                      <Check className="h-4 w-4" />
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
         </div>
       )}
     </div>

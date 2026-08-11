@@ -80,7 +80,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
   isLoading = false,
   loadError = null,
 }) => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [discographyFilter, setDiscographyFilter] = useState<'popular' | 'singles'>('popular');
   const [showAllPopular, setShowAllPopular] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -153,14 +153,14 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         <User className="w-12 h-12 mb-3 text-zinc-600" />
         <p className="text-base font-bold text-white">{t('Artist profile unavailable')}</p>
         <p className="text-xs text-zinc-500 mt-1">
-          {loadError || '404 — Artist not found.'}
+          {loadError ? t(loadError) : t('404 — Artist not found.')}
         </p>
         {onGoBack && (
           <button
             onClick={onGoBack}
             className="mt-4 px-4 py-2 rounded-full bg-white/10 text-white text-xs font-bold hover:bg-white/20"
           >
-            Go Back
+            {t('Go back')}
           </button>
         )}
       </div>
@@ -175,7 +175,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
     artistName = (artist as Artist).name;
   } else {
     const p = artist as UserProfile;
-    artistName = p.artistName || p.displayName || p.username || (p.email ? p.email.split('@')[0] : 'Artist');
+    artistName = p.artistName || p.displayName || p.username || (p.email ? p.email.split('@')[0] : t('Artist'));
   }
 
   const avatarUrl = isUserProfile
@@ -187,8 +187,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
     : ((artist as Artist).bannerUrl || '');
 
   const bio = isUserProfile
-    ? (artist as UserProfile).artistBio || (artist as UserProfile).bio || 'No artist biography has been added yet.'
-    : (artist as Artist).bio || 'No artist biography has been added yet.';
+    ? (artist as UserProfile).artistBio || (artist as UserProfile).bio || t('No artist biography has been added yet.')
+    : (artist as Artist).bio || t('No artist biography has been added yet.');
 
   const isVerified = isUserProfile
     ? (artist as UserProfile).artistVerified === true
@@ -341,7 +341,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
               <>
                 <span className="text-zinc-400">•</span>
                 <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] text-white text-[10px] font-mono uppercase font-bold">
-                  User & Artist Profile
+                  {t('User & Artist Profile')}
                 </span>
               </>
             )}
@@ -355,7 +355,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
         <button
           onClick={handlePlayArtist}
           className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-r from-[#A855F7] to-[#D946EF] hover:opacity-90 text-white flex items-center justify-center shadow-[0_8px_24px_rgba(217,70,239,0.4)] active:scale-95 transition-all"
-          title={`Play ${artistName}`}
+          title={t('Play {{title}}', { title: artistName })}
         >
           {isPlaying && displayTracks.some((t) => t.id === currentTrackId) ? (
             <Pause className="w-7 h-7 fill-white text-white" />
@@ -436,7 +436,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
             >
               <div className="space-y-0.5">
                 <button type="button" onClick={() => { handlePlayArtist(); closeArtistMenu(); }} disabled={displayTracks.length === 0} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><Play className="h-4 w-4 text-zinc-400" /><span>{t('Play artist')}</span></button>
-                <button type="button" onClick={() => { onToggleShuffle?.(displayTracks); closeArtistMenu(); }} disabled={displayTracks.length === 0 || !onToggleShuffle} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><Shuffle className="h-4 w-4 text-zinc-400" /><span>{isShuffle ? 'Disable artist shuffle' : 'Shuffle artist'}</span></button>
+                <button type="button" onClick={() => { onToggleShuffle?.(displayTracks); closeArtistMenu(); }} disabled={displayTracks.length === 0 || !onToggleShuffle} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><Shuffle className="h-4 w-4 text-zinc-400" /><span>{t(isShuffle ? 'Disable artist shuffle' : 'Shuffle artist')}</span></button>
 
                 {!isOwner && <button type="button" onClick={() => { onToggleFollow?.(artist); closeArtistMenu(); }} disabled={!onToggleFollow} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40">{isFollowing ? <Check className="h-4 w-4 text-[#D946EF]" /> : <UserPlus className="h-4 w-4 text-zinc-400" />}<span>{t(isFollowing ? 'Unfollow artist' : 'Follow artist')}</span></button>}
                 {isOwner && <button type="button" onClick={() => { setIsEditModalOpen(true); closeArtistMenu(); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/10 hover:text-white"><Edit3 className="h-4 w-4 text-[#D946EF]" /><span>{t('Edit artist profile')}</span></button>}
@@ -532,7 +532,7 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
 
                     <div className="hidden sm:block text-right w-24 flex-shrink-0">
                       <span className="text-xs font-mono text-zinc-400">
-                        {track.plays ? `${Number(track.plays).toLocaleString()}` : '0'} plays
+                        {t('{{count}} plays', { count: Number(track.plays || 0).toLocaleString(locale) })}
                       </span>
                     </div>
 
@@ -588,8 +588,8 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                   className="w-8 h-8 rounded-full object-cover border border-white/20"
                 />
                 <div className="text-xs">
-                  <p className="text-xs text-zinc-400">Posted by {artistName}</p>
-                  <p className="font-extrabold text-white">{artistPickComment || 'Artist Pick'}</p>
+                  <p className="text-xs text-zinc-400">{t('Posted by {{name}}', { name: artistName })}</p>
+                  <p className="font-extrabold text-white">{artistPickComment || t('Artist Pick')}</p>
                 </div>
               </div>
 
@@ -602,9 +602,9 @@ export const ArtistView: React.FC<ArtistViewProps> = ({
                 />
                 <div className="flex flex-col justify-center min-w-0">
                   <p className="text-sm font-black text-white truncate">{featuredTrack.title}</p>
-                  <p className="text-xs text-zinc-400 truncate">{featuredTrack.album || 'Single'}</p>
+                  <p className="text-xs text-zinc-400 truncate">{featuredTrack.album || t('Single')}</p>
                   <span className="mt-2 text-[10px] font-bold text-[#D946EF] uppercase tracking-wider flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Latest Release
+                    <Sparkles className="w-3 h-3" /> {t('Latest release')}
                   </span>
                 </div>
               </div>

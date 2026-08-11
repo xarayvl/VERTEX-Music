@@ -200,9 +200,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   </div>
                   <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-zinc-400 sm:justify-start">
                     <span className="flex items-center gap-1.5"><AtSign className="h-3.5 w-3.5" />{username}</span>
-                    <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Joined {joinedDate}</span>
+                    <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{t('Joined')} {joinedDate}</span>
                   </div>
-                  <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300">{bio || 'Add a short bio so listeners know a little more about you.'}</p>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300">{bio || t('Add a short bio so listeners know a little more about you.')}</p>
                 </div>
 
                 <button
@@ -210,7 +210,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   className={`flex w-full shrink-0 items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-black transition-all sm:w-auto ${isEditing ? 'border-white/10 bg-white/10 text-white hover:bg-white/15' : 'border-[#D946EF]/25 bg-[#D946EF]/15 text-[#F5D0FE] hover:bg-[#D946EF]/25'}`}
                 >
                   <Edit3 className="h-4 w-4" />
-                  {isEditing ? 'Cancel editing' : 'Edit profile'}
+                  {t(isEditing ? 'Cancel editing' : 'Edit profile')}
                 </button>
               </div>
             </section>
@@ -251,14 +251,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   <div className="flex flex-wrap items-center gap-2">
                     <button type="button" onClick={() => avatarFileInputRef.current?.click()} disabled={isReadingAvatarFile} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3.5 py-2.5 text-xs font-black text-white transition-colors hover:bg-white/10 disabled:opacity-50">
                       <Upload className="h-4 w-4" />
-                      {isReadingAvatarFile ? 'Reading photo…' : 'Choose photo'}
+                      {t(isReadingAvatarFile ? 'Reading photo…' : 'Choose photo')}
                     </button>
                     <button type="button" onClick={() => setAvatarUrl('')} className="rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-white">{t('Remove photo')}</button>
                     <input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarFileUpload} className="hidden" />
                   </div>
                   <button type="submit" className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-[#A855F7]/20 transition-colors hover:brightness-110">
                     <Save className="h-4 w-4" />
-                    Save changes
+                    {t('Save changes')}
                   </button>
                 </div>
               </form>
@@ -269,7 +269,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 <div key={label} className="group rounded-2xl border border-white/[0.07] bg-white/[0.045] p-4 transition-colors hover:border-[#D946EF]/20 hover:bg-white/[0.07]">
                   <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-xl bg-[#D946EF]/12 text-[#E879F9] transition-transform group-hover:scale-105"><Icon className="h-4 w-4" /></div>
                   <p className="text-xl font-black tracking-tight text-white">{value}</p>
-                  <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+                  <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-zinc-500">{t(label)}</p>
                 </div>
               ))}
             </section>
@@ -311,7 +311,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         <footer className="mobile-safe-footer flex items-center justify-between gap-3 border-t border-white/[0.08] bg-black/20 px-5 py-4 sm:px-7">
           <button onClick={() => { onClose(); onLogout?.(); }} className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-xs font-black text-red-300 transition-colors hover:bg-red-500/20 hover:text-red-200">
             <LogOut className="h-4 w-4" />
-            Log out
+            {t('Log out')}
           </button>
           <button onClick={onClose} className="rounded-xl border border-white/10 bg-white/[0.07] px-5 py-2.5 text-xs font-black text-white transition-colors hover:bg-white/15">{t('Done')}</button>
         </footer>

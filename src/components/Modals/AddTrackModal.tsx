@@ -85,7 +85,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
         setError(null);
       }
     };
-    audioEl.onerror = () => setError('The audio URL could not be loaded or does not point to playable audio.');
+    audioEl.onerror = () => setError(t('The audio URL could not be loaded or does not point to playable audio.'));
     return () => {
       audioEl.src = '';
     };
@@ -113,11 +113,11 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
         const value = audioEl.duration;
         cleanup();
         if (value && Number.isFinite(value)) resolve(Math.max(1, Math.round(value)));
-        else reject(new Error(`Could not determine the duration of "${file.name}".`));
+        else reject(new Error(t('Could not determine the duration of "{{name}}".', { name: file.name })));
       };
       audioEl.onerror = () => {
         cleanup();
-        reject(new Error(`"${file.name}" is not playable audio.`));
+        reject(new Error(t('"{{name}}" is not playable audio.', { name: file.name })));
       };
     });
 
@@ -127,9 +127,9 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
       reader.onload = (event) => {
         const result = event.target?.result;
         if (typeof result === 'string' && result) resolve(result);
-        else reject(new Error(`Could not read "${file.name}".`));
+        else reject(new Error(t('Could not read "{{name}}".', { name: file.name })));
       };
-      reader.onerror = () => reject(new Error(`Error reading "${file.name}".`));
+      reader.onerror = () => reject(new Error(t('Error reading "{{name}}".', { name: file.name })));
       const extension = file.name.split('.').pop()?.toLowerCase();
       const inferredMime = extension === 'mp3'
         ? 'audio/mpeg'
@@ -153,7 +153,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   const processAudioFile = async (file: File) => {
     if (!file) return;
     if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i)) {
-      setError('Please select a valid audio file (MP3, WAV, OGG, M4A, AAC, FLAC).');
+      setError(t('Please select a valid audio file (MP3, WAV, OGG, M4A, AAC, FLAC).'));
       return;
     }
 
@@ -177,7 +177,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     } catch (error: any) {
       setAudioUrl('');
       setDuration(0);
-      setError(error?.message || 'Error reading selected audio file.');
+      setError(t(error?.message || 'Error reading selected audio file.'));
     } finally {
       setIsReadingFile(false);
     }
@@ -233,7 +233,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
       (f) => f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i)
     );
     if (files.length === 0) {
-      setError('Please select valid audio files (MP3, WAV, OGG, M4A, AAC).');
+      setError(t('Please select valid audio files (MP3, WAV, OGG, M4A, AAC).'));
       return;
     }
     setError(null);
@@ -242,7 +242,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
       const newItems = await Promise.all(files.map(readFileAsAlbumTrack));
       setAlbumTracks((prev) => [...prev, ...newItems]);
     } catch (err: any) {
-      setError(err?.message || 'Error reading one or more audio files.');
+      setError(t(err?.message || 'Error reading one or more audio files.'));
     } finally {
       setIsReadingMultiFiles(false);
     }
@@ -310,11 +310,11 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     setError(null);
 
     if (!userId) {
-      setError('You must be signed in before uploading music.');
+      setError(t('You must be signed in before uploading music.'));
       return;
     }
     if (!userProfileName?.trim()) {
-      setError('Your artist name is missing. Add an artist name to your profile before uploading music.');
+      setError(t('Your artist name is missing. Add an artist name to your profile before uploading music.'));
       return;
     }
 
@@ -322,19 +322,19 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
     if (isMultiTrackRelease) {
       if (albumTracks.length === 0) {
-        setError('Please add at least one song to the tracklist.');
+        setError(t('Please add at least one song to the tracklist.'));
         return;
       }
       if (isReadingMultiFiles) {
-        setError('Audio files are still loading, please wait a moment...');
+        setError(t('Audio files are still loading, please wait a moment...'));
         return;
       }
       if (album === '__NEW__' && !customAlbumName.trim()) {
-        setError('A release title is required for an album or EP.');
+        setError(t('A release title is required for an album or EP.'));
         return;
       }
       if (albumTracks.some((track) => !track.title.trim() || !Number.isFinite(track.duration) || track.duration <= 0)) {
-        setError('Every track needs a title and verified audio duration.');
+        setError(t('Every track needs a title and verified audio duration.'));
         return;
       }
       await handleMultiTrackSubmit();
@@ -342,27 +342,27 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     }
 
     if (!title.trim()) {
-      setError('Song Title is required.');
+      setError(t('Song title is required.'));
       return;
     }
 
     if (audioSourceType === 'upload' && !audioUrl) {
-      setError('Please select an audio file (MP3, WAV, etc.) to upload.');
+      setError(t('Please select an audio file (MP3, WAV, etc.) to upload.'));
       return;
     }
 
     if (audioSourceType === 'url' && !/^https?:\/\//i.test(audioUrl.trim())) {
-      setError('Enter a valid http(s) audio URL.');
+      setError(t('Enter a valid http(s) audio URL.'));
       return;
     }
 
     if (isReadingFile) {
-      setError('Audio file is still loading, please wait a moment...');
+      setError(t('Audio file is still loading, please wait a moment...'));
       return;
     }
 
     if (!Number.isFinite(duration) || duration <= 0) {
-      setError('The audio duration could not be verified. Select a playable audio file or URL.');
+      setError(t('The audio duration could not be verified. Select a playable audio file or URL.'));
       return;
     }
 
@@ -409,7 +409,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
       }
 
       if (!res.ok || !data?.success) {
-        setError(data?.error || `Upload failed with status ${res.status}. Please try again.`);
+        setError(data?.error ? t(data.error) : t('Upload failed with status {{status}}. Please try again.', { status: res.status }));
         setLoading(false);
         return;
       }
@@ -418,7 +418,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
       onClose();
     } catch (err: any) {
       console.error('Track upload error:', err);
-      setError(err?.message || 'Server error saving track to database.');
+      setError(t(err?.message || 'Server error saving track to database.'));
     } finally {
       setLoading(false);
     }
@@ -434,7 +434,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     const finalCover = coverUrl.trim();
     const artistName = userProfileName?.trim();
     if (!userId || !artistName) {
-      setError('Your signed-in artist profile is required before uploading an album.');
+      setError(t('Your signed-in artist profile is required before uploading an album.'));
       setLoading(false);
       setUploadProgress(null);
       return;
@@ -489,7 +489,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
         if (!res.ok || !data?.success) {
           throw new Error(
-            data?.error || `"${item.title}" failed to upload (status ${res.status}).`
+            data?.error ? t(data.error) : t('"{{title}}" failed to upload (status {{status}}).', { title: item.title, status: res.status })
           );
         }
 
@@ -507,7 +507,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
           )
         );
       }
-      setError((err?.message || 'Server error saving tracklist.') + ' No partial release was kept.');
+      setError(`${t(err?.message || 'Server error saving tracklist.')} ${t('No partial release was kept.')}`);
     } finally {
       setLoading(false);
       setUploadProgress(null);
@@ -520,14 +520,14 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
   const isMultiTrackRelease = releaseType !== 'Single';
   const releaseName = isMultiTrackRelease
     ? album === '__NEW__'
-      ? customAlbumName.trim() || `Untitled ${releaseType}`
+      ? customAlbumName.trim() || t('Untitled {{type}}', { type: releaseType })
       : album
-    : title.trim() || 'Untitled single';
+    : title.trim() || t('Untitled single');
   const totalReleaseDuration = isMultiTrackRelease
     ? albumTracks.reduce((total, track) => total + track.duration, 0)
     : duration;
   const formatDuration = (seconds: number) => {
-    if (!Number.isFinite(seconds) || seconds <= 0) return 'Not ready';
+    if (!Number.isFinite(seconds) || seconds <= 0) return t('Not ready');
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
@@ -543,7 +543,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
             </div>
             <div className="min-w-0">
               <div className="mb-1 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] sm:text-[10px] sm:tracking-[0.24em]">
-                <Sparkles className="h-3.5 w-3.5" /> Artist workspace
+                <Sparkles className="h-3.5 w-3.5" /> {t('Artist workspace')}
               </div>
               <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">{t('Upload music')}</h1>
               <p className="mt-1 text-[11px] leading-4 text-zinc-400 sm:text-sm">{t('Build a release, verify its audio and publish it from the main panel.')}</p>
@@ -574,7 +574,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                 <h2 className="mt-1 text-xl font-black tracking-tight">{t('What are you publishing?')}</h2>
               </div>
               <span className="max-w-full break-words rounded-full border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#F0ABFC]">
-                Publishing as {userProfileName?.trim() || 'your artist account'}
+                {t('Publishing as')} {userProfileName?.trim() || t('your artist account')}
               </span>
             </div>
 
@@ -595,8 +595,8 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                     }`}
                   >
                     <div className="min-w-0 flex-1">
-                      <p className={`text-sm font-black ${active ? 'text-white' : 'text-zinc-300'}`}>{type}</p>
-                      <p className={`mt-1 break-words text-[10px] font-semibold leading-4 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>{copy}</p>
+                      <p className={`text-sm font-black ${active ? 'text-white' : 'text-zinc-300'}`}>{t(type)}</p>
+                      <p className={`mt-1 break-words text-[10px] font-semibold leading-4 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>{t(copy)}</p>
                     </div>
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-[#D946EF] text-white' : 'bg-white/5 text-zinc-500'}`}>
                       {type === 'Single' ? <FileAudio className="h-4 w-4" /> : <ListMusic className="h-4 w-4" />}
@@ -613,10 +613,10 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                 <div className="mb-6 flex min-w-0 flex-wrap items-start justify-between gap-3 sm:gap-4">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">{t('Audio files')}</p>
-                    <h2 className="mt-1 text-xl font-black tracking-tight">{isMultiTrackRelease ? 'Build the tracklist' : 'Choose an audio source'}</h2>
+                    <h2 className="mt-1 text-xl font-black tracking-tight">{t(isMultiTrackRelease ? 'Build the tracklist' : 'Choose an audio source')}</h2>
                   </div>
                   <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-400">
-                    {isMultiTrackRelease ? `${albumTracks.length} track${albumTracks.length === 1 ? '' : 's'}` : formatDuration(duration)}
+                    {isMultiTrackRelease ? t(albumTracks.length === 1 ? '{{count}} track' : '{{count}} tracks', { count: albumTracks.length }) : formatDuration(duration)}
                   </span>
                 </div>
 
@@ -640,7 +640,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                                 : 'border-white/[0.08] bg-white/[0.035] text-zinc-400 hover:bg-white/[0.07] hover:text-white'
                             }`}
                           >
-                            <Icon className="h-4 w-4" /> {label}
+                            <Icon className="h-4 w-4" /> {t(label)}
                           </button>
                         );
                       })}
@@ -686,10 +686,10 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                               </div>
                               <div className="max-w-full">
                                 <p className="mx-auto max-w-md truncate text-sm font-black text-white">{loadedFileName}</p>
-                                <p className="mt-1 text-xs font-semibold text-emerald-300">{loadedFileSize} · {formatDuration(duration)} · Ready</p>
+                                <p className="mt-1 text-xs font-semibold text-emerald-300">{loadedFileSize} · {formatDuration(duration)} · {t('Ready')}</p>
                               </div>
                               <label htmlFor="audio-file-input" className="control-press cursor-pointer rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-bold text-zinc-300 hover:bg-white/10 hover:text-white">
-                                Choose a different file
+                                {t('Choose a different file')}
                               </label>
                             </div>
                           ) : (
@@ -827,7 +827,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                     <img
                       key={coverUrl}
                       src={coverUrl.trim()}
-                      alt="Release cover preview"
+                      alt={t('Release cover preview')}
                       referrerPolicy="no-referrer"
                       onError={(event) => {
                         event.currentTarget.style.display = 'none';
@@ -841,9 +841,9 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E9D5FF]">{releaseType} preview</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E9D5FF]">{releaseType} {t('preview')}</p>
                     <h2 className="mt-1 truncate text-2xl font-black">{releaseName}</h2>
-                    <p className="mt-1 truncate text-xs font-semibold text-zinc-300">{userProfileName?.trim() || 'Artist name unavailable'}</p>
+                    <p className="mt-1 truncate text-xs font-semibold text-zinc-300">{userProfileName?.trim() || t('Artist name unavailable')}</p>
                   </div>
                 </div>
 
@@ -895,7 +895,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                         type="text"
                         value={customAlbumName}
                         onChange={(event) => setCustomAlbumName(event.target.value)}
-                        placeholder={`Name this ${releaseType.toLowerCase()}`}
+                        placeholder={t('Name this {{type}}', { type: releaseType.toLocaleLowerCase() })}
                         className={`${fieldClass} mt-3`}
                       />
                     )}
@@ -907,14 +907,14 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                     <label className={labelClass}>{t('Genre')}</label>
                     <select value={genre} onChange={(event) => setGenre(event.target.value)} className={fieldClass}>
                       <option value="">{t('Select genre')}</option>
-                      <option value="Synthwave">Synthwave</option>
-                      <option value="Cyberpunk">Cyberpunk</option>
-                      <option value="Lofi">Lofi</option>
-                      <option value="Ambient">Ambient</option>
-                      <option value="Electronic">Electronic</option>
-                      <option value="Acoustic">Acoustic</option>
-                      <option value="Pop">Pop</option>
-                      <option value="Rock">Rock</option>
+                      <option value="Synthwave">{t('Synthwave')}</option>
+                      <option value="Cyberpunk">{t('Cyberpunk')}</option>
+                      <option value="Lofi">{t('Lofi')}</option>
+                      <option value="Ambient">{t('Ambient')}</option>
+                      <option value="Electronic">{t('Electronic')}</option>
+                      <option value="Acoustic">{t('Acoustic')}</option>
+                      <option value="Pop">{t('Pop')}</option>
+                      <option value="Rock">{t('Rock')}</option>
                     </select>
                   </div>
                   <div>
@@ -956,7 +956,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                       className={`${fieldClass} min-w-0 flex-1`}
                     />
                     <label className="control-press flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white">
-                      <Upload className="h-4 w-4" /> Upload
+                      <Upload className="h-4 w-4" /> {t('Upload')}
                       <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
                     </label>
                   </div>

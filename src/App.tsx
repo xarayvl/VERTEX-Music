@@ -709,8 +709,8 @@ export default function App() {
   // get a fresh token in one step.
   const handleSessionExpired = React.useCallback(() => {
     handleLogout();
-    showToast('Your session expired — please log in again.');
-  }, []);
+    showToast(t('Your session expired — please log in again.'));
+  }, [t]);
 
   // Kept in a ref so the fetch interceptor below (installed once on mount)
   // always calls the latest version of handleSessionExpired, and a flag ref
@@ -786,7 +786,7 @@ export default function App() {
     if (token) {
       localStorage.setItem('vertex_session_token', token);
     }
-    showToast(`Welcome back, ${user.displayName || user.username}!`);
+    showToast(t('Welcome back, {{name}}!', { name: user.displayName || user.username }));
   };
 
   const handleOpenProfileModal = () => {
@@ -1263,7 +1263,7 @@ export default function App() {
 
   const handleToggleLike = async (trackId: string) => {
     const target = tracks.find((track) => track.id === trackId);
-    if (!target) return showToast('404 — Track not found.');
+    if (!target) return showToast(t('404 — Track not found.'));
     if (!userProfile) return showToast(t('Sign in to save tracks.'));
 
     const previousTracks = tracks;
@@ -1289,7 +1289,7 @@ export default function App() {
       if (!response.ok) {
         setTracks(previousTracks);
         setCurrentTrack(previousCurrentTrack);
-        showToast(data?.error || t('Could not update liked tracks.'));
+        showToast(data?.error ? t(data.error) : t('Could not update liked tracks.'));
       }
     } catch (error) {
       console.error('Error syncing liked tracks:', error);
@@ -1302,7 +1302,7 @@ export default function App() {
   const handleSetReleaseLiked = async (trackIds: string[], shouldLike: boolean): Promise<boolean> => {
     const uniqueIds = new Set(trackIds.filter(Boolean));
     if (uniqueIds.size === 0 || !tracks.some((track) => uniqueIds.has(track.id))) {
-      showToast('404 — Release tracks not found.');
+      showToast(t('404 — Release tracks not found.'));
       return false;
     }
     if (!userProfile) {
@@ -1331,7 +1331,7 @@ export default function App() {
       if (!response.ok) {
         setTracks(previousTracks);
         setCurrentTrack(previousCurrentTrack);
-        showToast(data?.error || t('Could not update liked tracks.'));
+        showToast(data?.error ? t(data.error) : t('Could not update liked tracks.'));
         return false;
       }
       return true;
@@ -1480,7 +1480,7 @@ export default function App() {
   const handleUpdatePlaylist = async (updatedPlaylist: Playlist): Promise<boolean> => {
     const existing = playlists.find((playlist) => playlist.id === updatedPlaylist.id);
     if (!existing) {
-      showToast('404 — Playlist not found.');
+      showToast(t('404 — Playlist not found.'));
       return false;
     }
     if (!userProfile || existing.userId !== userProfile.id) {
@@ -1502,7 +1502,7 @@ export default function App() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.playlist) {
-        showToast(data?.error || t('Playlist update failed.'));
+        showToast(data?.error ? t(data.error) : t('Playlist update failed.'));
         return false;
       }
       setPlaylists((previous) => previous.map((playlist) => (playlist.id === data.playlist.id ? data.playlist : playlist)));
@@ -1520,14 +1520,14 @@ export default function App() {
 
   const handleDeletePlaylist = async (playlistId: string) => {
     const target = playlists.find((playlist) => playlist.id === playlistId);
-    if (!target) return showToast('404 — Playlist not found.');
+    if (!target) return showToast(t('404 — Playlist not found.'));
     if (!userProfile || target.userId !== userProfile.id) return showToast(t('Only the playlist owner can delete it.'));
 
     activePlaylistMutationsRef.current += 1;
     try {
       const response = await fetch(`/api/playlists/${playlistId}`, { method: 'DELETE', headers: getAuthHeaders() });
       const data = await response.json().catch(() => null);
-      if (!response.ok) return showToast(data?.error || t('Playlist delete failed.'));
+      if (!response.ok) return showToast(data?.error ? t(data.error) : t('Playlist delete failed.'));
       setPlaylists((previous) => previous.filter((playlist) => playlist.id !== playlistId));
       if (selectedPlaylistId === playlistId) {
         setSelectedPlaylistId(null);
@@ -1545,7 +1545,7 @@ export default function App() {
   const updatePlaylistTracks = async (playlistId: string, nextTrackIds: string[]): Promise<Playlist | null> => {
     const target = playlists.find((playlist) => playlist.id === playlistId);
     if (!target) {
-      showToast('404 — Playlist not found.');
+      showToast(t('404 — Playlist not found.'));
       return null;
     }
     if (!userProfile || target.userId !== userProfile.id) {
@@ -1562,7 +1562,7 @@ export default function App() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.playlist) {
-        showToast(data?.error || t('Playlist update failed.'));
+        showToast(data?.error ? t(data.error) : t('Playlist update failed.'));
         return null;
       }
       setPlaylists((previous) => previous.map((playlist) => (playlist.id === playlistId ? data.playlist : playlist)));
@@ -1580,12 +1580,12 @@ export default function App() {
   const handleAddTracksToPlaylist = async (playlistId: string, trackIds: string[]): Promise<boolean> => {
     const target = playlists.find((playlist) => playlist.id === playlistId);
     if (!target) {
-      showToast('404 — Playlist not found.');
+      showToast(t('404 — Playlist not found.'));
       return false;
     }
     const uniqueTrackIds = [...new Set(trackIds)];
     if (uniqueTrackIds.some((trackId) => !tracks.some((track) => track.id === trackId))) {
-      showToast('404 — One or more tracks were not found.');
+      showToast(t('404 — One or more tracks were not found.'));
       return false;
     }
     const nextTrackIds = [...new Set([...target.trackIds, ...uniqueTrackIds])];
@@ -1598,7 +1598,7 @@ export default function App() {
   const handleRemoveTrackFromPlaylist = async (playlistId: string, trackId: string): Promise<boolean> => {
     const target = playlists.find((playlist) => playlist.id === playlistId);
     if (!target) {
-      showToast('404 — Playlist not found.');
+      showToast(t('404 — Playlist not found.'));
       return false;
     }
     return Boolean(await updatePlaylistTracks(playlistId, target.trackIds.filter((id) => id !== trackId)));
@@ -1619,7 +1619,7 @@ export default function App() {
         }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.playlist) return showToast(data?.error || t('Playlist creation failed.'));
+      if (!response.ok || !data?.playlist) return showToast(data?.error ? t(data.error) : t('Playlist creation failed.'));
       const createdPlaylist: Playlist = {
         ...data.playlist,
         userId: String(data.playlist.userId || userProfile.id),
@@ -1629,7 +1629,7 @@ export default function App() {
       setPlaylists((previous) => [createdPlaylist, ...previous.filter((playlist) => playlist.id !== createdPlaylist.id)]);
       setSelectedPlaylistId(createdPlaylist.id);
       handleSelectTab('playlist');
-      showToast(`Created "${createdPlaylist.title}" and added it to Your Library.`);
+      showToast(t('Created "{{title}}" and added it to Your Library.', { title: createdPlaylist.title }));
     } catch (error) {
       console.error('Error creating playlist:', error);
       showToast(t('Playlist creation failed.'));
@@ -1682,7 +1682,7 @@ export default function App() {
         : input.name;
 
     if (!requestedId) {
-      setArtistLoadError('404 — Artist not found.');
+      setArtistLoadError(t('404 — Artist not found.'));
       setIsArtistLoading(false);
       return;
     }
@@ -1701,7 +1701,7 @@ export default function App() {
     if (requestId !== artistRequestIdRef.current) return;
     if (!resolved) {
       setSelectedArtist(null);
-      setArtistLoadError(`404 — No registered artist profile was found for “${requestedLabel || 'this artist'}”.`);
+      setArtistLoadError(t('404 — No registered artist profile was found for “{{artist}}”.', { artist: requestedLabel || t('this artist') }));
       setIsArtistLoading(false);
       return;
     }
@@ -1777,7 +1777,7 @@ export default function App() {
 
   const handleDeleteTrack = async (trackId: string) => {
     const target = tracks.find((track) => track.id === trackId);
-    if (!target) return showToast('404 — Track not found.');
+    if (!target) return showToast(t('404 — Track not found.'));
     if (!userProfile || target.userId !== userProfile.id) {
       return showToast(t('Only the track owner can delete it.'));
     }
@@ -1786,7 +1786,7 @@ export default function App() {
       const res = await fetch(`/api/tracks/${trackId}`, { method: 'DELETE', headers: getAuthHeaders() });
       const payload = await res.json().catch(() => null);
       if (!res.ok || payload?.success === false) {
-        showToast(payload?.error || t('Failed to delete track.'));
+        showToast(payload?.error ? t(payload.error) : t('Failed to delete track.'));
         return;
       }
 
@@ -1815,7 +1815,7 @@ export default function App() {
     try {
       const response = await fetch('/api/tracks/wipe', { method: 'POST', headers: getAuthHeaders() });
       const data = await response.json().catch(() => null);
-      if (!response.ok) return showToast(data?.error || t('Track cleanup failed.'));
+      if (!response.ok) return showToast(data?.error ? t(data.error) : t('Track cleanup failed.'));
       const deletedIds = new Set<string>(Array.isArray(data?.deletedTrackIds) ? data.deletedTrackIds : []);
       setTracks((previous) => previous.filter((track) => !deletedIds.has(track.id)));
       setQueue((previous) => previous.filter((track) => !deletedIds.has(track.id)));
@@ -1829,7 +1829,7 @@ export default function App() {
         setIsPlaying(false);
         setCurrentTrack(null);
       }
-      showToast(`${deletedIds.size} owned track removed.`);
+      showToast(t('{{count}} owned track removed.', { count: deletedIds.size }));
     } catch (error) {
       console.error('Error wiping owned tracks:', error);
       showToast(t('Track cleanup failed.'));
@@ -1848,7 +1848,7 @@ export default function App() {
         body: JSON.stringify({ action }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok) return showToast(data?.error || t('Follow action failed.'));
+      if (!response.ok) return showToast(data?.error ? t(data.error) : t('Follow action failed.'));
 
       setFollowedArtistIds(Array.isArray(data.followedArtistIds) ? data.followedArtistIds : []);
       setUserProfile((previous) => previous ? {
@@ -1924,7 +1924,7 @@ export default function App() {
       if (!res.ok || !data?.success || !data.user) {
         setUserProfile(previousProfile);
         setSelectedArtist(previousArtist);
-        showToast(data?.error || 'Could not save artist profile changes — please try again.');
+        showToast(data?.error ? t(data.error) : t('Could not save artist profile changes — please try again.'));
         return;
       }
 
@@ -1949,7 +1949,7 @@ export default function App() {
       console.error('Failed to sync artist profile update with server:', error);
       setUserProfile(previousProfile);
       setSelectedArtist(previousArtist);
-      showToast('Could not save artist profile changes — please try again.');
+      showToast(t('Could not save artist profile changes — please try again.'));
     }
   };
 
@@ -1976,7 +1976,7 @@ export default function App() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success || !data.user) {
-        showToast(data?.error || t('Profile update failed.'));
+        showToast(data?.error ? t(data.error) : t('Profile update failed.'));
         return;
       }
       const persisted = { ...userProfile, ...data.user } as UserProfile;
@@ -2015,7 +2015,7 @@ export default function App() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.success) {
-        return { success: false, error: data?.error || t('Password update failed.') };
+        return { success: false, error: data?.error ? t(data.error) : t('Password update failed.') };
       }
       showToast(t('Password updated successfully!'));
       return { success: true };
@@ -2085,7 +2085,7 @@ export default function App() {
               // ignore
             }
           }}
-          title="Drag to resize sidebar (Double-click to reset)"
+          title={t('Drag to resize sidebar (Double-click to reset)')}
           className={`hidden md:flex items-center justify-center w-3 hover:w-3 -mx-1 cursor-col-resize group transition-colors select-none relative z-30 flex-shrink-0 ${
             isResizingSidebar ? 'bg-[#A855F7]/30' : 'hover:bg-white/10 bg-transparent'
           }`}
@@ -2424,7 +2424,7 @@ export default function App() {
                 // ignore
               }
             }}
-            title="Drag to resize right sidebar (Double-click to reset)"
+            title={t('Drag to resize right sidebar (Double-click to reset)')}
             className={`hidden md:flex items-center justify-center w-3 hover:w-3 -mx-1 cursor-col-resize group transition-colors select-none relative z-30 flex-shrink-0 ${
               isResizingRightSidebar ? 'bg-[#A855F7]/30' : 'hover:bg-white/10 bg-transparent'
             }`}
@@ -2565,13 +2565,13 @@ export default function App() {
           if (currentTrack?.id === updated.id) {
             setCurrentTrack((prev) => (prev ? { ...prev, ...updated } : null));
           }
-          showToast(`Updated "${updated.title}" metadata!`);
+          showToast(t('Updated "{{title}}" metadata!', { title: updated.title }));
         }}
         onTracksUpdated={(updatedTracks) => {
           const updatedById = new Map(updatedTracks.map((updated) => [updated.id, updated]));
           setTracks((previous) => previous.map((item) => updatedById.get(item.id) || item));
           setCurrentTrack((previous) => previous ? updatedById.get(previous.id) || previous : null);
-          showToast(updatedTracks.length > 1 ? `Updated ${updatedTracks.length} tracks and release metadata!` : `Updated "${updatedTracks[0]?.title || 'track'}" metadata!`);
+          showToast(updatedTracks.length > 1 ? t('Updated {{count}} tracks and release metadata!', { count: updatedTracks.length }) : t('Updated "{{title}}" metadata!', { title: updatedTracks[0]?.title || t('track') }));
         }}
       />
 

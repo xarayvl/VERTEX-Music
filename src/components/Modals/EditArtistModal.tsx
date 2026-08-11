@@ -167,13 +167,13 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
             </div>
             <div className="min-w-0">
               <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-[#D8B4FE] sm:gap-2 sm:text-[10px] sm:tracking-[0.24em]">
-                <Sparkles className="h-3.5 w-3.5" /> Artist workspace
+                <Sparkles className="h-3.5 w-3.5" /> {t('Artist workspace')}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="break-words text-xl font-black tracking-tight sm:text-3xl">{t('Edit artist profile')}</h1>
                 {artistVerified && (
                   <span className="flex items-center gap-1 rounded-full border border-blue-400/25 bg-blue-500/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-blue-300">
-                    <ShieldCheck className="h-3.5 w-3.5" /> Verified
+                    <ShieldCheck className="h-3.5 w-3.5" /> {t('Verified')}
                   </span>
                 )}
               </div>
@@ -198,7 +198,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                   <img
                     key={bannerUrl}
                     src={bannerUrl.trim()}
-                    alt="Artist banner preview"
+                    alt={t('Artist banner preview')}
                     referrerPolicy="no-referrer"
                     onError={(event) => {
                       event.currentTarget.style.display = 'none';
@@ -228,7 +228,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                   <div className="min-w-0 pb-1">
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E9D5FF]">{t('Live preview')}</p>
                     <h2 className="mt-1 truncate text-2xl font-black sm:text-3xl">{artistName}</h2>
-                    <p className="mt-1 truncate text-xs font-semibold text-zinc-300">{genre.trim() || 'Add your primary genre'}</p>
+                    <p className="mt-1 truncate text-xs font-semibold text-zinc-300">{genre.trim() || t('Add your primary genre')}</p>
                   </div>
                 </div>
               </div>
@@ -258,9 +258,9 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                 </div>
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">{t('Artist pick preview')}</p>
-                  <h3 className="mt-1 truncate text-sm font-black text-white">{selectedPick?.title || 'No featured track selected'}</h3>
+                  <h3 className="mt-1 truncate text-sm font-black text-white">{selectedPick?.title || t('No featured track selected')}</h3>
                   <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
-                    {artistPickComment.trim() || 'Choose a release and add a short note for your listeners.'}
+                    {artistPickComment.trim() || t('Choose a release and add a short note for your listeners.')}
                   </p>
                 </div>
               </div>
@@ -298,7 +298,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                       onClick={() => avatarFileInputRef.current?.click()}
                       className="control-press flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-300 hover:bg-white/10 hover:text-white"
                     >
-                      <Upload className="h-3.5 w-3.5" /> Upload
+                      <Upload className="h-3.5 w-3.5" /> {t('Upload')}
                     </button>
                     <input
                       ref={avatarFileInputRef}
@@ -325,7 +325,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                       onClick={() => bannerFileInputRef.current?.click()}
                       className="control-press flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-bold text-zinc-300 hover:bg-white/10 hover:text-white"
                     >
-                      <ImageIcon className="h-3.5 w-3.5" /> Upload
+                      <ImageIcon className="h-3.5 w-3.5" /> {t('Upload')}
                     </button>
                     <input
                       ref={bannerFileInputRef}
@@ -372,7 +372,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                   placeholder={t('Tell listeners about your story, influences and releases...')}
                   className={`${fieldClass} resize-none`}
                 />
-                <div className="mt-2 flex justify-end text-[10px] font-semibold text-zinc-600">{artistBio.length} characters</div>
+                <div className="mt-2 flex justify-end text-[10px] font-semibold text-zinc-600">{t('{{count}} characters', { count: artistBio.length })}</div>
               </div>
             </section>
 
