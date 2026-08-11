@@ -436,7 +436,7 @@ const turkishTranslations: Record<string, string> = {
   'profile': 'profil',
   'saved song': 'kayıtlı şarkı',
   'saved songs': 'kayıtlı şarkı',
-  'Thought for': 'Düşünme süresi',
+  'Thought for {{seconds}}s': '{{seconds}} sn düşünüldü',
   'songs': 'şarkı',
   'sources': 'kaynak',
   'tracks': 'parça',

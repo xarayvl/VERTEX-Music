@@ -551,7 +551,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 >
                   {msg.sender === 'ai' && (Boolean(msg.reasoning?.trim()) || Boolean(msg.reasoningTimeline?.length)) && (
                     <AgentPlanning
-                      title={typeof msg.thinkingSeconds === 'number' ? `${t('Thought for')} ${msg.thinkingSeconds}s')}` : t('How this answer was prepared')}
+                      title={typeof msg.thinkingSeconds === 'number' ? t('Thought for {{seconds}}s', { seconds: msg.thinkingSeconds }) : t('How this answer was prepared')}
                       steps={createRealReasoningSteps(msg.reasoning || '', t, msg.reasoningTimeline)}
                       defaultExpanded={false}
                       className="mb-3"
