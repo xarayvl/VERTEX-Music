@@ -278,7 +278,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
           text: message.text.slice(0, 8_000),
         }));
 
+      const token = localStorage.getItem('vertex_session_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
 
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -419,7 +421,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
 
     try {
+      const token = localStorage.getItem('vertex_session_token');
       const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
       const response = await fetch(`/api/chat-history/${userId}`, { method: 'DELETE', headers });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));

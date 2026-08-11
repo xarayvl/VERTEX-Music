@@ -17,8 +17,6 @@ import {
 import { Artist, Track, UserProfile } from '../../types';
 import { getArtistStats } from '../../utils/artistUtils';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
-import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
-import { uploadMediaFile } from '../../utils/mediaUpload';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface EditArtistModalProps {
@@ -121,22 +119,18 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
   const { totalPlays } = getArtistStats(artist, artistTracks);
   const selectedPick = artistTracks.find((track) => track.id === artistPickTrackId);
 
-  const readImageFile = async (
+  const readImageFile = (
     event: React.ChangeEvent<HTMLInputElement>,
     setter: React.Dispatch<React.SetStateAction<string>>
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      event.target.value = '';
-      return;
-    }
 
-    try {
-      setter(await uploadMediaFile(file, 'image'));
-    } catch {
-      // Keep the existing artwork when upload verification fails.
-    }
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+      if (typeof loadEvent.target?.result === 'string') setter(loadEvent.target.result);
+    };
+    reader.readAsDataURL(file);
     event.target.value = '';
   };
 
@@ -145,8 +139,8 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
     onSave({
       artistName,
       artistBio: artistBio.trim(),
-      avatarUrl: getSafeImageUrl(avatarUrl, DEFAULT_AVATAR_URL),
-      bannerUrl: getSafeImageUrl(bannerUrl, ''),
+      avatarUrl: avatarUrl.trim() || DEFAULT_AVATAR_URL,
+      bannerUrl: bannerUrl.trim(),
       genre: genre.trim(),
       instagramUrl: instagramUrl.trim(),
       twitterUrl: twitterUrl.trim(),
@@ -200,10 +194,10 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
           <aside className="space-y-6 lg:sticky lg:top-6">
             <div className="workspace-card section-reveal overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
               <div className="relative aspect-[16/10] overflow-hidden rounded-[1.4rem] border border-white/10 bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827] shadow-2xl">
-                {getSafeImageUrl(bannerUrl, '') && (
+                {bannerUrl.trim() && (
                   <img
                     key={bannerUrl}
-                    src={getSafeImageUrl(bannerUrl, '')}
+                    src={bannerUrl.trim()}
                     alt={t('Artist banner preview')}
                     referrerPolicy="no-referrer"
                     onError={(event) => {
@@ -217,7 +211,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                   <div className="relative">
                     <img
                       key={avatarUrl}
-                      src={getSafeImageUrl(avatarUrl, DEFAULT_AVATAR_URL)}
+                      src={avatarUrl.trim() || DEFAULT_AVATAR_URL}
                       alt={artistName}
                       referrerPolicy="no-referrer"
                       onError={(event) => {
@@ -309,7 +303,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                     <input
                       ref={avatarFileInputRef}
                       type="file"
-                      accept="image/jpeg,image/png,image/webp"
+                      accept="image/*"
                       className="hidden"
                       onChange={(event) => readImageFile(event, setAvatarUrl)}
                     />
@@ -336,7 +330,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                     <input
                       ref={bannerFileInputRef}
                       type="file"
-                      accept="image/jpeg,image/png,image/webp"
+                      accept="image/*"
                       className="hidden"
                       onChange={(event) => readImageFile(event, setBannerUrl)}
                     />

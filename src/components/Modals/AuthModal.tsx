@@ -93,7 +93,7 @@ declare global {
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (user: UserProfile) => void;
+  onLoginSuccess: (user: UserProfile, token?: string) => void;
 }
 
 type UsernameAvailabilityStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'error';
@@ -144,6 +144,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const completeAuthentication = (
     user: UserProfile,
+    token: string | undefined,
     successKind: AuthSuccessKind
   ) => {
     setLoading(false);
@@ -155,7 +156,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       window.clearTimeout(authSuccessTimerRef.current);
     }
     authSuccessTimerRef.current = window.setTimeout(() => {
-      onLoginSuccess(user);
+      onLoginSuccess(user, token);
       onClose();
       setAuthSuccess(null);
       authSuccessTimerRef.current = null;
@@ -185,7 +186,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setGoogleError(data.error || t('Google sign-in failed. Please try again.'));
         return;
       }
-      completeAuthentication(data.user, 'google');
+      completeAuthentication(data.user, data.token, 'google');
     } catch {
       setGoogleError(t('Google sign-in could not reach the server. Please try again.'));
     } finally {
@@ -332,7 +333,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setError(data.error || t('Login failed. Please check your credentials.'));
         return;
       }
-      completeAuthentication(data.user, 'login');
+      completeAuthentication(data.user, data.token, 'login');
     } catch {
       setError(t('Server connection error. Please try again.'));
     } finally {
@@ -371,7 +372,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setError(data.error || t('Registration failed.'));
         return;
       }
-      completeAuthentication(data.user, 'register');
+      completeAuthentication(data.user, data.token, 'register');
     } catch {
       setError(t('Server connection error. Please try again.'));
     } finally {

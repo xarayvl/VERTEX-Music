@@ -2,8 +2,6 @@ import React, { useState, useRef } from 'react';
 import { X, Music, Upload, Link, Sparkles, Image, Check, FileAudio, AlertCircle, GripVertical, ArrowUp, ArrowDown, Trash2, ListMusic } from 'lucide-react';
 import { Track } from '../../types';
 import { formatCopyright, stripCopyrightPrefix } from '../../utils/copyright';
-import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
-import { uploadMediaFile } from '../../utils/mediaUpload';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface AlbumTrackItem {
@@ -123,6 +121,35 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
       };
     });
 
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result;
+        if (typeof result === 'string' && result) resolve(result);
+        else reject(new Error(t('Could not read "{{name}}".', { name: file.name })));
+      };
+      reader.onerror = () => reject(new Error(t('Error reading "{{name}}".', { name: file.name })));
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      const inferredMime = extension === 'mp3'
+        ? 'audio/mpeg'
+        : extension === 'wav'
+          ? 'audio/wav'
+          : extension === 'ogg'
+            ? 'audio/ogg'
+            : extension === 'm4a'
+              ? 'audio/mp4'
+              : extension === 'aac'
+                ? 'audio/aac'
+                : extension === 'flac'
+                  ? 'audio/flac'
+                  : '';
+      const readableFile = file.type.startsWith('audio/') || !inferredMime
+        ? file
+        : new Blob([file], { type: inferredMime });
+      reader.readAsDataURL(readableFile);
+    });
+
   const processAudioFile = async (file: File) => {
     if (!file) return;
     if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i)) {
@@ -141,9 +168,11 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     if (!title.trim()) setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
 
     try {
-      const detectedDuration = await readAudioDuration(file);
-      const uploadedUrl = await uploadMediaFile(file, 'audio');
-      setAudioUrl(uploadedUrl);
+      const [dataUrl, detectedDuration] = await Promise.all([
+        readFileAsDataUrl(file),
+        readAudioDuration(file),
+      ]);
+      setAudioUrl(dataUrl);
       setDuration(detectedDuration);
     } catch (error: any) {
       setAudioUrl('');
@@ -168,33 +197,31 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     }
   };
 
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setError(t('Please select a JPEG, PNG, or WebP image.'));
-      e.target.value = '';
-      return;
-    }
 
-    try {
-      setCoverUrl(await uploadMediaFile(file, 'image'));
-    } catch (uploadError: any) {
-      setError(t(uploadError?.message || 'Cover artwork could not be uploaded.'));
-    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setCoverUrl(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
-  // Uploads audio directly to R2 and keeps only its short metadata in React.
+  // Reads a single File into an AlbumTrackItem (base64 audio + detected duration + a
+  // title guessed from the filename), resolving once the FileReader finishes.
   const readFileAsAlbumTrack = async (file: File): Promise<AlbumTrackItem> => {
     const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
     const guessedTitle = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
-    const detectedDuration = await readAudioDuration(file);
-    const uploadedUrl = await uploadMediaFile(file, 'audio');
+    const [audioDataUrl, detectedDuration] = await Promise.all([
+      readFileAsDataUrl(file),
+      readAudioDuration(file),
+    ]);
 
     return {
       clientId: crypto.randomUUID(),
       title: guessedTitle,
-      audioUrl: uploadedUrl,
+      audioUrl: audioDataUrl,
       duration: detectedDuration,
       fileName: file.name,
       fileSize: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
@@ -212,8 +239,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     setError(null);
     setIsReadingMultiFiles(true);
     try {
-      const newItems: AlbumTrackItem[] = [];
-      for (const file of files) newItems.push(await readFileAsAlbumTrack(file));
+      const newItems = await Promise.all(files.map(readFileAsAlbumTrack));
       setAlbumTracks((prev) => [...prev, ...newItems]);
     } catch (err: any) {
       setError(t(err?.message || 'Error reading one or more audio files.'));
@@ -342,13 +368,17 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
     setLoading(true);
 
-    const finalCover = getSafeImageUrl(coverUrl, '');
+    const finalCover = coverUrl.trim();
     const finalAudioUrl = audioUrl.trim();
     const artistName = userProfileName.trim();
     const finalAlbumName = album === '__NEW__' ? (customAlbumName.trim() || 'Single') : album;
 
     try {
+      const token = localStorage.getItem('vertex_session_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
 
       const res = await fetch('/api/tracks', {
         method: 'POST',
@@ -401,7 +431,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     setLoading(true);
     setUploadProgress({ current: 0, total: albumTracks.length });
 
-    const finalCover = getSafeImageUrl(coverUrl, '');
+    const finalCover = coverUrl.trim();
     const artistName = userProfileName?.trim();
     if (!userId || !artistName) {
       setError(t('Your signed-in artist profile is required before uploading an album.'));
@@ -412,12 +442,18 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     const finalAlbumName = (album === '__NEW__' ? customAlbumName.trim() : album).trim();
     const sharedReleaseId = crypto.randomUUID();
 
+    const token = localStorage.getItem('vertex_session_token');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
 
     const createdTracks: Track[] = [];
 
     try {
-      // Metadata is committed sequentially so track order stays deterministic.
+      // Uploaded sequentially (not Promise.all) so track order is
+      // deterministic and the server isn't hit with a burst of large
+      // base64 audio payloads at once.
       for (let i = 0; i < albumTracks.length; i++) {
         const item = albumTracks[i];
         setUploadProgress({ current: i + 1, total: albumTracks.length });
@@ -467,7 +503,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
       if (createdTracks.length > 0) {
         await Promise.allSettled(
           createdTracks.map((track) =>
-            fetch(`/api/tracks/${track.id}`, { method: 'DELETE' })
+            fetch(`/api/tracks/${track.id}`, { method: 'DELETE', headers: token ? { Authorization: `Bearer ${token}` } : {} })
           )
         );
       }
@@ -787,10 +823,10 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
             <aside className="min-w-0 space-y-6 lg:sticky lg:top-6">
               <section className="workspace-card section-reveal min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
                 <div className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#101010] shadow-2xl">
-                  {getSafeImageUrl(coverUrl, '') ? (
+                  {coverUrl.trim() ? (
                     <img
                       key={coverUrl}
-                      src={getSafeImageUrl(coverUrl, '')}
+                      src={coverUrl.trim()}
                       alt={t('Release cover preview')}
                       referrerPolicy="no-referrer"
                       onError={(event) => {
@@ -921,7 +957,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
                     />
                     <label className="control-press flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-xs font-black text-zinc-300 hover:bg-white/10 hover:text-white">
                       <Upload className="h-4 w-4" /> {t('Upload')}
-                      <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleCoverUpload} className="hidden" />
+                      <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
                     </label>
                   </div>
                 </div>

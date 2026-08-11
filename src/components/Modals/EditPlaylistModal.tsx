@@ -2,8 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, Check, Edit3, Image as ImageIcon, Loader2, Save, Sparkles, Upload, X } from 'lucide-react';
 import { Playlist } from '../../types';
 import { DEFAULT_COVER_URL } from '../../utils/profilePlaceholders';
-import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
-import { uploadMediaFile } from '../../utils/mediaUpload';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface EditPlaylistModalProps {
@@ -48,11 +46,11 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
   if (!isOpen || !playlist) return null;
 
 
-  const handleCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    if (!file.type.startsWith('image/')) {
       setErrorMessage(t('Please select a valid image file.'));
       return;
     }
@@ -60,13 +58,15 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
       setErrorMessage(t('Playlist cover must be smaller than 8 MB.'));
       return;
     }
-    try {
-      setCoverUrl(await uploadMediaFile(file, 'image'));
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return;
+      setCoverUrl(reader.result);
       setCoverFileName(file.name);
       setErrorMessage('');
-    } catch (uploadError: any) {
-      setErrorMessage(t(uploadError?.message || 'Could not upload the selected image.'));
-    }
+    };
+    reader.onerror = () => setErrorMessage(t('Could not read the selected image.'));
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,7 +80,7 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
         ...playlist,
         title: title.trim(),
         description: description.trim(),
-        coverUrl: getSafeImageUrl(coverUrl, playlist.coverUrl),
+        coverUrl: coverUrl.trim() || playlist.coverUrl,
       });
       if (succeeded === false) {
         setErrorMessage(t('Playlist could not be updated.'));
@@ -122,7 +122,7 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
         <form onSubmit={handleSubmit} className="relative grid min-w-0 gap-5 p-4 sm:gap-6 sm:p-7 lg:grid-cols-[0.9fr_1.1fr]">
           <section className="rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
             <div className="group relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-[1.6rem] border border-white/10 bg-black shadow-2xl">
-              <img key={coverUrl} src={getSafeImageUrl(coverUrl, DEFAULT_COVER_URL)} alt={t('Playlist cover preview')} referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+              <img key={coverUrl} src={coverUrl.trim() || DEFAULT_COVER_URL} alt={t('Playlist cover preview')} referrerPolicy="no-referrer" className="h-full w-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/5 to-transparent" />
               <button type="button" onClick={() => coverFileInputRef.current?.click()} className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/55 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100">
                 <Upload className="h-7 w-7" />
@@ -134,9 +134,9 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                 <p className="mt-1 text-[10px] text-zinc-300">{playlist.trackIds.length} {t('songs')}</p>
               </div>
             </div>
-            <input ref={coverFileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleCoverUpload} className="hidden" />
+            <input ref={coverFileInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
             <button type="button" onClick={() => coverFileInputRef.current?.click()} className="control-press mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#D946EF]/25 bg-[#D946EF]/10 px-4 py-3 text-xs font-black text-[#F0ABFC] hover:bg-[#D946EF]/15"><Upload className="h-4 w-4" /> {t('Choose image')}</button>
-            <p className="mt-2 truncate text-center text-[10px] text-zinc-500">{coverFileName || t('JPG, PNG or WebP · maximum 8 MB')}</p>
+            <p className="mt-2 truncate text-center text-[10px] text-zinc-500">{coverFileName || t('JPG, PNG, WebP or GIF · maximum 8 MB')}</p>
           </section>
 
           <section className="rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">
