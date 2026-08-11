@@ -289,7 +289,7 @@ const turkishTranslations: Record<string, string> = {
   'Flat': 'Düz',
   'Frequency controls': 'Frekans kontrolleri',
   'Give your next mix a clear identity and cover.': 'Sıradaki listene belirgin bir kimlik ve kapak ver.',
-  'Google sign-in complete!': 'Google ile giriş tamamlandı!',
+  'Google sign-in complete!': 'Google ile giriş tamamlandı',
   'Google sign-in could not be initialized. Please try again.': 'Google ile giriş başlatılamadı. Lütfen tekrar dene.',
   'Google sign-in could not be loaded. Check your connection and try again.': 'Google ile giriş yüklenemedi. Bağlantını kontrol edip tekrar dene.',
   'Google sign-in could not reach the server. Please try again.': 'Google ile giriş sunucuya ulaşamadı. Lütfen tekrar dene.',
