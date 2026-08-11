@@ -629,7 +629,7 @@ export default function App() {
     if (token) {
       fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
     }
-    audioEngine.pause();
+    audioEngine.releaseNetworkResources();
     if (pendingPlayTimerRef.current !== null) {
       window.clearTimeout(pendingPlayTimerRef.current);
       pendingPlayTimerRef.current = null;
@@ -871,7 +871,10 @@ export default function App() {
         }, 1000);
       }
     } else {
-      audioEngine.pause();
+      // Pausing a media element does not necessarily abort its current and
+      // standby byte-range downloads. Release them so an idle tab produces no
+      // hidden traffic against the Render service.
+      audioEngine.releaseNetworkResources();
     }
 
     return () => {
@@ -991,39 +994,100 @@ export default function App() {
     }
   }, []);
 
-  // Periodically persist cumulative listening-time stats (seconds/hours
-  // listened) to the backend while a track is actually playing, so this
-  // data is saved to Upstash instead of only existing in local state.
+  // Persist cumulative listening time at playback lifecycle boundaries. A
+  // fixed interval here used to POST every minute for as long as a tab was
+  // playing (or incorrectly thought it was playing), preventing a free Render
+  // service from ever reaching its 15-minute inbound-traffic idle window.
   const lastPersistedSecondsRef = useRef(0);
+  const listeningStatsOwnerRef = useRef<string | null>(null);
   const userProfileRef = useRef(userProfile);
   useEffect(() => {
     userProfileRef.current = userProfile;
+    const ownerId = userProfile?.id || null;
+    if (listeningStatsOwnerRef.current !== ownerId) {
+      listeningStatsOwnerRef.current = ownerId;
+      lastPersistedSecondsRef.current = userProfile?.stats?.secondsListened || 0;
+    }
   }, [userProfile]);
 
+  const persistListeningStats = React.useCallback((keepalive = false) => {
+    const liveProfile = userProfileRef.current;
+    const stats = liveProfile?.stats;
+    if (!liveProfile || !stats) return;
+
+    const secondsListened = Math.max(0, Number(stats.secondsListened) || 0);
+    const previousSeconds = lastPersistedSecondsRef.current;
+    if (secondsListened <= previousSeconds) return;
+
+    // Optimistically reserve this snapshot so pause + pagehide occurring
+    // together cannot create duplicate writes. Roll it back only if this is
+    // still the newest attempted snapshot when the request fails.
+    lastPersistedSecondsRef.current = secondsListened;
+    const token = localStorage.getItem('vertex_session_token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    fetch(`/api/users/${liveProfile.id}/listening-stats`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        secondsListened,
+        hoursListened: stats.hoursListened || 0,
+      }),
+      keepalive,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Listening stats request failed (${response.status})`);
+        const payload = await response.json().catch(() => null);
+        const acceptedSeconds = Number(payload?.stats?.secondsListened);
+        if (Number.isFinite(acceptedSeconds) && lastPersistedSecondsRef.current === secondsListened) {
+          lastPersistedSecondsRef.current = acceptedSeconds;
+        }
+      })
+      .catch((err) => {
+        if (lastPersistedSecondsRef.current === secondsListened) {
+          lastPersistedSecondsRef.current = previousSeconds;
+        }
+        console.error('Failed to persist listening stats:', err);
+      });
+  }, []);
+
+  const previousPlaybackRef = useRef({
+    isPlaying: false,
+    trackId: null as string | null,
+    userId: null as string | null,
+  });
+
   useEffect(() => {
-    if (!userProfile) return;
-    let syncTimer: number | null = null;
-    if (isPlaying && currentTrack) {
-      syncTimer = window.setInterval(() => {
-        const liveProfile = userProfileRef.current;
-        const stats = liveProfile?.stats;
-        if (!liveProfile || !stats) return;
-        if ((stats.secondsListened || 0) === lastPersistedSecondsRef.current) return;
-        lastPersistedSecondsRef.current = stats.secondsListened || 0;
-        fetch(`/api/users/${liveProfile.id}/listening-stats`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-          body: JSON.stringify({
-            secondsListened: stats.secondsListened || 0,
-            hoursListened: stats.hoursListened || 0,
-          }),
-        }).catch((err) => console.error('Failed to persist listening stats:', err));
-      }, 60000);
+    const previous = previousPlaybackRef.current;
+    const trackId = currentTrack?.id || null;
+    const userId = userProfile?.id || null;
+    const playbackBoundary = previous.isPlaying && (
+      !isPlaying ||
+      previous.trackId !== trackId ||
+      previous.userId !== userId
+    );
+
+    if (playbackBoundary) {
+      persistListeningStats();
     }
-    return () => {
-      if (syncTimer) clearInterval(syncTimer);
+
+    previousPlaybackRef.current = { isPlaying, trackId, userId };
+  }, [isPlaying, currentTrack?.id, userProfile?.id, persistListeningStats]);
+
+  useEffect(() => {
+    const flushOnPageHide = () => persistListeningStats(true);
+    const flushWhenHidden = () => {
+      if (document.visibilityState === 'hidden') flushOnPageHide();
     };
-  }, [isPlaying, currentTrack?.id, userProfile?.id]);
+
+    window.addEventListener('pagehide', flushOnPageHide);
+    document.addEventListener('visibilitychange', flushWhenHidden);
+    return () => {
+      window.removeEventListener('pagehide', flushOnPageHide);
+      document.removeEventListener('visibilitychange', flushWhenHidden);
+    };
+  }, [persistListeningStats]);
 
   // Actions
   const handleTogglePlay = () => {

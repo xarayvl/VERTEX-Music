@@ -185,9 +185,22 @@ class AudioEngine {
         if (shouldResume) {
           audio.play().catch((playErr) => {
             console.warn('[AudioEngine] Proxy fallback play attempt failed:', playErr);
+            if (audio === this.audio) {
+              this.isRealAudioPlaying = false;
+              this.onPlaybackStateChangeCallback?.(false);
+            }
           });
         }
+        return;
       }
+    }
+
+    // A failed active element never emits a reliable `pause` event in every
+    // browser. Explicitly leave the playing state so React cannot keep its
+    // listening-stat synchronization alive after a media/network failure.
+    if (audio === this.audio) {
+      this.isRealAudioPlaying = false;
+      this.onPlaybackStateChangeCallback?.(false);
     }
   }
 
@@ -416,10 +429,18 @@ class AudioEngine {
     }
 
     this.audio.volume = this.currentVolume;
-    const playPromise = this.audio.play();
+    const attemptedAudio = this.audio;
+    const playPromise = attemptedAudio.play();
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
         console.warn('Audio playback failed or interrupted:', err);
+        // Ignore an old element whose promise was rejected because the user
+        // skipped tracks. A rejection for the still-active element must stop
+        // the app's playing state; otherwise background work can run forever.
+        if (attemptedAudio === this.audio) {
+          this.isRealAudioPlaying = false;
+          this.onPlaybackStateChangeCallback?.(false);
+        }
       });
     }
   }
@@ -427,6 +448,25 @@ class AudioEngine {
   public pause() {
     this.audio.pause();
     this.isRealAudioPlaying = false;
+  }
+
+  public releaseNetworkResources() {
+    this.pause();
+
+    // `pause()` alone does not require a browser to stop buffering an
+    // HTMLAudioElement. Detach every active/standby source so paused tabs do
+    // not continue issuing byte-range requests to the Render service.
+    for (const entry of this.audioCache.values()) {
+      this.releaseCacheEntry(entry);
+    }
+    this.audioCache.clear();
+    this.currentTrackKey = '';
+    this.currentAudioUrl = '';
+    this.audio = this.createAudioElement('auto');
+
+    if (this.ctx?.state === 'running') {
+      this.ctx.suspend().catch(() => {});
+    }
   }
 
   public seek(seconds: number, track?: Track) {

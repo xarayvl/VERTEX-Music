@@ -440,7 +440,7 @@ async function startServer() {
       return res.status(200).end();
     }
     next();
-  }, express.static(uploadsRootDir));
+  }, express.static(uploadsRootDir, { maxAge: "1y", immutable: true }));
 
   // Rate limiters are defined here (rather than further down, where the rest
   // of the /api routes are registered) so that every route which is wired up
@@ -470,6 +470,7 @@ async function startServer() {
     res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Authorization, X-Requested-With, *");
     res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type");
     res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
 
     if (req.method === "OPTIONS") {
       return res.status(200).end();
@@ -517,8 +518,6 @@ async function startServer() {
       }
 
       res.setHeader("Content-Type", contentType);
-      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-
       if (data.ContentLength !== undefined) {
         res.setHeader("Content-Length", data.ContentLength);
       }
@@ -1432,10 +1431,9 @@ async function startServer() {
     }
   });
 
-  // Persist cumulative listening-time stats (seconds/hours listened).
-  // The client pings this periodically while a track is playing so the
-  // "hours listened" stat on the profile is real and survives redeploys
-  // instead of only living in local React state / localStorage.
+  // Persist cumulative listening-time stats at client playback boundaries
+  // (pause, track change, or page hide). This deliberately avoids a heartbeat
+  // that would keep an otherwise idle free Render service awake.
   app.post("/api/users/:userId/listening-stats", async (req, res) => {
     try {
       const { userId } = req.params;
@@ -1464,9 +1462,9 @@ async function startServer() {
       if (requestedSeconds === previousSeconds) {
         return res.json({ success: true, stats: db.users[index].stats, unchanged: true });
       }
-      // The client reports roughly every 15 seconds. Cap one request to two minutes
-      // of progress so a forged payload cannot manufacture listening history.
-      const acceptedSeconds = Math.min(requestedSeconds, previousSeconds + 120);
+      // Lifecycle-based writes can cover a long podcast/mix. Track uploads are
+      // already limited to 24 hours, so cap a single boundary update likewise.
+      const acceptedSeconds = Math.min(requestedSeconds, previousSeconds + 86_400);
       db.users[index] = {
         ...db.users[index],
         stats: {
