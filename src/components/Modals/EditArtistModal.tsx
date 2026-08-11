@@ -17,6 +17,7 @@ import {
 import { Artist, Track, UserProfile } from '../../types';
 import { getArtistStats } from '../../utils/artistUtils';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
+import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface EditArtistModalProps {
@@ -139,8 +140,8 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
     onSave({
       artistName,
       artistBio: artistBio.trim(),
-      avatarUrl: avatarUrl.trim() || DEFAULT_AVATAR_URL,
-      bannerUrl: bannerUrl.trim(),
+      avatarUrl: getSafeImageUrl(avatarUrl, DEFAULT_AVATAR_URL),
+      bannerUrl: getSafeImageUrl(bannerUrl, ''),
       genre: genre.trim(),
       instagramUrl: instagramUrl.trim(),
       twitterUrl: twitterUrl.trim(),
@@ -194,10 +195,10 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
           <aside className="space-y-6 lg:sticky lg:top-6">
             <div className="workspace-card section-reveal overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
               <div className="relative aspect-[16/10] overflow-hidden rounded-[1.4rem] border border-white/10 bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827] shadow-2xl">
-                {bannerUrl.trim() && (
+                {getSafeImageUrl(bannerUrl, '') && (
                   <img
                     key={bannerUrl}
-                    src={bannerUrl.trim()}
+                    src={getSafeImageUrl(bannerUrl, '')}
                     alt={t('Artist banner preview')}
                     referrerPolicy="no-referrer"
                     onError={(event) => {
@@ -211,7 +212,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                   <div className="relative">
                     <img
                       key={avatarUrl}
-                      src={avatarUrl.trim() || DEFAULT_AVATAR_URL}
+                      src={getSafeImageUrl(avatarUrl, DEFAULT_AVATAR_URL)}
                       alt={artistName}
                       referrerPolicy="no-referrer"
                       onError={(event) => {

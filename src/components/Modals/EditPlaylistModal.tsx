@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, Check, Edit3, Image as ImageIcon, Loader2, Save, Sparkles, Upload, X } from 'lucide-react';
 import { Playlist } from '../../types';
 import { DEFAULT_COVER_URL } from '../../utils/profilePlaceholders';
+import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface EditPlaylistModalProps {
@@ -80,7 +81,7 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
         ...playlist,
         title: title.trim(),
         description: description.trim(),
-        coverUrl: coverUrl.trim() || playlist.coverUrl,
+        coverUrl: getSafeImageUrl(coverUrl, playlist.coverUrl),
       });
       if (succeeded === false) {
         setErrorMessage(t('Playlist could not be updated.'));
@@ -122,7 +123,7 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
         <form onSubmit={handleSubmit} className="relative grid min-w-0 gap-5 p-4 sm:gap-6 sm:p-7 lg:grid-cols-[0.9fr_1.1fr]">
           <section className="rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
             <div className="group relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-[1.6rem] border border-white/10 bg-black shadow-2xl">
-              <img key={coverUrl} src={coverUrl.trim() || DEFAULT_COVER_URL} alt={t('Playlist cover preview')} referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+              <img key={coverUrl} src={getSafeImageUrl(coverUrl, DEFAULT_COVER_URL)} alt={t('Playlist cover preview')} referrerPolicy="no-referrer" className="h-full w-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/5 to-transparent" />
               <button type="button" onClick={() => coverFileInputRef.current?.click()} className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/55 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100">
                 <Upload className="h-7 w-7" />

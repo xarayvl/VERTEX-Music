@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, Music, Upload, Link, Sparkles, Image, Check, FileAudio, AlertCircle, GripVertical, ArrowUp, ArrowDown, Trash2, ListMusic } from 'lucide-react';
 import { Track } from '../../types';
 import { formatCopyright, stripCopyrightPrefix } from '../../utils/copyright';
+import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface AlbumTrackItem {
@@ -368,7 +369,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
 
     setLoading(true);
 
-    const finalCover = coverUrl.trim();
+    const finalCover = getSafeImageUrl(coverUrl, '');
     const finalAudioUrl = audioUrl.trim();
     const artistName = userProfileName.trim();
     const finalAlbumName = album === '__NEW__' ? (customAlbumName.trim() || 'Single') : album;
@@ -431,7 +432,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     setLoading(true);
     setUploadProgress({ current: 0, total: albumTracks.length });
 
-    const finalCover = coverUrl.trim();
+    const finalCover = getSafeImageUrl(coverUrl, '');
     const artistName = userProfileName?.trim();
     if (!userId || !artistName) {
       setError(t('Your signed-in artist profile is required before uploading an album.'));
@@ -823,10 +824,10 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
             <aside className="min-w-0 space-y-6 lg:sticky lg:top-6">
               <section className="workspace-card section-reveal min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
                 <div className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#101010] shadow-2xl">
-                  {coverUrl.trim() ? (
+                  {getSafeImageUrl(coverUrl, '') ? (
                     <img
                       key={coverUrl}
-                      src={coverUrl.trim()}
+                      src={getSafeImageUrl(coverUrl, '')}
                       alt={t('Release cover preview')}
                       referrerPolicy="no-referrer"
                       onError={(event) => {

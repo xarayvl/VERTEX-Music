@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Track } from '../../types';
 import { formatCopyright, stripCopyrightPrefix } from '../../utils/copyright';
+import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface EditTrackModalProps {
@@ -213,7 +214,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
           body: JSON.stringify({
             releaseType: releaseType.toUpperCase(),
             releaseTitle: finalAlbum,
-            coverUrl: coverUrl.trim() || track.coverUrl,
+            coverUrl: getSafeImageUrl(coverUrl, track.coverUrl),
             copyright: formatCopyright(copyright, releaseYear),
             releaseYear: Number(releaseYear) || new Date().getFullYear(),
             tracks: trackDrafts.map((draft) => ({ id: draft.id, title: draft.title.trim(), genre: draft.genre.trim() })),
@@ -239,7 +240,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
             releaseType: releaseType.toUpperCase(),
             releaseTitle: releaseType === 'Single' ? draft.title.trim() : finalAlbum,
             genre: draft.genre.trim(),
-            coverUrl: coverUrl.trim() || track.coverUrl,
+            coverUrl: getSafeImageUrl(coverUrl, track.coverUrl),
             audioUrl: audioUrl || undefined,
             audioFileName: audioUrl ? newFileName : undefined,
             duration: audioUrl ? duration ?? undefined : undefined,
@@ -377,7 +378,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
               <aside className="min-w-0 space-y-5 sm:space-y-6 lg:sticky lg:top-24">
                 <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-[#24182d] to-[#181818] p-4 sm:p-5">
                   <div className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#101010] shadow-2xl">
-                    {coverUrl ? <img src={coverUrl} alt={t('Release cover preview')} className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827]"><Image className="h-16 w-16 text-white/30" /></div>}
+                    {getSafeImageUrl(coverUrl, '') ? <img src={getSafeImageUrl(coverUrl, '')} alt={t('Release cover preview')} className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#312e81] via-[#581c87] to-[#111827]"><Image className="h-16 w-16 text-white/30" /></div>}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
                     <div className="absolute inset-x-0 bottom-0 p-5"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E9D5FF]">{releaseType}</p><h2 className="mt-1 truncate text-2xl font-black">{releaseType === 'Single' ? trackDrafts[0]?.title || track.title : releaseTitle || t('Untitled release')}</h2><p className="mt-1 truncate text-xs font-semibold text-zinc-300">{track.artist}</p></div>
                   </div>

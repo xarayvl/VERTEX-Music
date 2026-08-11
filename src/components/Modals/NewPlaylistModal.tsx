@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { AlertCircle, Image as ImageIcon, ListMusic, Plus, Sparkles, Upload, X } from 'lucide-react';
 import { Playlist } from '../../types';
 import { DEFAULT_COVER_URL } from '../../utils/profilePlaceholders';
+import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
 import { useI18n } from '../../i18n/I18nContext';
 
 export type NewPlaylistDraft = Pick<Playlist, 'title' | 'description' | 'coverUrl' | 'trackIds'>;
@@ -57,7 +58,7 @@ export const NewPlaylistModal: React.FC<NewPlaylistModalProps> = ({
     const newPlaylist: NewPlaylistDraft = {
       title: title.trim(),
       description: description.trim(),
-      coverUrl: selectedCover.trim(),
+      coverUrl: getSafeImageUrl(selectedCover, ''),
       trackIds: [],
     };
 
@@ -100,7 +101,7 @@ export const NewPlaylistModal: React.FC<NewPlaylistModalProps> = ({
             <div className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#0f0f0f] shadow-2xl">
               <img
                 key={selectedCover}
-                src={selectedCover.trim() || DEFAULT_COVER_URL}
+                src={getSafeImageUrl(selectedCover, DEFAULT_COVER_URL)}
                 alt={t('Selected playlist cover')}
                 referrerPolicy="no-referrer"
                 className="media-fade h-full w-full object-cover"
