@@ -643,26 +643,20 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile?.id]);
 
-  // Keep the shared tracks/playlists lists live: poll periodically and refetch whenever
-  // the tab regains focus, so songs another user uploads show up here without needing
-  // a full page reload or re-login.
+  // Refresh shared tracks/playlists when the tab regains focus. Avoid background
+  // polling so an otherwise idle browser does not keep the server awake.
   useEffect(() => {
-    const POLL_INTERVAL_MS = 60000;
     const FOCUS_REFRESH_COOLDOWN_MS = 15000;
     const refreshSharedData = () => {
       if (document.visibilityState !== 'visible') return;
       if (Date.now() - lastBackgroundRefreshAtRef.current < FOCUS_REFRESH_COOLDOWN_MS) return;
       void fetchServerData(false);
     };
-    const intervalId = window.setInterval(() => {
-      refreshSharedData();
-    }, POLL_INTERVAL_MS);
 
     window.addEventListener('focus', refreshSharedData);
     document.addEventListener('visibilitychange', refreshSharedData);
 
     return () => {
-      window.clearInterval(intervalId);
       window.removeEventListener('focus', refreshSharedData);
       document.removeEventListener('visibilitychange', refreshSharedData);
     };
