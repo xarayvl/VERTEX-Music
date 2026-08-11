@@ -261,7 +261,7 @@ const turkishTranslations: Record<string, string> = {
   'Authentication mode': 'Kimlik doğrulama modu',
   'Authentication successful': 'Kimlik doğrulama başarılı',
   'Availability check failed. Registration can still be attempted.': 'Uygunluk kontrolü başarısız oldu. Yine de kayıt olmayı deneyebilirsin.',
-  'Bass': 'Bas',
+  'Bass': 'Bass',
   'By continuing, you confirm that this account belongs to you and that uploaded music follows the platform rules.': 'Devam ederek bu hesabın sana ait olduğunu ve yüklenen müziklerin platform kurallarına uyduğunu doğrularsın.',
   'Change physical output in system sound settings': 'Fiziksel çıkışı sistem ses ayarlarından değiştir',
   'Checking availability...': 'Uygunluk kontrol ediliyor...',
