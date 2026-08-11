@@ -163,6 +163,12 @@ test("database hydration rejects media that bypasses R2 upload persistence", () 
     playlists: [],
     tracks: [
       { ...baseTrack, id: "remote_track", audioUrl: "/api/r2-file/user_remote_media/audio.mp3" },
+      {
+        ...baseTrack,
+        id: "legacy_r2_dev_track",
+        coverUrl: "https://pub-legacy.r2.dev/user_remote_media/cover%20art.jpg",
+        audioUrl: "https://pub-legacy.r2.dev/user_remote_media/audio%20file.mp3",
+      },
       { ...baseTrack, id: "local_track", audioUrl: "/uploads/user_remote_media/audio.mp3" },
       { ...baseTrack, id: "inline_track", audioUrl: "data:audio/mpeg;base64,AAAA" },
     ],
@@ -170,5 +176,7 @@ test("database hydration rejects media that bypasses R2 upload persistence", () 
     chatHistories: {},
   });
 
-  assert.deepEqual(result.tracks.map((track) => track.id), ["remote_track"]);
+  assert.deepEqual(result.tracks.map((track) => track.id), ["remote_track", "legacy_r2_dev_track"]);
+  assert.equal(result.tracks[1].coverUrl, "/api/r2-file/user_remote_media/cover%20art.jpg");
+  assert.equal(result.tracks[1].audioUrl, "/api/r2-file/user_remote_media/audio%20file.mp3");
 });

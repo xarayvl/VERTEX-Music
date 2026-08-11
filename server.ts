@@ -16,6 +16,12 @@ import { ALLOWED_IMAGE_MIME_TYPES, InvalidImageUploadError, validateImageBuffer 
 import { classifyGoogleSignInAccount, getVerifiedGoogleIdentity, InvalidGoogleIdentityError } from "./server/googleAccountSecurity.js";
 import { getProductionPublicOrigin, requireHttps, securityHeaders } from "./server/httpSecurity.js";
 import { getConfiguredPublicBaseUrl, getRuntimePort } from "./server/runtimeConfig.js";
+import {
+  canServeR2MediaDirectly,
+  getManagedStorageKey as resolveManagedStorageKey,
+  mediaUrlForKey as buildMediaUrlForKey,
+  normalizeR2PublicBaseUrl,
+} from "./server/r2Media.js";
 
 dotenv.config();
 
@@ -329,38 +335,11 @@ function getR2BucketName(): string {
 }
 
 function getR2PublicBaseUrl(): string | null {
-  const configured = process.env.R2_PUBLIC_DOMAIN?.trim();
-  if (!configured) return null;
-  try {
-    const parsed = new URL(configured.startsWith("http") ? configured : `https://${configured}`);
-    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash) {
-      throw new Error("R2_PUBLIC_DOMAIN must use HTTPS without credentials, query, or fragment.");
-    }
-    return parsed.toString().replace(/\/+$/, "");
-  } catch {
-    throw new Error("R2_PUBLIC_DOMAIN must be a valid HTTPS media origin.");
-  }
+  return normalizeR2PublicBaseUrl(process.env.R2_PUBLIC_DOMAIN);
 }
 
 function getManagedStorageKey(mediaUrl: string): string | null {
-  try {
-    let key = '';
-    if (mediaUrl.startsWith('/api/r2-file/')) key = mediaUrl.slice('/api/r2-file/'.length);
-    else if (isHttpUrl(mediaUrl) && getR2PublicBaseUrl()) {
-      const media = new URL(mediaUrl);
-      const configured = new URL(getR2PublicBaseUrl()!);
-      if (media.origin !== configured.origin) return null;
-      const configuredPath = configured.pathname.replace(/^\/+|\/+$/g, '');
-      const mediaPath = media.pathname.replace(/^\/+/, '');
-      if (configuredPath && !mediaPath.startsWith(`${configuredPath}/`)) return null;
-      key = configuredPath ? mediaPath.slice(configuredPath.length + 1) : mediaPath;
-    }
-    key = decodeURIComponent(key).replace(/\\/g, '/');
-    if (!key || key.startsWith('/') || key.split('/').some((segment) => !segment || segment === '.' || segment === '..')) return null;
-    return key;
-  } catch {
-    return null;
-  }
+  return resolveManagedStorageKey(mediaUrl, getR2PublicBaseUrl());
 }
 
 function storageUsageKey(userId: string): string {
@@ -430,8 +409,7 @@ function resolveUploadExtension(kind: "audio" | "image", mimeType: string, fileN
 }
 
 function mediaUrlForKey(key: string): string {
-  const publicDomain = getR2PublicBaseUrl();
-  return publicDomain ? `${publicDomain}/${key}` : `/api/r2-file/${key}`;
+  return buildMediaUrlForKey(key, getR2PublicBaseUrl());
 }
 
 async function deleteManagedFile(mediaUrl: string): Promise<void> {
@@ -604,7 +582,7 @@ async function startServer() {
     // are redirected there too. App cookies are host-only and are never sent
     // to this separate origin.
     const publicMediaBaseUrl = getR2PublicBaseUrl();
-    if (publicMediaBaseUrl) {
+    if (canServeR2MediaDirectly(publicMediaBaseUrl)) {
       const encodedKey = key.split('/').map(encodeURIComponent).join('/');
       return res.redirect(307, `${publicMediaBaseUrl}/${encodedKey}`);
     }

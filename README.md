@@ -54,8 +54,10 @@ message with the globe button. Live web search uses the Tavily Search API. Set
   allow `PUT`/`GET` plus `Content-Type`, `Content-Disposition`, `Cache-Control`,
   and `Range`. Completed uploads immediately receive their permanent media URL.
 - `R2_PUBLIC_DOMAIN`, when used, must point to `R2_BUCKET_NAME` and remain a
-  separate cookieless HTTPS origin. Without it, the hardened `/api/r2-file/*`
-  proxy serves the same bucket.
+  separate cookieless HTTPS origin. A custom domain is served directly.
+  Cloudflare's `*.r2.dev` development URL (and deployments without a public
+  domain) stays behind the hardened `/api/r2-file/*` proxy, so media reads do
+  not depend on public-development access or cross-origin Web Audio headers.
 - Metadata still travels through Express and is limited to 64 KB.
 - `USER_STORAGE_QUOTA_BYTES` defaults to 2 GiB per account and
   `MAX_AUDIO_UPLOAD_BYTES` defaults to 100 MiB per file.
