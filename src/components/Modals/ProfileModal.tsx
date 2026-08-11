@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Track, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
+import { uploadMediaFile } from '../../utils/mediaUpload';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface ProfileModalProps {
@@ -72,18 +73,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleAvatarFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return;
     setIsReadingAvatarFile(true);
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') setAvatarUrl(reader.result);
+    try {
+      setAvatarUrl(await uploadMediaFile(file, 'image'));
+    } catch {
+      // Keep the existing avatar when upload verification fails.
+    } finally {
       setIsReadingAvatarFile(false);
-    };
-    reader.onerror = () => setIsReadingAvatarFile(false);
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleSave = (event: React.FormEvent) => {
@@ -254,7 +255,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                       {t(isReadingAvatarFile ? 'Reading photo…' : 'Choose photo')}
                     </button>
                     <button type="button" onClick={() => setAvatarUrl('')} className="rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-white">{t('Remove photo')}</button>
-                    <input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarFileUpload} className="hidden" />
+                    <input ref={avatarFileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarFileUpload} className="hidden" />
                   </div>
                   <button type="submit" className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#A855F7] to-[#D946EF] px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-[#A855F7]/20 transition-colors hover:brightness-110">
                     <Save className="h-4 w-4" />

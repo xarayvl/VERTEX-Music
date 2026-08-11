@@ -3,6 +3,7 @@ import { AlertCircle, Check, Edit3, Image as ImageIcon, Loader2, Save, Sparkles,
 import { Playlist } from '../../types';
 import { DEFAULT_COVER_URL } from '../../utils/profilePlaceholders';
 import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
+import { uploadMediaFile } from '../../utils/mediaUpload';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface EditPlaylistModalProps {
@@ -47,11 +48,11 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
   if (!isOpen || !playlist) return null;
 
 
-  const handleCoverUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       setErrorMessage(t('Please select a valid image file.'));
       return;
     }
@@ -59,15 +60,13 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
       setErrorMessage(t('Playlist cover must be smaller than 8 MB.'));
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') return;
-      setCoverUrl(reader.result);
+    try {
+      setCoverUrl(await uploadMediaFile(file, 'image'));
       setCoverFileName(file.name);
       setErrorMessage('');
-    };
-    reader.onerror = () => setErrorMessage(t('Could not read the selected image.'));
-    reader.readAsDataURL(file);
+    } catch (uploadError: any) {
+      setErrorMessage(t(uploadError?.message || 'Could not upload the selected image.'));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -135,9 +134,9 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                 <p className="mt-1 text-[10px] text-zinc-300">{playlist.trackIds.length} {t('songs')}</p>
               </div>
             </div>
-            <input ref={coverFileInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+            <input ref={coverFileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleCoverUpload} className="hidden" />
             <button type="button" onClick={() => coverFileInputRef.current?.click()} className="control-press mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#D946EF]/25 bg-[#D946EF]/10 px-4 py-3 text-xs font-black text-[#F0ABFC] hover:bg-[#D946EF]/15"><Upload className="h-4 w-4" /> {t('Choose image')}</button>
-            <p className="mt-2 truncate text-center text-[10px] text-zinc-500">{coverFileName || t('JPG, PNG, WebP or GIF · maximum 8 MB')}</p>
+            <p className="mt-2 truncate text-center text-[10px] text-zinc-500">{coverFileName || t('JPG, PNG or WebP · maximum 8 MB')}</p>
           </section>
 
           <section className="rounded-3xl border border-white/10 bg-[#181818] p-5 sm:p-6">

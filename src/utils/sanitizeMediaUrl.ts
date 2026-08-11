@@ -12,10 +12,7 @@
  *
  * `getSafeImageUrl` only allows:
  *  - absolute http(s) URLs, and
- *  - `data:image/...;base64,` URIs produced by our own FileReader upload
- *    flow — any real image subtype (png, jpeg, gif, webp, avif, bmp, tiff,
- *    x-icon, heic, ...) EXCEPT `svg+xml`, since inline SVG can carry
- *    <script>/event-handler payloads even though it's technically an image.
+ *  - base64 JPEG, PNG, and WebP URIs produced by our FileReader upload flow.
  *
  * Anything else — including `javascript:`, `vbscript:`, `data:text/*`,
  * relative paths that resolve unexpectedly, or malformed input — falls back
@@ -25,12 +22,11 @@ export function getSafeImageUrl(value: string | undefined | null, fallback: stri
   const trimmed = (value ?? '').trim();
   if (!trimmed) return fallback;
 
-  // Uploaded files: allow any base64 image data URI our own upload handlers
-  // can produce (they already reject non-"image/*" files before reading),
-  // except SVG — inline SVG can carry <script>/event-handler payloads.
+  // Keep this allowlist aligned with the server-side magic-byte validator.
   if (trimmed.toLowerCase().startsWith('data:')) {
-    const match = /^data:image\/([a-z0-9.+-]+);base64,([a-z0-9+/]+=*)$/i.exec(trimmed);
-    return match && !/svg/i.test(match[1]) ? trimmed : fallback;
+    return /^data:image\/(?:jpeg|jpg|png|webp);base64,[a-z0-9+/]+=*$/i.test(trimmed)
+      ? trimmed
+      : fallback;
   }
 
   try {

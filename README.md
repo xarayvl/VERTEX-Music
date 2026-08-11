@@ -30,11 +30,45 @@ message with the globe button. Live web search uses the Tavily Search API. Set
 - Upstash Redis is the only canonical database and session store. The server
   refuses to start when its URL or token is missing and does not fall back to
   local JSON or in-memory-only sessions.
-- Cloudflare R2 is the only managed upload store. Uploads, reads, and deletions
-  fail when R2 is unavailable; media is never copied to local application disk.
+- `DATA_ENCRYPTION_KEY` is required and must decode to exactly 32 bytes. The
+  canonical snapshot, recovery backup, and per-user entity values are stored as
+  authenticated AES-256-GCM envelopes, covering email, password hashes, Google
+  subjects, and chat history. Existing plaintext values are migrated on startup.
+- Chat history is limited to the newest 200 messages within
+  `CHAT_RETENTION_DAYS` (30 days by default, at most 365). Expired messages are
+  physically removed on startup/access and by an hourly unref'd retention
+  sweep. Clearing chat history also deletes the recovery snapshot so it cannot
+  retain the cleared conversation.
+- Recovery snapshots use a real Redis expiry controlled by
+  `DB_BACKUP_TTL_SECONDS` (7 days by default, at most 90). Active canonical and
+  entity records remain until their account data is deleted. Rotating or losing
+  `DATA_ENCRYPTION_KEY` without first re-encrypting the data makes it unreadable;
+  keep the key in the deployment secret manager, never in source control.
+- `UPSTASH_DB_CACHE_TTL_MS` controls only the in-process read cache and is not a
+  Redis retention or deletion setting.
+- Cloudflare R2 is the only managed upload store. `R2_PRIVATE_BUCKET_NAME` is
+  the owner-only staging bucket and must be distinct from the public catalog
+  `R2_BUCKET_NAME`; the server refuses to start when they are the same.
 - Set every required Upstash and R2 variable shown in `.env.example` before
-  starting the application. `R2_PUBLIC_DOMAIN` remains optional because media
-  can be served through the application's rate-limited R2 proxy route.
+  starting the application. Disable both r2.dev public access and custom
+  domains on the private bucket. `R2_PUBLIC_DOMAIN`, when used, must be attached
+  only to the public bucket and must be a separate cookieless HTTPS origin.
+- Browser uploads use five-minute presigned PUT URLs into the private bucket.
+  Configure its CORS policy for the exact `PUBLIC_BASE_URL` origin (no `*`) and
+  allow `PUT`/`GET` plus `Content-Type`, `Content-Disposition`, `Cache-Control`,
+  and `Range`. Staged reads require an active owner session and redirect to a
+  one-minute signed GET URL with `private, no-store` caching.
+- A verified staged object is copied to the public bucket only when it is saved
+  into a profile, track/release, or playlist record. The public fallback proxy
+  serves only `public/` keys and referenced legacy catalog objects; its CORS
+  response is limited to `PUBLIC_BASE_URL` rather than wildcard access.
+- Before enabling the split-bucket deployment, migrate referenced legacy media
+  to the public bucket and remove unreferenced objects. The application cannot
+  inspect Cloudflare dashboard public-access switches, so the private bucket's
+  disabled public access remains a required deployment control.
+- Metadata still travels through Express and is limited to 64 KB.
+- `USER_STORAGE_QUOTA_BYTES` defaults to 2 GiB per account and
+  `MAX_AUDIO_UPLOAD_BYTES` defaults to 100 MiB per file.
 
 ## Shared track previews
 

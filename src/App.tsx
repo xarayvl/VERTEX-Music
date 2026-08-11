@@ -101,9 +101,14 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
-  // The session token may persist, but the profile itself is always loaded from
-  // the server so stale or forged localStorage profile data cannot grant UI ownership.
+  // The profile is always loaded from the server; authentication lives only in
+  // a Secure, HttpOnly cookie and is never exposed to application JavaScript.
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    // One-time cleanup for browsers that used the former localStorage bearer token.
+    localStorage.removeItem('vertex_session_token');
+  }, []);
 
   // Media Data State
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -514,11 +519,6 @@ export default function App() {
     }
   }, [serverDataLoaded, userProfile]);
 
-  const getAuthHeaders = (): Record<string, string> => {
-    const token = localStorage.getItem('vertex_session_token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
-
   // Clear account-scoped state while the server fetches a newly active account.
   // When /api/data has already hydrated this exact account, keep the freshly
   // restored history instead of clearing it in the user-id effect that follows.
@@ -579,9 +579,7 @@ export default function App() {
   const fetchServerData = React.useCallback(async () => {
     const playlistVersionAtRequestStart = playlistMutationVersionRef.current;
     try {
-      const token = localStorage.getItem('vertex_session_token');
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch('/api/data', { headers });
+      const res = await fetch('/api/data');
       if (res.ok) {
         const data = await res.json();
         const serverTracks: Track[] = Array.isArray(data.tracks) ? data.tracks : [];
@@ -605,10 +603,8 @@ export default function App() {
         setChatMessages(serverChatHistory);
         if (data.user) {
           setUserProfile((previous) => (previous ? { ...previous, ...data.user } : data.user));
-        } else if (token) {
-          localStorage.removeItem('vertex_session_token');
+        } else {
           setUserProfile(null);
-          setIsAuthModalOpen(true);
         }
       }
     } catch (err) {
@@ -625,10 +621,7 @@ export default function App() {
   }, [userProfile?.id]);
 
   const handleLogout = () => {
-    const token = localStorage.getItem('vertex_session_token');
-    if (token) {
-      fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
-    }
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
     audioEngine.releaseNetworkResources();
     if (pendingPlayTimerRef.current !== null) {
       window.clearTimeout(pendingPlayTimerRef.current);
@@ -659,10 +652,9 @@ export default function App() {
     setIsAuthModalOpen(true);
   };
 
-  // Fires when the server rejects a request because the session token is
-  // missing/expired/unknown. This clears the client-side session state,
-  // tells the person what happened, and reopens the login modal so they can
-  // get a fresh token in one step.
+  // Fires when the server rejects a request because the session cookie is
+  // missing/expired/unknown. This clears the client-side account state, tells
+  // the person what happened, reopens login, and expires the server cookie.
   const handleSessionExpired = React.useCallback(() => {
     handleLogout();
     showToast(t('Your session expired — please log in again.'));
@@ -688,26 +680,16 @@ export default function App() {
     const customFetch = async (...args: Parameters<typeof fetch>) => {
       const response = await originalFetch(...args);
       if (response.status === 401 && !sessionExpiryHandledRef.current) {
-        const hadToken = !!localStorage.getItem('vertex_session_token');
-        if (hadToken) {
-          const clone = response.clone();
-          clone
-            .json()
-            .then((data: any) => {
-              if (data?.error && /session/i.test(String(data.error)) && !sessionExpiryHandledRef.current) {
-                sessionExpiryHandledRef.current = true;
-                handleSessionExpiredRef.current();
-              }
-            })
-            .catch(() => {
-              // Non-JSON 401 body — still treat it as an expired session
-              // since every auth-gated route in this app returns JSON.
-              if (!sessionExpiryHandledRef.current) {
-                sessionExpiryHandledRef.current = true;
-                handleSessionExpiredRef.current();
-              }
-            });
-        }
+        const clone = response.clone();
+        clone
+          .json()
+          .then((data: any) => {
+            if (data?.error && /session/i.test(String(data.error)) && !sessionExpiryHandledRef.current) {
+              sessionExpiryHandledRef.current = true;
+              handleSessionExpiredRef.current();
+            }
+          })
+          .catch(() => undefined);
       }
       return response;
     };
@@ -734,14 +716,11 @@ export default function App() {
     }
   }, []);
 
-  const handleLoginSuccess = (user: UserProfile, token?: string) => {
+  const handleLoginSuccess = (user: UserProfile) => {
     sessionExpiryHandledRef.current = false;
     chatHydratedUserIdRef.current = null;
     lastSavedChatHistoryRef.current = '';
     setUserProfile(user);
-    if (token) {
-      localStorage.setItem('vertex_session_token', token);
-    }
     showToast(t('Welcome back, {{name}}!', { name: user.displayName || user.username }));
   };
 
@@ -768,7 +747,7 @@ export default function App() {
     const saveTimer = window.setTimeout(() => {
       fetch(`/api/chat-history/${userProfile.id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chatHistory: chatMessages }),
       })
         .then((response) => {
@@ -940,7 +919,7 @@ export default function App() {
       lastPlayRequestAtRef.current.set(listenerKey, now);
       fetch(`/api/tracks/${track.id}/play`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
       })
       .then(async (response) => {
         if (response.status === 404) {
@@ -1023,9 +1002,7 @@ export default function App() {
     // together cannot create duplicate writes. Roll it back only if this is
     // still the newest attempted snapshot when the request fails.
     lastPersistedSecondsRef.current = secondsListened;
-    const token = localStorage.getItem('vertex_session_token');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
 
     fetch(`/api/users/${liveProfile.id}/listening-stats`, {
       method: 'POST',
@@ -1302,7 +1279,7 @@ export default function App() {
       const likedTrackIds = nextTracks.filter((track) => track.isLiked).map((track) => track.id);
       const response = await fetch(`/api/user-state/${userProfile.id}/liked-tracks`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ likedTrackIds }),
       });
       const data = await response.json().catch(() => null);
@@ -1344,7 +1321,7 @@ export default function App() {
       const likedTrackIds = nextTracks.filter((track) => track.isLiked).map((track) => track.id);
       const response = await fetch(`/api/user-state/${userProfile.id}/liked-tracks`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ likedTrackIds }),
       });
       const data = await response.json().catch(() => null);
@@ -1512,7 +1489,7 @@ export default function App() {
     try {
       const response = await fetch(`/api/playlists/${updatedPlaylist.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: updatedPlaylist.title,
           description: updatedPlaylist.description,
@@ -1545,7 +1522,7 @@ export default function App() {
 
     activePlaylistMutationsRef.current += 1;
     try {
-      const response = await fetch(`/api/playlists/${playlistId}`, { method: 'DELETE', headers: getAuthHeaders() });
+      const response = await fetch(`/api/playlists/${playlistId}`, { method: 'DELETE' });
       const data = await response.json().catch(() => null);
       if (!response.ok) return showToast(data?.error ? t(data.error) : t('Playlist delete failed.'));
       setPlaylists((previous) => previous.filter((playlist) => playlist.id !== playlistId));
@@ -1577,7 +1554,7 @@ export default function App() {
     try {
       const response = await fetch(`/api/playlists/${playlistId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ trackIds: nextTrackIds }),
       });
       const data = await response.json().catch(() => null);
@@ -1630,7 +1607,7 @@ export default function App() {
     try {
       const response = await fetch('/api/playlists', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: draft.title,
           description: draft.description,
@@ -1803,7 +1780,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`/api/tracks/${trackId}`, { method: 'DELETE', headers: getAuthHeaders() });
+      const res = await fetch(`/api/tracks/${trackId}`, { method: 'DELETE' });
       const payload = await res.json().catch(() => null);
       if (!res.ok || payload?.success === false) {
         showToast(payload?.error ? t(payload.error) : t('Failed to delete track.'));
@@ -1833,7 +1810,7 @@ export default function App() {
   const handleWipeAllTracks = async () => {
     if (!userProfile) return showToast(t('Sign in first.'));
     try {
-      const response = await fetch('/api/tracks/wipe', { method: 'POST', headers: getAuthHeaders() });
+      const response = await fetch('/api/tracks/wipe', { method: 'POST' });
       const data = await response.json().catch(() => null);
       if (!response.ok) return showToast(data?.error ? t(data.error) : t('Track cleanup failed.'));
       const deletedIds = new Set<string>(Array.isArray(data?.deletedTrackIds) ? data.deletedTrackIds : []);
@@ -1864,7 +1841,7 @@ export default function App() {
     try {
       const response = await fetch(`/api/users/${target.id}/follow`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
       const data = await response.json().catch(() => null);
@@ -1937,7 +1914,7 @@ export default function App() {
     try {
       const res = await fetch(`/api/users/${userProfile.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedProfile),
       });
       const data = await res.json().catch(() => null);
@@ -1991,7 +1968,7 @@ export default function App() {
     try {
       const res = await fetch(`/api/users/${updated.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatePayload),
       });
       const data = await res.json().catch(() => null);
@@ -2030,7 +2007,7 @@ export default function App() {
     try {
       const response = await fetch(`/api/users/${userProfile.id}/password`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword, newPassword }),
       });
       const data = await response.json().catch(() => null);
@@ -2038,6 +2015,7 @@ export default function App() {
         return { success: false, error: data?.error ? t(data.error) : t('Password update failed.') };
       }
       showToast(t('Password updated successfully!'));
+      handleLogout();
       return { success: true };
     } catch (error) {
       console.error('Failed to update account password:', error);

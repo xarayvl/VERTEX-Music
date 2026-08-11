@@ -18,6 +18,7 @@ import {
 import { Track } from '../../types';
 import { formatCopyright, stripCopyrightPrefix } from '../../utils/copyright';
 import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
+import { uploadMediaFile } from '../../utils/mediaUpload';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface EditTrackModalProps {
@@ -137,16 +138,22 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
     });
   };
 
-  const handleCoverFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (loadEvent) => setCoverUrl(String(loadEvent.target?.result || ''));
-    reader.onerror = () => setError(t('Cover artwork could not be read.'));
-    reader.readAsDataURL(file);
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError(t('Please select a JPEG, PNG, or WebP image.'));
+      event.target.value = '';
+      return;
+    }
+    try {
+      setCoverUrl(await uploadMediaFile(file, 'image'));
+    } catch (uploadError: any) {
+      setError(t(uploadError?.message || 'Cover artwork could not be uploaded.'));
+    }
   };
 
-  const handleAudioFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAudioFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const mimeType = inferAudioMimeType(file);
@@ -170,17 +177,13 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
     };
     audioElement.onerror = () => URL.revokeObjectURL(objectUrl);
 
-    const reader = new FileReader();
-    reader.onload = (loadEvent) => {
-      setAudioUrl(String(loadEvent.target?.result || ''));
+    try {
+      setAudioUrl(await uploadMediaFile(file, 'audio'));
+    } catch (uploadError: any) {
+      setError(t(uploadError?.message || 'The replacement audio file could not be uploaded.'));
+    } finally {
       setIsReadingFile(false);
-    };
-    reader.onerror = () => {
-      setError(t('The replacement audio file could not be read.'));
-      setIsReadingFile(false);
-    };
-    const readableFile = file.type.startsWith('audio/') ? file : new Blob([file], { type: mimeType });
-    reader.readAsDataURL(readableFile);
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -199,9 +202,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
     setError(null);
 
     try {
-      const token = localStorage.getItem('vertex_session_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
 
       const finalAlbum = releaseType === 'Single' ? 'Single' : releaseTitle.trim();
       let updatedTracks: Track[] = [];
@@ -389,7 +390,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
                   {releaseType !== 'Single' && <div><label className={labelClass}>{t('Album / EP title *')}</label><input value={releaseTitle} onChange={(event) => setReleaseTitle(event.target.value)} placeholder={t('Release title')} className={fieldClass} /></div>}
                   <div className={releaseType !== 'Single' ? 'mt-5' : ''}><label className={labelClass}>{t('Release year')}</label><input type="number" min="1900" max={new Date().getFullYear() + 1} value={releaseYear} onChange={(event) => setReleaseYear(parseInt(event.target.value, 10) || new Date().getFullYear())} className={fieldClass} /></div>
                   <div className="mt-5"><label className={labelClass}>{t('Copyright / label')}</label><div className="flex min-w-0 max-w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] focus-within:border-[#C084FC]/70 focus-within:ring-4 focus-within:ring-[#A855F7]/10"><span className="flex shrink-0 select-none items-center border-r border-white/10 px-3 text-xs font-black sm:px-4 sm:text-sm">© {releaseYear}</span><input value={copyright} onChange={(event) => setCopyright(stripCopyrightPrefix(event.target.value))} placeholder={t('Your Label')} className="min-w-0 flex-1 bg-transparent px-3 py-3.5 text-sm text-white outline-none placeholder:text-zinc-600 sm:px-4" /></div></div>
-                  <div className="mt-5"><label className={labelClass}>{t('Cover artwork')}</label><div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row"><input value={coverUrl} onChange={(event) => setCoverUrl(event.target.value)} placeholder={t('Image URL or upload a file')} className={`${fieldClass} min-w-0 flex-1`} /><label className="control-press flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-xs font-black text-zinc-300 hover:bg-white/10"><Upload className="h-4 w-4" /> {t('Upload')}<input type="file" accept="image/*" onChange={handleCoverFileUpload} className="hidden" /></label></div></div>
+                  <div className="mt-5"><label className={labelClass}>{t('Cover artwork')}</label><div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row"><input value={coverUrl} onChange={(event) => setCoverUrl(event.target.value)} placeholder={t('Image URL or upload a file')} className={`${fieldClass} min-w-0 flex-1`} /><label className="control-press flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-xs font-black text-zinc-300 hover:bg-white/10"><Upload className="h-4 w-4" /> {t('Upload')}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleCoverFileUpload} className="hidden" /></label></div></div>
                 </section>
 
                 <section className="workspace-card section-reveal min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/10 bg-[#181818] p-4 sm:p-5">

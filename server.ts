@@ -4,14 +4,151 @@ import fs from "fs";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { Ratelimit, type Duration } from "@upstash/ratelimit";
 import { createServer as createViteServer } from "vite";
 import { OAuth2Client } from "google-auth-library";
-import { readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
+import { readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, purgeLegacySessionsFromRedis, getUserSessionVersionFromRedis, persistSessionToRedis, readAndTouchSessionFromRedis, deleteSessionFromRedis, deleteAllUserSessionsFromRedis, deleteDatabaseBackupFromRedis, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
 import { getPublicOrigin, injectTrackSocialMeta } from "./server/socialMeta.js";
 import { searchLiveWeb, type WebSearchSource } from "./server/liveWebSearch.js";
+import { ALLOWED_IMAGE_MIME_TYPES, InvalidImageUploadError, validateImageBuffer } from "./server/mediaSecurity.js";
+import { classifyGoogleSignInAccount, getVerifiedGoogleIdentity, InvalidGoogleIdentityError } from "./server/googleAccountSecurity.js";
+import { classifyMediaStorageKey, getPrivateMediaOwner } from "./server/mediaAccessPolicy.js";
+import { getProductionPublicOrigin, requireHttps, securityHeaders } from "./server/httpSecurity.js";
 
 dotenv.config();
+
+const SESSION_COOKIE_NAME = "__Host-vertex_session";
+const SESSION_ABSOLUTE_TTL_SECONDS = readPositiveIntegerEnv("SESSION_ABSOLUTE_TTL_SECONDS", 30 * 24 * 60 * 60);
+const SESSION_IDLE_TTL_SECONDS = Math.min(
+  readPositiveIntegerEnv("SESSION_IDLE_TTL_SECONDS", 24 * 60 * 60),
+  SESSION_ABSOLUTE_TTL_SECONDS,
+);
+const USER_STORAGE_QUOTA_BYTES = readPositiveIntegerEnv("USER_STORAGE_QUOTA_BYTES", 2 * 1024 * 1024 * 1024);
+const MAX_AUDIO_UPLOAD_BYTES = readPositiveIntegerEnv("MAX_AUDIO_UPLOAD_BYTES", 100 * 1024 * 1024);
+const UPLOAD_URL_TTL_SECONDS = 5 * 60;
+const UPLOAD_RESERVATION_TTL_SECONDS = 10 * 60;
+const PRIVATE_MEDIA_READ_TTL_SECONDS = 60;
+
+type SessionRequest = express.Request & {
+  authSession?: { tokenDigest: string; userId: string };
+};
+
+type UploadReservation = {
+  uploadId: string;
+  userId: string;
+  key: string;
+  kind: "audio" | "image";
+  mimeType: string;
+  size: number;
+  fileName: string;
+};
+
+const ERROR_CODES = {
+  MEDIA_STORAGE_UNAVAILABLE: 'MEDIA_STORAGE_UNAVAILABLE',
+  UPLOAD_URL_CREATE_FAILED: 'UPLOAD_URL_CREATE_FAILED',
+  UPLOAD_VERIFICATION_FAILED: 'UPLOAD_VERIFICATION_FAILED',
+  INVALID_IMAGE_UPLOAD: 'INVALID_IMAGE_UPLOAD',
+  PRIVATE_MEDIA_FORBIDDEN: 'PRIVATE_MEDIA_FORBIDDEN',
+  PROFILE_UPDATE_FAILED: 'PROFILE_UPDATE_FAILED',
+  TRACK_CREATE_FAILED: 'TRACK_CREATE_FAILED',
+  RELEASE_UPDATE_FAILED: 'RELEASE_UPDATE_FAILED',
+  TRACK_UPDATE_FAILED: 'TRACK_UPDATE_FAILED',
+  TRACK_DELETE_FAILED: 'TRACK_DELETE_FAILED',
+  TRACK_WIPE_FAILED: 'TRACK_WIPE_FAILED',
+  PLAYLIST_CREATE_FAILED: 'PLAYLIST_CREATE_FAILED',
+  PLAYLIST_UPDATE_FAILED: 'PLAYLIST_UPDATE_FAILED',
+  PLAYLIST_DELETE_FAILED: 'PLAYLIST_DELETE_FAILED',
+  AI_NOT_CONFIGURED: 'AI_NOT_CONFIGURED',
+  AI_PROVIDER_ERROR: 'AI_PROVIDER_ERROR',
+  AI_RATE_LIMITED: 'AI_RATE_LIMITED',
+  WEB_SEARCH_UNAVAILABLE: 'WEB_SEARCH_UNAVAILABLE',
+} as const;
+
+function getCorrelationId(res: express.Response): string {
+  const existing = res.locals.correlationId;
+  if (typeof existing === 'string' && existing) return existing;
+  const correlationId = crypto.randomUUID();
+  res.locals.correlationId = correlationId;
+  if (!res.headersSent) res.setHeader('X-Correlation-ID', correlationId);
+  return correlationId;
+}
+
+function logCorrelatedError(context: string, res: express.Response, error: unknown): string {
+  const correlationId = getCorrelationId(res);
+  console.error(`${context} [correlationId=${correlationId}]`, error);
+  return correlationId;
+}
+
+function sendCorrelatedError(
+  res: express.Response,
+  status: number,
+  code: string,
+  message: string,
+  context: string,
+  error: unknown,
+  extra: Record<string, unknown> = {},
+) {
+  const correlationId = logCorrelatedError(context, res, error);
+  return res.status(status).json({ ...extra, error: message, code, correlationId });
+}
+
+function sendPublicError(
+  res: express.Response,
+  status: number,
+  code: string,
+  message: string,
+  extra: Record<string, unknown> = {},
+) {
+  return res.status(status).json({ ...extra, error: message, code, correlationId: getCorrelationId(res) });
+}
+
+
+function readPositiveIntegerEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
+function hashSessionToken(token: string): string {
+  return crypto.createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+function readCookie(req: express.Request, name: string): string | null {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0 || part.slice(0, separator).trim() !== name) continue;
+    try {
+      return decodeURIComponent(part.slice(separator + 1).trim());
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function setSessionCookie(res: express.Response, token: string): void {
+  res.cookie(SESSION_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_ABSOLUTE_TTL_SECONDS * 1_000,
+  });
+  res.setHeader("Cache-Control", "no-store");
+}
+
+function clearSessionCookie(res: express.Response): void {
+  res.clearCookie(SESSION_COOKIE_NAME, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+  });
+  res.setHeader("Cache-Control", "no-store");
+}
 
 // Google Sign-In (OAuth) client id. Used both to verify ID tokens sent by the
 // frontend and as the audience the tokens must have been issued for.
@@ -47,7 +184,7 @@ function isHttpUrl(value: string): boolean {
 }
 
 function isStoredMediaUrl(value: string): boolean {
-  return value.startsWith("/api/r2-file/") || isHttpUrl(value);
+  return value.startsWith("/api/r2-file/") || value.startsWith("/api/r2-private/") || isHttpUrl(value);
 }
 
 function normalizeCopyright(value: unknown, fallback: string): string {
@@ -59,32 +196,6 @@ function normalizeCopyright(value: unknown, fallback: string): string {
   return `© ${year}${owner ? ` ${owner}` : ""}`;
 }
 
-const AUDIO_MIME_BY_EXTENSION: Record<string, string> = {
-  mp3: "audio/mpeg",
-  wav: "audio/wav",
-  ogg: "audio/ogg",
-  m4a: "audio/mp4",
-  aac: "audio/aac",
-  flac: "audio/flac",
-};
-
-function inferAudioMimeType(fileName: unknown): string | undefined {
-  if (typeof fileName !== "string") return undefined;
-  const extension = fileName.trim().toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
-  return extension ? AUDIO_MIME_BY_EXTENSION[extension] : undefined;
-}
-
-function parseAudioDataUrl(value: string, fileName: unknown): { base64Data: string; mimeType: string } | null {
-  const match = value.match(/^data:([^;,]*)(?:;[^,]*)?;base64,([\s\S]+)$/i);
-  if (!match?.[2]) return null;
-
-  const declaredMime = match[1].trim().toLowerCase();
-  const inferredMime = inferAudioMimeType(fileName);
-  const mimeType = declaredMime.startsWith("audio/") ? declaredMime : inferredMime;
-  if (!mimeType) return null;
-
-  return { base64Data: match[2], mimeType };
-}
 
 function sanitizeChatHistory(value: unknown, tracks: TrackRecord[] = []): any[] {
   if (!Array.isArray(value)) return [];
@@ -219,19 +330,42 @@ function getR2BucketName(): string {
   return bucketName;
 }
 
+function getR2PrivateBucketName(): string {
+  const bucketName = process.env.R2_PRIVATE_BUCKET_NAME?.trim();
+  if (!bucketName) throw new Error("R2_PRIVATE_BUCKET_NAME is required for private upload staging.");
+  if (bucketName === getR2BucketName()) {
+    throw new Error("R2_PRIVATE_BUCKET_NAME must be different from the public R2_BUCKET_NAME.");
+  }
+  return bucketName;
+}
+
+function getR2PublicBaseUrl(): string | null {
+  const configured = process.env.R2_PUBLIC_DOMAIN?.trim();
+  if (!configured) return null;
+  try {
+    const parsed = new URL(configured.startsWith("http") ? configured : `https://${configured}`);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash) {
+      throw new Error("R2_PUBLIC_DOMAIN must use HTTPS without credentials, query, or fragment.");
+    }
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    throw new Error("R2_PUBLIC_DOMAIN must be a valid HTTPS media origin.");
+  }
+}
+
 function getManagedStorageKey(mediaUrl: string): string | null {
   try {
     let key = '';
     if (mediaUrl.startsWith('/api/r2-file/')) key = mediaUrl.slice('/api/r2-file/'.length);
-    else if (isHttpUrl(mediaUrl) && process.env.R2_PUBLIC_DOMAIN) {
+    else if (mediaUrl.startsWith('/api/r2-private/')) key = mediaUrl.slice('/api/r2-private/'.length);
+    else if (isHttpUrl(mediaUrl) && getR2PublicBaseUrl()) {
       const media = new URL(mediaUrl);
-      const configured = new URL(
-        process.env.R2_PUBLIC_DOMAIN.startsWith('http')
-          ? process.env.R2_PUBLIC_DOMAIN
-          : `https://${process.env.R2_PUBLIC_DOMAIN}`
-      );
-      if (media.host !== configured.host) return null;
-      key = media.pathname.replace(/^\/+/, '');
+      const configured = new URL(getR2PublicBaseUrl()!);
+      if (media.origin !== configured.origin) return null;
+      const configuredPath = configured.pathname.replace(/^\/+|\/+$/g, '');
+      const mediaPath = media.pathname.replace(/^\/+/, '');
+      if (configuredPath && !mediaPath.startsWith(`${configuredPath}/`)) return null;
+      key = configuredPath ? mediaPath.slice(configuredPath.length + 1) : mediaPath;
     }
     key = decodeURIComponent(key).replace(/\\/g, '/');
     if (!key || key.startsWith('/') || key.split('/').some((segment) => !segment || segment === '.' || segment === '..')) return null;
@@ -241,13 +375,146 @@ function getManagedStorageKey(mediaUrl: string): string | null {
   }
 }
 
+function storageUsageKey(userId: string): string {
+  return `app:storage:usage:${sanitizeUserId(userId)}`;
+}
+
+function uploadReservationKey(uploadId: string): string {
+  return `app:upload-reservation:${uploadId}`;
+}
+
+function storageObjectRecordKey(key: string): string {
+  return `app:storage:object:${crypto.createHash("sha256").update(key).digest("hex")}`;
+}
+
+async function reserveStorageQuota(userId: string, bytes: number): Promise<number> {
+  const redis = getUpstashClient();
+  const result = await redis.eval(
+    `local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+     local amount = tonumber(ARGV[1])
+     local quota = tonumber(ARGV[2])
+     if current + amount > quota then return -1 end
+     local updated = current + amount
+     redis.call('SET', KEYS[1], updated)
+     return updated`,
+    [storageUsageKey(userId)],
+    [String(bytes), String(USER_STORAGE_QUOTA_BYTES)],
+  );
+  return Number(result);
+}
+
+async function releaseStorageQuota(userId: string, bytes: number): Promise<void> {
+  await getUpstashClient().eval(
+    `local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+     local updated = math.max(0, current - tonumber(ARGV[1]))
+     redis.call('SET', KEYS[1], updated)
+     return updated`,
+    [storageUsageKey(userId)],
+    [String(bytes)],
+  );
+}
+
+const AUDIO_UPLOAD_TYPES: Record<string, { extension: string; fileExtensions: string[] }> = {
+  'audio/mpeg': { extension: 'mp3', fileExtensions: ['mp3'] },
+  'audio/wav': { extension: 'wav', fileExtensions: ['wav'] },
+  'audio/ogg': { extension: 'ogg', fileExtensions: ['ogg'] },
+  'audio/mp4': { extension: 'm4a', fileExtensions: ['m4a', 'mp4'] },
+  'audio/aac': { extension: 'aac', fileExtensions: ['aac'] },
+  'audio/flac': { extension: 'flac', fileExtensions: ['flac'] },
+};
+
+function normalizeUploadMimeType(value: unknown): string {
+  const mime = typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : '';
+  if (mime === 'audio/mp3') return 'audio/mpeg';
+  if (mime === 'audio/m4a' || mime === 'audio/x-m4a') return 'audio/mp4';
+  if (mime === 'image/jpg') return 'image/jpeg';
+  return mime;
+}
+
+function resolveUploadExtension(kind: "audio" | "image", mimeType: string, fileName: string): string | null {
+  const suppliedExtension = fileName.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || '';
+  if (kind === 'image') {
+    const expected = mimeType === 'image/jpeg' ? ['jpg', 'jpeg'] : mimeType === 'image/png' ? ['png'] : mimeType === 'image/webp' ? ['webp'] : [];
+    return expected.includes(suppliedExtension) ? (mimeType === 'image/jpeg' ? 'jpg' : suppliedExtension) : null;
+  }
+  const audioType = AUDIO_UPLOAD_TYPES[mimeType];
+  return audioType?.fileExtensions.includes(suppliedExtension) ? audioType.extension : null;
+}
+
+function publicMediaUrlForKey(key: string): string {
+  const publicDomain = getR2PublicBaseUrl();
+  return publicDomain ? `${publicDomain}/${key}` : `/api/r2-file/${key}`;
+}
+
+function privateMediaUrlForKey(key: string): string {
+  return `/api/r2-private/${key}`;
+}
+
+function promotionRecordKey(key: string): string {
+  return `app:storage:promotion:${crypto.createHash("sha256").update(key).digest("hex")}`;
+}
+
+class PrivateMediaAccessError extends Error {}
+
+/** Move verified owner-only staging media into the public catalog bucket. */
+async function publishManagedMedia(mediaUrl: string, userId: string): Promise<string> {
+  const key = getManagedStorageKey(mediaUrl);
+  if (!key || classifyMediaStorageKey(key) !== 'private') return mediaUrl;
+
+  const safeUserId = sanitizeUserId(userId);
+  if (getPrivateMediaOwner(key) !== safeUserId) {
+    throw new PrivateMediaAccessError('Private media does not belong to the signed-in account.');
+  }
+
+  const redis = getUpstashClient();
+  const existingPromotion = await redis.get<string>(promotionRecordKey(key));
+  if (existingPromotion) {
+    const promotedKey = getManagedStorageKey(existingPromotion);
+    if (promotedKey && await redis.get(storageObjectRecordKey(promotedKey))) return existingPromotion;
+    await redis.del(promotionRecordKey(key));
+  }
+
+  const stored = await redis.get<{ userId: string; size: number }>(storageObjectRecordKey(key));
+  if (!stored || stored.userId !== userId || !Number.isSafeInteger(stored.size) || stored.size <= 0) {
+    throw new PrivateMediaAccessError('Private media is missing or has not completed verification.');
+  }
+
+  const r2 = getR2Client();
+  const privateBucket = getR2PrivateBucketName();
+  const publicBucket = getR2BucketName();
+  const head = await r2.send(new HeadObjectCommand({ Bucket: privateBucket, Key: key }));
+  const publicKey = `public/${safeUserId}/${path.basename(key)}`;
+  await r2.send(new CopyObjectCommand({
+    Bucket: publicBucket,
+    Key: publicKey,
+    CopySource: encodeURIComponent(`${privateBucket}/${key}`),
+    MetadataDirective: 'REPLACE',
+    ContentType: head.ContentType || 'application/octet-stream',
+    ContentDisposition: head.ContentDisposition || 'inline',
+    CacheControl: 'public, max-age=31536000, immutable',
+  }));
+
+  const publicUrl = publicMediaUrlForKey(publicKey);
+  await redis.set(storageObjectRecordKey(publicKey), stored);
+  await redis.set(promotionRecordKey(key), publicUrl);
+  await redis.del(storageObjectRecordKey(key));
+  await r2.send(new DeleteObjectCommand({ Bucket: privateBucket, Key: key })).catch(() => undefined);
+  return publicUrl;
+}
+
 async function deleteManagedFile(mediaUrl: string): Promise<void> {
   const key = getManagedStorageKey(mediaUrl);
   if (!key) return;
 
   const r2 = getR2Client();
-  const bucketName = getR2BucketName();
+  const bucketName = classifyMediaStorageKey(key) === 'private' ? getR2PrivateBucketName() : getR2BucketName();
   await r2.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
+  const redis = getUpstashClient();
+  const objectRecordKey = storageObjectRecordKey(key);
+  const stored = await redis.getdel<{ userId: string; size: number }>(objectRecordKey);
+  if (stored?.userId && Number.isSafeInteger(stored.size) && stored.size > 0) {
+    await releaseStorageQuota(stored.userId, stored.size);
+  }
 }
 
 function collectReferencedMediaUrls(db: { users: UserRecord[]; tracks: TrackRecord[]; playlists: PlaylistRecord[] }): Set<string> {
@@ -264,105 +531,59 @@ function collectReferencedMediaUrls(db: { users: UserRecord[]; tracks: TrackReco
   return refs;
 }
 
-type RateLimitOptions = {
-  windowMs: number;
-  max: number;
-  name: string;
-};
+async function isPublicCatalogKey(key: string): Promise<boolean> {
+  const scope = classifyMediaStorageKey(key);
+  if (scope === 'public') return true;
+  if (scope === 'private') return false;
 
-function createRateLimiter({ windowMs, max, name }: RateLimitOptions): express.RequestHandler {
-  const buckets = new Map<string, { count: number; resetAt: number }>();
-
-  return (req, res, next) => {
-    const now = Date.now();
-    // Use the network identity rather than a raw Authorization header. An
-    // attacker can mint arbitrary invalid bearer values and would otherwise
-    // get a fresh bucket for every request.
-    const identity = req.ip || req.socket.remoteAddress || 'unknown';
-    const key = `${name}:${identity}`;
-    let bucket = buckets.get(key);
-    if (!bucket || bucket.resetAt <= now) {
-      bucket = { count: 0, resetAt: now + windowMs };
-      buckets.set(key, bucket);
-    }
-
-    bucket.count += 1;
-    const remaining = Math.max(0, max - bucket.count);
-    const retryAfterSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1_000));
-    res.setHeader('RateLimit-Limit', String(max));
-    res.setHeader('RateLimit-Remaining', String(remaining));
-    res.setHeader('RateLimit-Reset', String(Math.ceil(bucket.resetAt / 1_000)));
-
-    if (buckets.size > 10_000) {
-      for (const [bucketKey, value] of buckets) {
-        if (value.resetAt <= now) buckets.delete(bucketKey);
-      }
-    }
-
-    if (bucket.count > max) {
-      res.setHeader('Retry-After', String(retryAfterSeconds));
-      return res.status(429).json({
-        error: 'Too many requests. Please wait and try again.',
-        rateLimited: true,
-        retryAfterSeconds,
-      });
-    }
-    next();
-  };
+  // Backward compatibility is limited to legacy objects that are already
+  // referenced by a public catalog record. Unreferenced legacy keys are not
+  // reachable through the application proxy.
+  const db = await readDBAsync(false);
+  for (const mediaUrl of collectReferencedMediaUrls(db)) {
+    if (getManagedStorageKey(mediaUrl) === key) return true;
+  }
+  return false;
 }
 
+type RateLimitOptions = {
+  window: Duration;
+  max: number;
+  name: string;
+  identity: (req: express.Request) => string | null;
+};
 
-async function saveUploadedFile(base64Data: string, mimeType: string, folderUserId: string, filePrefix: string): Promise<string> {
-  const safeUserId = sanitizeUserId(folderUserId);
-  const fileId = crypto.randomUUID();
+function createRateLimiter({ window, max, name, identity }: RateLimitOptions): express.RequestHandler {
+  const ratelimit = new Ratelimit({
+    redis: getUpstashClient(),
+    limiter: Ratelimit.slidingWindow(max, window),
+    prefix: `app:ratelimit:${name}`,
+    analytics: false,
+  });
 
-  let ext = (mimeType || '').split('/')[1] || 'bin';
-  if (ext.includes(';')) ext = ext.split(';')[0];
-  if (ext === 'mpeg' || ext === 'mp3') ext = 'mp3';
-  if (ext === 'jpeg' || ext === 'jpg') ext = 'jpg';
-  if (ext === 'png') ext = 'png';
-  if (ext === 'ogg') ext = 'ogg';
-  if (ext === 'wav') ext = 'wav';
-  if (ext === 'webm') ext = 'webm';
-  if (ext === 'm4a' || ext === 'x-m4a' || ext === 'mp4') ext = 'm4a';
-
-  const filename = `${filePrefix}_${fileId}.${ext}`;
-  const key = `${safeUserId}/${filename}`;
-
-  const cleanBase64 = base64Data.replace(/[\r\n\s]/g, "");
-  const buffer = Buffer.from(cleanBase64, "base64");
-
-  let cleanMime = (mimeType || '').split(';')[0].trim();
-  if (cleanMime === 'audio/mp3') cleanMime = 'audio/mpeg';
-  if (cleanMime === 'audio/m4a' || cleanMime === 'audio/x-m4a') cleanMime = 'audio/mp4';
-  if (!cleanMime || cleanMime === 'application/octet-stream' || cleanMime === 'binary/octet-stream') {
-    if (ext === 'mp3') cleanMime = 'audio/mpeg';
-    else if (ext === 'ogg') cleanMime = 'audio/ogg';
-    else if (ext === 'wav') cleanMime = 'audio/wav';
-    else if (ext === 'm4a') cleanMime = 'audio/mp4';
-    else if (ext === 'webm') cleanMime = 'audio/webm';
-    else if (ext === 'jpg' || ext === 'jpeg') cleanMime = 'image/jpeg';
-    else if (ext === 'png') cleanMime = 'image/png';
-    else cleanMime = filePrefix.includes('audio') ? 'audio/mpeg' : 'image/jpeg';
-  }
-
-  const r2 = getR2Client();
-  const bucketName = getR2BucketName();
-  await r2.send(
-    new PutObjectCommand({
-      Bucket: bucketName,
-      Key: key,
-      Body: buffer,
-      ContentType: cleanMime,
-    })
-  );
-
-  const publicDomain = process.env.R2_PUBLIC_DOMAIN?.trim();
-  if (publicDomain && !publicDomain.includes('.r2.dev')) {
-    const cleanDomain = (publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`).replace(/\/+$/, "");
-    return `${cleanDomain}/${key}`;
-  }
-  return `/api/r2-file/${key}`;
+  return async (req, res, next) => {
+    const identifier = identity(req);
+    if (!identifier) return next();
+    try {
+      const result = await ratelimit.limit(identifier);
+      const retryAfterSeconds = Math.max(1, Math.ceil((result.reset - Date.now()) / 1_000));
+      res.setHeader('RateLimit-Limit', String(result.limit));
+      res.setHeader('RateLimit-Remaining', String(Math.max(0, result.remaining)));
+      res.setHeader('RateLimit-Reset', String(Math.ceil(result.reset / 1_000)));
+      if (!result.success) {
+        res.setHeader('Retry-After', String(retryAfterSeconds));
+        return res.status(429).json({
+          error: 'Too many requests. Please wait and try again.',
+          rateLimited: true,
+          retryAfterSeconds,
+        });
+      }
+      return next();
+    } catch (error) {
+      console.error(`Distributed rate limiter failed (${name}):`, error);
+      return res.status(503).json({ error: 'Rate limit service is unavailable.' });
+    }
+  };
 }
 
 
@@ -370,62 +591,124 @@ async function startServer() {
   // Refuse to start without the required remote persistence configuration.
   getR2Client();
   getR2BucketName();
+  getR2PrivateBucketName();
+  const publicMediaBaseUrl = getR2PublicBaseUrl();
+  const configuredAppUrl = process.env.PUBLIC_BASE_URL || process.env.SITE_URL || process.env.APP_URL;
+  const isProduction = process.env.NODE_ENV === "production";
+  const productionPublicOrigin = isProduction
+    ? getProductionPublicOrigin(process.env.PUBLIC_BASE_URL)
+    : null;
+  if (publicMediaBaseUrl && configuredAppUrl) {
+    const appOrigin = new URL(configuredAppUrl).origin;
+    if (new URL(publicMediaBaseUrl).origin === appOrigin) {
+      throw new Error("R2_PUBLIC_DOMAIN must use a separate cookieless origin from the application.");
+    }
+  }
 
   const app = express();
   const PORT = 3000;
   app.set('trust proxy', 1);
+  app.use((_req, res, next) => {
+    const correlationId = crypto.randomUUID();
+    res.locals.correlationId = correlationId;
+    res.setHeader('X-Correlation-ID', correlationId);
+    next();
+  });
+  app.disable('x-powered-by');
+  app.use(securityHeaders(isProduction));
+  if (productionPublicOrigin) app.use(requireHttps(productionPublicOrigin));
 
   // Initialize the required Upstash Redis database.
   await initUpstashDB();
 
-  // Hydrate active login sessions from the required Upstash Redis store so that
-  // logged-in users stay authenticated across server restarts/redeploys and
-  // across multiple server instances, instead of losing their session every
-  // time the process restarts.
-  const persistedSessions = await loadSessionsFromRedis();
-  const persistedSessionCount = Object.keys(persistedSessions).length;
-  if (persistedSessionCount > 0) {
-    console.log(`⚡ Restored ${persistedSessionCount} active session(s) from Upstash Redis.`);
-  }
+  // Enforce chat retention even on a long-lived instance with no database
+  // mutations. The unref'd timer never keeps an otherwise idle process alive;
+  // a cold start performs the same pruning before serving requests.
+  let retentionSweepRunning = false;
+  const retentionSweep = setInterval(() => {
+    if (retentionSweepRunning) return;
+    retentionSweepRunning = true;
+    void readDBAsync(true)
+      .catch((error) => console.error('Scheduled data-retention sweep failed:', error))
+      .finally(() => { retentionSweepRunning = false; });
+  }, 60 * 60 * 1_000);
+  retentionSweep.unref();
 
-  // Rate limiters are defined here (rather than further down, where the rest
-  // of the /api routes are registered) so that every route which is wired up
-  // before that point — like the R2 file proxy below — can also be guarded.
-  // A route registered ahead of `app.use('/api', generalApiLimiter)` would
-  // otherwise send its response before that middleware ever runs, leaving it
-  // completely unrateLimited.
-  const generalApiLimiter = createRateLimiter({ windowMs: 5 * 60_000, max: 600, name: 'api' });
-  const mutationLimiter = createRateLimiter({ windowMs: 60_000, max: 120, name: 'mutation' });
-  const authLimiter = createRateLimiter({ windowMs: 15 * 60_000, max: 20, name: 'auth' });
-  const usernameAvailabilityLimiter = createRateLimiter({ windowMs: 60_000, max: 60, name: 'username-availability' });
-  const chatLimiter = createRateLimiter({ windowMs: 60_000, max: 12, name: 'chat' });
-  const trackPlayLimiter = createRateLimiter({ windowMs: 60_000, max: 30, name: 'track-play' });
+  // The former session hash stored raw, non-expiring bearer tokens. Remove it
+  // during deployment; the new per-session keys contain only SHA-256 digests.
+  await purgeLegacySessionsFromRedis();
+
+  const ipIdentity = (req: express.Request) => `ip:${req.ip || req.socket.remoteAddress || 'unknown'}`;
+  const userIdentity = (req: express.Request) => {
+    const userId = (req as SessionRequest).authSession?.userId;
+    return userId ? `user:${userId}` : null;
+  };
+  const generalIpLimiter = createRateLimiter({ window: '5 m', max: 600, name: 'api-ip', identity: ipIdentity });
+  const generalUserLimiter = createRateLimiter({ window: '5 m', max: 600, name: 'api-user', identity: userIdentity });
+  const mutationIpLimiter = createRateLimiter({ window: '1 m', max: 120, name: 'mutation-ip', identity: ipIdentity });
+  const mutationUserLimiter = createRateLimiter({ window: '1 m', max: 120, name: 'mutation-user', identity: userIdentity });
+  const authLimiter = createRateLimiter({ window: '15 m', max: 20, name: 'auth-ip', identity: ipIdentity });
+  const usernameAvailabilityLimiter = createRateLimiter({ window: '1 m', max: 60, name: 'username-availability-ip', identity: ipIdentity });
+  const chatIpLimiter = createRateLimiter({ window: '1 m', max: 12, name: 'chat-ip', identity: ipIdentity });
+  const chatUserLimiter = createRateLimiter({ window: '1 m', max: 12, name: 'chat-user', identity: userIdentity });
+  const trackPlayIpLimiter = createRateLimiter({ window: '1 m', max: 30, name: 'track-play-ip', identity: ipIdentity });
+  const trackPlayUserLimiter = createRateLimiter({ window: '1 m', max: 30, name: 'track-play-user', identity: userIdentity });
+  const uploadIpLimiter = createRateLimiter({ window: '10 m', max: 40, name: 'upload-ip', identity: ipIdentity });
+  const uploadUserLimiter = createRateLimiter({ window: '10 m', max: 40, name: 'upload-user', identity: userIdentity });
   // Also used for full-page/document requests below (SPA fallback, shared
   // track pages) which sit outside the /api prefix and so aren't covered by
   // the app.use('/api', ...) wiring further down either.
-  const pageLimiter = createRateLimiter({ windowMs: 60_000, max: 120, name: 'page' });
+  const pageLimiter = createRateLimiter({ window: '1 m', max: 120, name: 'page-ip', identity: ipIdentity });
 
-  // Serve files stored in Cloudflare R2 directly or via proxy endpoint
-  app.all("/api/r2-file/*", generalApiLimiter, async (req, res) => {
+  // Only published catalog objects are available without authentication.
+  app.all("/api/r2-file/*", generalIpLimiter, async (req, res) => {
     const key = getManagedStorageKey(`/api/r2-file/${String(req.params[0] || "").replace(/^\/+/, "")}`);
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    const requestOrigin = typeof req.headers.origin === 'string' ? req.headers.origin : '';
+    const trustedOrigin = getPublicOrigin(req);
+    if (requestOrigin && requestOrigin === trustedOrigin) {
+      res.setHeader("Access-Control-Allow-Origin", trustedOrigin);
+      res.setHeader("Vary", "Origin");
+    }
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Authorization, X-Requested-With, *");
-    res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type");
+    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type, Content-Disposition");
     res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
 
     if (req.method === "OPTIONS") {
-      return res.status(200).end();
+      return requestOrigin === trustedOrigin ? res.status(204).end() : res.status(403).end();
+    }
+
+    if (!key) return res.status(404).send("File not found.");
+    try {
+      if (!(await isPublicCatalogKey(key))) return res.status(404).send("File not found.");
+    } catch (error) {
+      res.setHeader('Cache-Control', 'no-store');
+      return sendCorrelatedError(
+        res,
+        503,
+        ERROR_CODES.MEDIA_STORAGE_UNAVAILABLE,
+        'Media storage is temporarily unavailable.',
+        'Public media policy lookup error',
+        error,
+      );
+    }
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+
+    // Once a cookieless media origin is configured, old same-origin proxy URLs
+    // are redirected there too. App cookies are host-only and are never sent
+    // to this separate origin.
+    const publicMediaBaseUrl = getR2PublicBaseUrl();
+    if (publicMediaBaseUrl) {
+      const encodedKey = key.split('/').map(encodeURIComponent).join('/');
+      return res.redirect(307, `${publicMediaBaseUrl}/${encodedKey}`);
     }
 
     try {
       const r2 = getR2Client();
       const bucketName = getR2BucketName();
-
-      if (!key) {
-        return res.status(404).send("File not found.");
-      }
 
       const rangeHeader = req.headers.range;
 
@@ -437,10 +720,12 @@ async function startServer() {
 
       const data = await r2.send(command);
 
-      // Determine Content-Type
-      let contentType = "audio/mpeg";
+      // Determine a non-executable response type. Legacy SVG objects are
+      // rejected outright, and unknown types are downloads rather than inline
+      // same-origin documents.
+      let contentType = "application/octet-stream";
       if (data.ContentType && data.ContentType !== "binary/octet-stream" && data.ContentType !== "application/octet-stream") {
-        contentType = data.ContentType;
+        contentType = data.ContentType.split(';', 1)[0].trim().toLowerCase();
       } else {
         const lowerKey = key.toLowerCase();
         if (lowerKey.endsWith(".mp3")) contentType = "audio/mpeg";
@@ -450,9 +735,31 @@ async function startServer() {
         else if (lowerKey.endsWith(".webm")) contentType = "audio/webm";
         else if (lowerKey.endsWith(".png")) contentType = "image/png";
         else if (lowerKey.endsWith(".jpg") || lowerKey.endsWith(".jpeg")) contentType = "image/jpeg";
+        else if (lowerKey.endsWith(".webp")) contentType = "image/webp";
       }
 
+      const lowerKey = key.toLowerCase();
+      const isSvg = contentType === "image/svg+xml" || lowerKey.endsWith('.svg') || lowerKey.endsWith('.svgz');
+      if (isSvg) {
+        (data.Body as any)?.destroy?.();
+        return res.status(415).send("SVG media is not supported.");
+      }
+
+      const expectedImageExtension = contentType === 'image/jpeg'
+        ? /\.jpe?g$/i
+        : contentType === 'image/png'
+          ? /\.png$/i
+          : contentType === 'image/webp'
+            ? /\.webp$/i
+            : null;
+      const safeImage = ALLOWED_IMAGE_MIME_TYPES.has(contentType) && expectedImageExtension?.test(key) === true;
+      const safeAudio = new Set(['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/webm', 'audio/aac', 'audio/flac']).has(contentType);
+      const safeInlineMedia = safeImage || safeAudio;
+      if (!safeInlineMedia) contentType = 'application/octet-stream';
+
       res.setHeader("Content-Type", contentType);
+      const downloadName = path.basename(key).replace(/[\r\n"\\]/g, '_') || 'media';
+      res.setHeader("Content-Disposition", `${safeInlineMedia ? 'inline' : 'attachment'}; filename="${downloadName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
       if (data.ContentLength !== undefined) {
         res.setHeader("Content-Length", data.ContentLength);
       }
@@ -483,29 +790,274 @@ async function startServer() {
         }
       }
     } catch (err: any) {
-      console.error("R2 File Express Route Error:", err);
       const status = err?.name === 'NoSuchKey' || err?.$metadata?.httpStatusCode === 404 ? 404 : 502;
-      return res.status(status).send(status === 404 ? "File not found" : "R2 storage unavailable");
+      if (status === 404) return res.status(404).send('File not found');
+      return sendCorrelatedError(
+        res,
+        502,
+        ERROR_CODES.MEDIA_STORAGE_UNAVAILABLE,
+        'Media storage is temporarily unavailable.',
+        'R2 file proxy error',
+        err,
+      );
     }
   });
 
-  // In-memory limits stop accidental request loops and basic abuse before a
-  // request body is parsed or reaches Upstash, R2, bcrypt, or Gemini.
-  // Immutable media streaming is intentionally excluded because the R2 route
-  // is registered above.
-  app.use('/api', generalApiLimiter);
+  // Staged uploads live in a distinct private bucket. The app authenticates
+  // ownership and returns a one-minute signed GET URL; private objects never
+  // use the public domain or the public proxy/cache policy.
+  app.get("/api/r2-private/*", generalIpLimiter, async (req, res) => {
+    const key = getManagedStorageKey(`/api/r2-private/${String(req.params[0] || "").replace(/^\/+/, "")}`);
+    if (!key || classifyMediaStorageKey(key) !== 'private') return res.status(404).send("File not found.");
+
+    const token = readCookie(req, SESSION_COOKIE_NAME);
+    if (!token) return res.status(401).json({ error: 'Unauthorized: Active session required.' });
+    try {
+      const session = await readAndTouchSessionFromRedis(hashSessionToken(token), SESSION_IDLE_TTL_SECONDS);
+      if (!session || getPrivateMediaOwner(key) !== sanitizeUserId(session.userId)) {
+        return res.status(404).send("File not found.");
+      }
+      const objectRecord = await getUpstashClient().get<{ userId: string; size: number }>(storageObjectRecordKey(key));
+      if (!objectRecord || objectRecord.userId !== session.userId) return res.status(404).send("File not found.");
+
+      const signedUrl = await getSignedUrl(
+        getR2Client(),
+        new GetObjectCommand({ Bucket: getR2PrivateBucketName(), Key: key }),
+        { expiresIn: PRIVATE_MEDIA_READ_TTL_SECONDS },
+      );
+      res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+      res.setHeader('Referrer-Policy', 'no-referrer');
+      return res.redirect(307, signedUrl);
+    } catch (error) {
+      return sendCorrelatedError(
+        res,
+        503,
+        ERROR_CODES.MEDIA_STORAGE_UNAVAILABLE,
+        'Private media storage is temporarily unavailable.',
+        'Private R2 access error',
+        error,
+      );
+    }
+  });
+
+  // IP limits run before session lookup and before any request body is parsed.
+  // Route-specific expensive endpoints are likewise limited at this stage.
+  app.use('/api', generalIpLimiter);
   app.use('/api', (req, res, next) => {
     if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') {
-      return mutationLimiter(req, res, next);
+      return mutationIpLimiter(req, res, next);
     }
     next();
   });
+  app.use(['/api/auth/login', '/api/auth/register', '/api/auth/google'], authLimiter);
+  app.use('/api/auth/username-availability', usernameAvailabilityLimiter);
+  app.use('/api/chat', chatIpLimiter);
+  app.use('/api/tracks/:id/play', trackPlayIpLimiter);
+  app.use('/api/uploads', uploadIpLimiter);
 
-  // Increase payload limit for custom track audio uploads or images. Rate
-  // limiting runs first so rejected clients cannot repeatedly force parsing
-  // of a 100 MB JSON body.
-  app.use(express.json({ limit: "100mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "100mb" }));
+  // Cookie-authenticated mutations must originate from this site. Browsers
+  // always attach an Origin header to fetch/XHR mutations; requiring it when a
+  // session cookie is present also keeps non-browser requests explicit.
+  app.use('/api', async (req, res, next) => {
+    const token = readCookie(req, SESSION_COOKIE_NAME);
+    const isMutation = req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE';
+
+    if (isMutation) {
+      const origin = typeof req.headers.origin === 'string' ? req.headers.origin : '';
+      const fetchSite = typeof req.headers['sec-fetch-site'] === 'string' ? req.headers['sec-fetch-site'] : '';
+      const trustedOrigin = getPublicOrigin(req);
+      if (fetchSite === 'cross-site' || (origin && origin !== trustedOrigin) || (token && !origin)) {
+        return res.status(403).json({ error: 'Forbidden: Untrusted request origin.' });
+      }
+    }
+
+    if (!token) return next();
+
+    try {
+      const tokenDigest = hashSessionToken(token);
+      const session = await readAndTouchSessionFromRedis(tokenDigest, SESSION_IDLE_TTL_SECONDS);
+      if (session) {
+        (req as SessionRequest).authSession = { tokenDigest, userId: session.userId };
+      } else {
+        clearSessionCookie(res);
+      }
+      return next();
+    } catch (error) {
+      console.error('Session validation error:', error);
+      return res.status(503).json({ error: 'Session storage is unavailable.' });
+    }
+  });
+
+  // Authenticated users receive a second, account-scoped distributed limit so
+  // changing IP addresses cannot reset expensive mutation/chat allowances.
+  app.use('/api', generalUserLimiter);
+  app.use('/api', (req, res, next) => {
+    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') {
+      return mutationUserLimiter(req, res, next);
+    }
+    next();
+  });
+  app.use('/api/chat', chatUserLimiter);
+  app.use('/api/tracks/:id/play', trackPlayUserLimiter);
+  app.use('/api/uploads', uploadUserLimiter);
+
+  // Metadata endpoints accept small JSON only. Binary media uses presigned R2
+  // PUTs below and never enters the Node process or JSON parser.
+  app.use('/api', (req, res, next) => {
+    const contentLength = Number(req.headers['content-length']);
+    if (Number.isFinite(contentLength) && contentLength > 64 * 1024) {
+      return res.status(413).json({ error: 'Request body exceeds the 64 KB metadata limit.' });
+    }
+    next();
+  });
+  app.use(express.json({ limit: "64kb" }));
+  app.use(express.urlencoded({ extended: true, limit: "32kb", parameterLimit: 100 }));
+  app.use((error: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (error?.type === 'entity.too.large') {
+      return res.status(413).json({ error: 'Request body exceeds the metadata limit.' });
+    }
+    return next(error);
+  });
+
+  // Large media bypasses Express entirely: the browser uploads directly to a
+  // five-minute R2 URL, then asks the server to verify and finalize it.
+  app.get('/api/uploads/quota', async (req, res) => {
+    const userId = getUserIdFromToken(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized: Active session required.' });
+    const usedBytes = await getUpstashClient().get<number>(storageUsageKey(userId)) || 0;
+    return res.json({ usedBytes, quotaBytes: USER_STORAGE_QUOTA_BYTES, remainingBytes: Math.max(0, USER_STORAGE_QUOTA_BYTES - usedBytes) });
+  });
+
+  app.post('/api/uploads/presign', async (req, res) => {
+    const userId = getUserIdFromToken(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized: Active session required.' });
+
+    const kind = req.body?.kind;
+    const fileName = typeof req.body?.fileName === 'string' ? path.basename(req.body.fileName).trim() : '';
+    const mimeType = normalizeUploadMimeType(req.body?.mimeType);
+    const size = Number(req.body?.size);
+    if ((kind !== 'audio' && kind !== 'image') || !fileName || fileName.length > 200 || !Number.isSafeInteger(size) || size <= 0) {
+      return res.status(400).json({ error: 'Invalid upload metadata.' });
+    }
+    const maxBytes = kind === 'audio' ? MAX_AUDIO_UPLOAD_BYTES : 12 * 1024 * 1024;
+    if (size > maxBytes) return res.status(413).json({ error: `Upload exceeds the ${Math.floor(maxBytes / 1024 / 1024)} MB file limit.` });
+    if (kind === 'image' && !ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) {
+      return res.status(400).json({ error: 'Unsupported image type. Use JPEG, PNG, or WebP; SVG is not allowed.' });
+    }
+    if (kind === 'audio' && !AUDIO_UPLOAD_TYPES[mimeType]) {
+      return res.status(400).json({ error: 'Unsupported audio type. Use MP3, WAV, OGG, M4A, AAC, or FLAC.' });
+    }
+    const extension = resolveUploadExtension(kind, mimeType, fileName);
+    if (!extension) return res.status(400).json({ error: 'File extension does not match its MIME type.' });
+
+    const uploadId = crypto.randomUUID();
+    const key = `private/${sanitizeUserId(userId)}/${kind}_${uploadId}.${extension}`;
+    const safeDownloadName = fileName.replace(/[\r\n"\\]/g, '_');
+    const contentDisposition = `inline; filename="${safeDownloadName}"`;
+    const usedBytes = await reserveStorageQuota(userId, size);
+    if (usedBytes < 0) {
+      return res.status(413).json({ error: 'User storage quota exceeded.', quotaBytes: USER_STORAGE_QUOTA_BYTES });
+    }
+
+    const reservation: UploadReservation = { uploadId, userId, key, kind, mimeType, size, fileName: safeDownloadName };
+    const redis = getUpstashClient();
+    try {
+      await redis.set(uploadReservationKey(uploadId), reservation, { ex: UPLOAD_RESERVATION_TTL_SECONDS });
+      const uploadUrl = await getSignedUrl(
+        getR2Client(),
+        new PutObjectCommand({
+          Bucket: getR2PrivateBucketName(),
+          Key: key,
+          ContentType: mimeType,
+          ContentLength: size,
+          ContentDisposition: contentDisposition,
+          CacheControl: 'private, no-store, max-age=0',
+        }),
+        { expiresIn: UPLOAD_URL_TTL_SECONDS },
+      );
+      return res.json({
+        success: true,
+        uploadId,
+        uploadUrl,
+        expiresIn: UPLOAD_URL_TTL_SECONDS,
+        requiredHeaders: {
+          'Content-Type': mimeType,
+          'Content-Disposition': contentDisposition,
+          'Cache-Control': 'private, no-store, max-age=0',
+        },
+        storage: { usedBytes, quotaBytes: USER_STORAGE_QUOTA_BYTES },
+      });
+    } catch (error) {
+      await redis.del(uploadReservationKey(uploadId)).catch(() => undefined);
+      await releaseStorageQuota(userId, size).catch(() => undefined);
+      return sendCorrelatedError(
+        res,
+        503,
+        ERROR_CODES.UPLOAD_URL_CREATE_FAILED,
+        'Could not create upload URL.',
+        'Create presigned upload error',
+        error,
+      );
+    }
+  });
+
+  app.post('/api/uploads/complete', async (req, res) => {
+    const userId = getUserIdFromToken(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized: Active session required.' });
+    const uploadId = typeof req.body?.uploadId === 'string' ? req.body.uploadId : '';
+    if (!/^[0-9a-f-]{36}$/i.test(uploadId)) return res.status(400).json({ error: 'Invalid upload ID.' });
+
+    const redis = getUpstashClient();
+    const reservationKey = uploadReservationKey(uploadId);
+    const reservation = await redis.getdel<UploadReservation>(reservationKey);
+    if (!reservation || reservation.userId !== userId) return res.status(404).json({ error: 'Upload reservation expired or was not found.' });
+
+    try {
+      const r2 = getR2Client();
+      const bucket = getR2PrivateBucketName();
+      const head = await r2.send(new HeadObjectCommand({ Bucket: bucket, Key: reservation.key }));
+      const actualMime = normalizeUploadMimeType(head.ContentType);
+      if (Number(head.ContentLength) !== reservation.size || actualMime !== reservation.mimeType) {
+        throw new Error('Uploaded object does not match its signed size or MIME type.');
+      }
+      if (reservation.kind === 'image') {
+        const object = await r2.send(new GetObjectCommand({ Bucket: bucket, Key: reservation.key }));
+        const bytes = await object.Body?.transformToByteArray();
+        validateImageBuffer(Buffer.from(bytes || []), reservation.mimeType);
+      }
+
+      await redis.set(storageObjectRecordKey(reservation.key), { userId, size: reservation.size });
+      return res.json({
+        success: true,
+        url: privateMediaUrlForKey(reservation.key),
+        storage: { usedBytes: await redis.get<number>(storageUsageKey(userId)) || 0, quotaBytes: USER_STORAGE_QUOTA_BYTES },
+      });
+    } catch (error: any) {
+      await getR2Client().send(new DeleteObjectCommand({ Bucket: getR2PrivateBucketName(), Key: reservation.key })).catch(() => undefined);
+      await releaseStorageQuota(userId, reservation.size).catch(() => undefined);
+      return sendCorrelatedError(
+        res,
+        400,
+        ERROR_CODES.UPLOAD_VERIFICATION_FAILED,
+        'Uploaded media failed server verification.',
+        'Complete upload verification error',
+        error,
+      );
+    }
+  });
+
+  app.delete('/api/uploads/:uploadId', async (req, res) => {
+    const userId = getUserIdFromToken(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized: Active session required.' });
+    const uploadId = req.params.uploadId;
+    const redis = getUpstashClient();
+    const reservationKey = uploadReservationKey(uploadId);
+    const reservation = await redis.getdel<UploadReservation>(reservationKey);
+    if (!reservation || reservation.userId !== userId) return res.json({ success: true });
+    await getR2Client().send(new DeleteObjectCommand({ Bucket: getR2PrivateBucketName(), Key: reservation.key })).catch(() => undefined);
+    await releaseStorageQuota(userId, reservation.size);
+    return res.json({ success: true });
+  });
 
   // System status endpoint to check Upstash & R2 integration status
   app.get("/api/system-status", async (req, res) => {
@@ -522,7 +1074,9 @@ async function startServer() {
         process.env.R2_ACCOUNT_ID &&
         process.env.R2_ACCESS_KEY_ID &&
         process.env.R2_SECRET_ACCESS_KEY &&
-        process.env.R2_BUCKET_NAME
+        process.env.R2_BUCKET_NAME &&
+        process.env.R2_PRIVATE_BUCKET_NAME &&
+        process.env.R2_BUCKET_NAME !== process.env.R2_PRIVATE_BUCKET_NAME
       ),
       databaseStats: {
         usersCount: db.users.length,
@@ -535,40 +1089,51 @@ async function startServer() {
   // ==========================================
   // AUTHENTICATION & SESSION MANAGEMENT
   // ==========================================
-  // token -> userId. Hydrated from Upstash Redis at startup (see persistedSessions
-  // above), and persisted to Redis before a token is returned to the client.
-  const activeSessions = new Map<string, string>(Object.entries(persistedSessions));
   const recentPlayEvents = new Map<string, number>();
 
   async function issueSessionToken(userId: string): Promise<string> {
     if (!userId) return "";
     const token = `sess_${crypto.randomBytes(32).toString("hex")}`;
-    await persistSessionToRedis(token, userId);
-    activeSessions.set(token, userId);
+    const now = Date.now();
+    const sessionVersion = await getUserSessionVersionFromRedis(userId);
+    await persistSessionToRedis(hashSessionToken(token), {
+      userId,
+      createdAt: now,
+      absoluteExpiresAt: now + SESSION_ABSOLUTE_TTL_SECONDS * 1_000,
+      sessionVersion,
+    }, SESSION_IDLE_TTL_SECONDS);
     return token;
   }
 
   function getUserIdFromToken(req: express.Request): string | null {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return null;
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    if (!token) return null;
-
-    if (activeSessions.has(token)) {
-      return activeSessions.get(token) || null;
-    }
-    return null;
+    return (req as SessionRequest).authSession?.userId || null;
   }
 
-  async function revokeSessionToken(token: string): Promise<void> {
-    if (!token) return;
-    await deleteSessionFromRedis(token);
-    activeSessions.delete(token);
+  async function revokeRequestSession(req: express.Request): Promise<void> {
+    const session = (req as SessionRequest).authSession;
+    if (!session) return;
+    await deleteSessionFromRedis(session.tokenDigest, session.userId);
+  }
+
+  async function verifyGoogleCredential(credential: unknown) {
+    if (typeof credential !== "string" || !credential.trim()) {
+      throw new InvalidGoogleIdentityError("Missing Google credential.");
+    }
+    try {
+      const ticket = await googleOAuthClient.verifyIdToken({
+        idToken: credential,
+        audience: GOOGLE_CLIENT_ID,
+      });
+      return getVerifiedGoogleIdentity(ticket.getPayload());
+    } catch (error) {
+      if (error instanceof InvalidGoogleIdentityError) throw error;
+      throw new InvalidGoogleIdentityError("Invalid Google credential.");
+    }
   }
 
   // Lightweight preflight for the registration form. Registration still
   // performs the authoritative uniqueness check below to avoid race conditions.
-  app.get("/api/auth/username-availability", usernameAvailabilityLimiter, async (req, res) => {
+  app.get("/api/auth/username-availability", async (req, res) => {
     try {
       const rawUsername = typeof req.query.username === "string" ? req.query.username : "";
       const cleanUsername = rawUsername.trim();
@@ -593,7 +1158,7 @@ async function startServer() {
   });
 
   // User Registration
-  app.post("/api/auth/register", authLimiter, async (req, res) => {
+  app.post("/api/auth/register", async (req, res) => {
     try {
       const { username, email, password, displayName } = req.body;
 
@@ -662,9 +1227,10 @@ async function startServer() {
       await writeDBAsync(db);
 
       const token = await issueSessionToken(newUser.id);
+      setSessionCookie(res, token);
       // Omit password from returned user object
       const { password: _, ...userWithoutPassword } = newUser;
-      return res.json({ success: true, user: userWithoutPassword, token });
+      return res.json({ success: true, user: userWithoutPassword });
     } catch (error: any) {
       console.error("Register Error:", error);
       return res.status(500).json({ error: "Failed to register user." });
@@ -672,7 +1238,7 @@ async function startServer() {
   });
 
   // User Login
-  app.post("/api/auth/login", authLimiter, async (req, res) => {
+  app.post("/api/auth/login", async (req, res) => {
     try {
       const { usernameOrEmail, password } = req.body || {};
 
@@ -712,8 +1278,9 @@ async function startServer() {
       }
 
       const token = await issueSessionToken(user.id);
+      setSessionCookie(res, token);
       const { password: _, ...userWithoutPassword } = user;
-      return res.json({ success: true, user: userWithoutPassword, token });
+      return res.json({ success: true, user: userWithoutPassword });
     } catch (error: any) {
       console.error("Login Error:", error);
       return res.status(500).json({ error: "Failed to log in." });
@@ -723,54 +1290,36 @@ async function startServer() {
   // Sign in (or register) with Google. The frontend sends the ID token
   // ("credential") produced by Google Identity Services; we verify it
   // server-side before trusting any of its claims.
-  app.post("/api/auth/google", authLimiter, async (req, res) => {
+  app.post("/api/auth/google", async (req, res) => {
     try {
       const { credential } = req.body || {};
-      if (typeof credential !== "string" || !credential.trim()) {
-        return res.status(400).json({ error: "Missing Google credential." });
-      }
-
-      let payload;
+      let identity: Awaited<ReturnType<typeof verifyGoogleCredential>>;
       try {
-        const ticket = await googleOAuthClient.verifyIdToken({
-          idToken: credential,
-          audience: GOOGLE_CLIENT_ID,
-        });
-        payload = ticket.getPayload();
+        identity = await verifyGoogleCredential(credential);
       } catch (verifyError) {
         console.error("Google token verification failed:", verifyError);
         return res.status(401).json({ error: "Invalid Google credential." });
       }
 
-      if (!payload || !payload.sub || !payload.email) {
-        return res.status(401).json({ error: "Invalid Google credential." });
-      }
-      if (payload.email_verified === false) {
-        return res.status(401).json({ error: "Google account email is not verified." });
-      }
-
-      const googleId = payload.sub;
-      const email = payload.email.trim().toLowerCase();
-      const name = typeof payload.name === "string" ? payload.name.trim() : "";
-      const picture = typeof payload.picture === "string" ? payload.picture.trim() : "";
+      const { googleId, email, name, picture } = identity;
 
       const db = await readDBAsync(req.method !== "GET");
 
-      let user = db.users.find((u) => u.googleId === googleId);
+      const accountMatch = classifyGoogleSignInAccount(db.users, identity);
+      let user = accountMatch.kind === "linked" ? accountMatch.account : undefined;
       let isNewUser = false;
 
-      if (!user) {
-        // Fall back to matching by email so an existing password account can
-        // be linked to Google instead of creating a duplicate account.
-        user = db.users.find((u) => u.email.toLowerCase() === email);
+      if (accountMatch.kind === "email-conflict") {
+        // Never turn control of an email address into control of a pre-existing
+        // local account. Linking is a separate step-up flow below that requires
+        // both an active local session and the current account password.
+        return res.status(409).json({
+          error: "An account already uses this email. Sign in with its password before linking Google.",
+          code: "GOOGLE_LINK_REQUIRED",
+        });
       }
 
-      if (user) {
-        if (!user.googleId) {
-          user.googleId = googleId;
-          await writeDBAsync(db);
-        }
-      } else {
+      if (accountMatch.kind === "new") {
         isNewUser = true;
 
         const baseUsername = (email.split("@")[0] || "user").replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 24) || "user";
@@ -808,20 +1357,89 @@ async function startServer() {
       }
 
       const token = await issueSessionToken(user.id);
+      setSessionCookie(res, token);
       const { password: _pw, ...userWithoutPassword } = user;
-      return res.json({ success: true, user: userWithoutPassword, token, isNewUser });
+      return res.json({ success: true, user: userWithoutPassword, isNewUser });
     } catch (error: any) {
       console.error("Google Auth Error:", error);
       return res.status(500).json({ error: "Failed to sign in with Google." });
     }
   });
 
-  // Revoke the current session token on logout.
+  // Linking is deliberately distinct from Google sign-in. A verified Google
+  // email alone is not proof that the caller owns an existing local account:
+  // the caller must already hold a session and repeat the local password.
+  app.post("/api/auth/google/link", async (req, res) => {
+    try {
+      const userId = getUserIdFromToken(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      }
+
+      const { credential, currentPassword } = req.body || {};
+      if (typeof currentPassword !== "string" || !currentPassword || currentPassword.length > 128) {
+        return res.status(400).json({ error: "Current password is required to link Google." });
+      }
+
+      let identity: Awaited<ReturnType<typeof verifyGoogleCredential>>;
+      try {
+        identity = await verifyGoogleCredential(credential);
+      } catch (verifyError) {
+        return res.status(401).json({ error: "Invalid Google credential." });
+      }
+
+      const db = await readDBAsync(req.method !== "GET");
+      const userIndex = db.users.findIndex((candidate) => candidate.id === userId);
+      if (userIndex === -1) return res.status(404).json({ error: "User not found." });
+
+      const user = db.users[userIndex];
+      const currentPasswordMatches = user.password.startsWith("$2a$") || user.password.startsWith("$2b$") || user.password.startsWith("$2y$")
+        ? await bcrypt.compare(currentPassword, user.password)
+        : user.password === currentPassword;
+      if (!currentPasswordMatches) {
+        return res.status(401).json({ error: "Current password is incorrect." });
+      }
+
+      if (identity.email !== user.email.toLowerCase()) {
+        return res.status(409).json({ error: "Google email must match the signed-in account email." });
+      }
+      if (user.googleId) {
+        return res.status(409).json({ error: "This account is already linked to Google." });
+      }
+      if (db.users.some((candidate) => candidate.id !== userId && candidate.googleId === identity.googleId)) {
+        return res.status(409).json({ error: "This Google account is already linked to another account." });
+      }
+
+      // Invalidate before and after the canonical write. This closes sessions
+      // that were already active as well as a concurrent login that completed
+      // against the pre-link account state while this request was in flight.
+      await deleteAllUserSessionsFromRedis(userId);
+      db.users[userIndex] = {
+        ...user,
+        password: user.password.startsWith("$2a$") || user.password.startsWith("$2b$") || user.password.startsWith("$2y$")
+          ? user.password
+          : await bcrypt.hash(currentPassword, 10),
+        googleId: identity.googleId,
+      };
+      await writeDBAsync(db);
+      await deleteAllUserSessionsFromRedis(userId);
+
+      const token = await issueSessionToken(userId);
+      setSessionCookie(res, token);
+      const { password: _password, ...userWithoutPassword } = db.users[userIndex];
+      return res.json({ success: true, user: userWithoutPassword });
+    } catch (error) {
+      console.error("Google Link Error:", error);
+      clearSessionCookie(res);
+      return res.status(500).json({ error: "Failed to link Google account." });
+    }
+  });
+
+  // Revoke the current Redis session and expire the browser's HttpOnly cookie.
   app.post("/api/auth/logout", async (req, res) => {
     try {
-      const authHeader = req.headers.authorization || "";
-      const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-      if (token) await revokeSessionToken(token);
+      await revokeRequestSession(req);
+      clearSessionCookie(res);
       return res.json({ success: true });
     } catch (error) {
       console.error("Logout Error:", error);
@@ -1049,6 +1667,9 @@ async function startServer() {
 
       db.chatHistories[userId] = [];
       await writeDBAsync(db);
+      // A privacy deletion must not leave the cleared conversation in the
+      // recovery snapshot until its normal expiry.
+      await deleteDatabaseBackupFromRedis();
 
       return res.json({ success: true, chatHistory: [] });
     } catch (error: any) {
@@ -1193,20 +1814,14 @@ async function startServer() {
 
       // An explicitly empty avatar means "remove the uploaded profile photo".
       // Keep the built-in SVG as a UI fallback instead of trying to decode it
-      // as a base64 upload.
+      // as user-uploaded media; all real uploads arrive through presigned R2 PUTs.
       if (hasAvatarUpdate && !avatarUrl) avatarUrl = DEFAULT_AVATAR_URL;
 
       if (avatarUrl !== DEFAULT_AVATAR_URL && avatarUrl.startsWith("data:")) {
-        const mimeMatch = avatarUrl.match(/^data:(image\/[^;]+);base64,/);
-        const b64 = avatarUrl.includes(",") ? avatarUrl.split(",")[1] : "";
-        if (!mimeMatch || !b64) return res.status(400).json({ error: "Invalid avatar image." });
-        avatarUrl = await saveUploadedFile(b64, mimeMatch?.[1] || "image/jpeg", userId, "avatar");
+        return res.status(400).json({ error: "Inline image uploads are disabled; use the presigned upload endpoint." });
       }
       if (bannerUrl.startsWith("data:")) {
-        const mimeMatch = bannerUrl.match(/^data:(image\/[^;]+);base64,/);
-        const b64 = bannerUrl.includes(",") ? bannerUrl.split(",")[1] : "";
-        if (!mimeMatch || !b64) return res.status(400).json({ error: "Invalid banner image." });
-        bannerUrl = await saveUploadedFile(b64, mimeMatch?.[1] || "image/jpeg", userId, "banner");
+        return res.status(400).json({ error: "Inline image uploads are disabled; use the presigned upload endpoint." });
       }
       if (avatarUrl && avatarUrl !== DEFAULT_AVATAR_URL && !isStoredMediaUrl(avatarUrl)) return res.status(400).json({ error: "Avatar URL must use HTTP(S) or an uploaded file." });
       if (bannerUrl && !isStoredMediaUrl(bannerUrl)) return res.status(400).json({ error: "Banner URL must use HTTP(S) or an uploaded file." });
@@ -1275,6 +1890,9 @@ async function startServer() {
           : current.artistPickComment
         : undefined;
 
+      if (avatarUrl && avatarUrl !== DEFAULT_AVATAR_URL) avatarUrl = await publishManagedMedia(avatarUrl, userId);
+      if (bannerUrl) bannerUrl = await publishManagedMedia(bannerUrl, userId);
+
       db.users[index] = {
         ...current,
         displayName,
@@ -1310,8 +1928,13 @@ async function startServer() {
       const { password: _, ...updatedUser } = db.users[index];
       return res.json({ success: true, user: updatedUser });
     } catch (error: any) {
-      console.error("Update User Error:", error);
-      return res.status(500).json({ error: "Failed to update user profile." });
+      if (error instanceof InvalidImageUploadError) {
+        return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.');
+      }
+      if (error instanceof PrivateMediaAccessError) {
+        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.');
+      }
+      return sendCorrelatedError(res, 500, ERROR_CODES.PROFILE_UPDATE_FAILED, 'Failed to update user profile.', 'Update user error', error);
     }
   });
 
@@ -1355,9 +1978,17 @@ async function startServer() {
         return res.status(401).json({ error: "Current password is incorrect." });
       }
 
-      db.users[index] = { ...user, password: await bcrypt.hash(newPassword, 10) };
+      const newPasswordHash = await bcrypt.hash(newPassword, 10);
+      // Invalidate once before the write and once after it. The first bump
+      // closes all existing sessions; the second also catches a concurrent
+      // login that began against the old password immediately before the
+      // canonical password write completed.
+      await deleteAllUserSessionsFromRedis(userId);
+      db.users[index] = { ...user, password: newPasswordHash };
       await writeDBAsync(db);
-      return res.json({ success: true });
+      await deleteAllUserSessionsFromRedis(userId);
+      clearSessionCookie(res);
+      return res.json({ success: true, reauthenticationRequired: true });
     } catch (error: any) {
       console.error("Change Password Error:", error);
       return res.status(500).json({ error: "Failed to change password." });
@@ -1471,16 +2102,10 @@ async function startServer() {
       let persistentAudioUrl = audioUrl.trim();
       let persistentCoverUrl = typeof coverUrl === "string" ? coverUrl.trim() : "";
       if (persistentAudioUrl.startsWith("data:")) {
-        const parsedAudio = parseAudioDataUrl(persistentAudioUrl, audioFileName);
-        if (!parsedAudio) return res.status(400).json({ success: false, error: "Unsupported audio file. Use MP3, WAV, OGG, M4A, AAC, or FLAC." });
-        persistentAudioUrl = await saveUploadedFile(parsedAudio.base64Data, parsedAudio.mimeType, sessionUserId, "audio");
+        return res.status(400).json({ success: false, error: "Inline audio uploads are disabled; use the presigned upload endpoint." });
       }
       if (persistentCoverUrl.startsWith("data:")) {
-        const mimeMatch = persistentCoverUrl.match(/^data:(image\/[^;]+);base64,/);
-        if (!mimeMatch) return res.status(400).json({ success: false, error: "Cover upload must contain an image MIME type." });
-        const imgBase64 = persistentCoverUrl.includes(",") ? persistentCoverUrl.split(",")[1] : "";
-        if (!imgBase64) return res.status(400).json({ success: false, error: "Invalid cover image." });
-        persistentCoverUrl = await saveUploadedFile(imgBase64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "cover");
+        return res.status(400).json({ success: false, error: "Inline image uploads are disabled; use the presigned upload endpoint." });
       }
       if (!isStoredMediaUrl(persistentAudioUrl)) return res.status(400).json({ success: false, error: "Audio URL must use HTTP(S) or an uploaded file." });
       if (persistentCoverUrl && !isStoredMediaUrl(persistentCoverUrl)) return res.status(400).json({ success: false, error: "Cover URL must use HTTP(S) or an uploaded file." });
@@ -1515,6 +2140,8 @@ async function startServer() {
       }
       const cleanCopyright = normalizeCopyright(copyright, `${cleanReleaseYear || currentYear} ${canonicalArtistName}`);
       if (cleanCopyright.length > 300) return res.status(400).json({ success: false, error: "Copyright text cannot exceed 300 characters." });
+      persistentAudioUrl = await publishManagedMedia(persistentAudioUrl, sessionUserId);
+      persistentCoverUrl = await publishManagedMedia(persistentCoverUrl, sessionUserId);
       const newTrack: TrackRecord = {
         id: createEntityId("trk"),
         userId: sessionUserId,
@@ -1549,8 +2176,13 @@ async function startServer() {
       await writeDBAsync(db);
       return res.json({ success: true, track: newTrack });
     } catch (error: any) {
-      console.error("Add Track Error:", error);
-      return res.status(500).json({ success: false, error: error?.message || "Failed to add track." });
+      if (error instanceof InvalidImageUploadError) {
+        return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.', { success: false });
+      }
+      if (error instanceof PrivateMediaAccessError) {
+        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.', { success: false });
+      }
+      return sendCorrelatedError(res, 500, ERROR_CODES.TRACK_CREATE_FAILED, 'Failed to add track.', 'Add track error', error, { success: false });
     }
   });
 
@@ -1611,15 +2243,13 @@ async function startServer() {
       if (typeof req.body.coverUrl === "string" && req.body.coverUrl.trim()) {
         const cleanCover = req.body.coverUrl.trim();
         if (cleanCover.startsWith("data:")) {
-          const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
-          const imageBase64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
-          if (!mimeMatch || !imageBase64) return res.status(400).json({ error: "Invalid cover image." });
-          persistentCoverUrl = await saveUploadedFile(imageBase64, mimeMatch[1], sessionUserId, "cover");
+          return res.status(400).json({ error: "Inline image uploads are disabled; use the presigned upload endpoint." });
         } else {
           if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Cover URL must use HTTP(S) or an uploaded file." });
           persistentCoverUrl = cleanCover;
         }
       }
+      persistentCoverUrl = await publishManagedMedia(persistentCoverUrl, sessionUserId);
 
       const sharedReleaseId = seedTrack.releaseId || createEntityId("rel");
       const updatedTracks = requestedTracks.map((requestedTrack: any, index: number) => {
@@ -1647,8 +2277,13 @@ async function startServer() {
       await writeDBAsync(db);
       return res.json({ success: true, tracks: updatedTracks });
     } catch (error: any) {
-      console.error("Update Release Error:", error);
-      return res.status(500).json({ error: error?.message || "Failed to update release." });
+      if (error instanceof InvalidImageUploadError) {
+        return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.');
+      }
+      if (error instanceof PrivateMediaAccessError) {
+        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.');
+      }
+      return sendCorrelatedError(res, 500, ERROR_CODES.RELEASE_UPDATE_FAILED, 'Failed to update release.', 'Update release error', error);
     }
   });
 
@@ -1676,10 +2311,7 @@ async function startServer() {
       if (typeof coverUrl === "string") {
         const cleanCover = coverUrl.trim();
         if (cleanCover.startsWith("data:")) {
-          const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
-          const imgBase64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
-          if (!mimeMatch || !imgBase64) return res.status(400).json({ error: "Invalid cover image." });
-          persistentCoverUrl = await saveUploadedFile(imgBase64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "cover");
+          return res.status(400).json({ error: "Inline image uploads are disabled; use the presigned upload endpoint." });
         } else if (cleanCover) {
           if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Cover URL must use HTTP(S) or an uploaded file." });
           persistentCoverUrl = cleanCover;
@@ -1690,9 +2322,7 @@ async function startServer() {
       if (typeof audioUrl === "string" && audioUrl.trim()) {
         const cleanAudio = audioUrl.trim();
         if (cleanAudio.startsWith("data:")) {
-          const parsedAudio = parseAudioDataUrl(cleanAudio, audioFileName);
-          if (!parsedAudio) return res.status(400).json({ error: "Unsupported audio file. Use MP3, WAV, OGG, M4A, AAC, or FLAC." });
-          persistentAudioUrl = await saveUploadedFile(parsedAudio.base64Data, parsedAudio.mimeType, sessionUserId, "audio");
+          return res.status(400).json({ error: "Inline audio uploads are disabled; use the presigned upload endpoint." });
         } else {
           if (!isStoredMediaUrl(cleanAudio)) return res.status(400).json({ error: "Audio URL must use HTTP(S) or an uploaded file." });
           persistentAudioUrl = cleanAudio;
@@ -1730,6 +2360,8 @@ async function startServer() {
         `${nextReleaseYear || currentYear} ${ownerArtistName}`,
       );
       if (nextCopyright.length > 300) return res.status(400).json({ error: "Copyright text cannot exceed 300 characters." });
+      persistentAudioUrl = await publishManagedMedia(persistentAudioUrl, sessionUserId);
+      persistentCoverUrl = await publishManagedMedia(persistentCoverUrl, sessionUserId);
 
       const updatedTrack: TrackRecord = {
         ...existingTrack,
@@ -1752,13 +2384,18 @@ async function startServer() {
       await writeDBAsync(db);
       return res.json({ success: true, track: updatedTrack });
     } catch (error: any) {
-      console.error("Update Track Error:", error);
-      return res.status(500).json({ error: "Failed to update track." });
+      if (error instanceof InvalidImageUploadError) {
+        return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.');
+      }
+      if (error instanceof PrivateMediaAccessError) {
+        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.');
+      }
+      return sendCorrelatedError(res, 500, ERROR_CODES.TRACK_UPDATE_FAILED, 'Failed to update track.', 'Update track error', error);
     }
   });
 
   // Record a real track play and persist the authenticated listener's history.
-  app.post("/api/tracks/:id/play", trackPlayLimiter, async (req, res) => {
+  app.post("/api/tracks/:id/play", async (req, res) => {
     try {
       const { id } = req.params;
       const db = await readDBAsync(req.method !== "GET");
@@ -1853,8 +2490,7 @@ async function startServer() {
       );
       return res.json({ success: true, deletedTrackId: id });
     } catch (error: any) {
-      console.error("Delete Track Error:", error);
-      return res.status(500).json({ error: "Failed to delete track." });
+      return sendCorrelatedError(res, 500, ERROR_CODES.TRACK_DELETE_FAILED, 'Failed to delete track.', 'Delete track error', error);
     }
   });
 
@@ -1890,8 +2526,7 @@ async function startServer() {
 
       return res.json({ success: true, wipedCount: ownedIds.size, deletedTrackIds: [...ownedIds] });
     } catch (error: any) {
-      console.error("Wipe Tracks Error:", error);
-      return res.status(500).json({ error: "Failed to wipe uploaded tracks." });
+      return sendCorrelatedError(res, 500, ERROR_CODES.TRACK_WIPE_FAILED, 'Failed to wipe uploaded tracks.', 'Wipe tracks error', error);
     }
   };
 
@@ -1986,15 +2621,13 @@ async function startServer() {
       if (typeof req.body.coverUrl === "string" && req.body.coverUrl.trim()) {
         const cleanCover = req.body.coverUrl.trim();
         if (cleanCover.startsWith("data:")) {
-          const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
-          const base64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
-          if (!mimeMatch || !base64) return res.status(400).json({ error: "Invalid playlist cover image." });
-          persistentCoverUrl = await saveUploadedFile(base64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "playlist");
+          return res.status(400).json({ error: "Inline image uploads are disabled; use the presigned upload endpoint." });
         } else {
           if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Playlist cover URL must use HTTP(S) or an uploaded file." });
           persistentCoverUrl = cleanCover;
         }
       }
+      persistentCoverUrl = await publishManagedMedia(persistentCoverUrl, sessionUserId);
 
       const newPlaylist: PlaylistRecord = {
         id: createEntityId("pl"),
@@ -2013,8 +2646,13 @@ async function startServer() {
       await writeDBAsync(db);
       return res.status(201).json({ success: true, playlist: newPlaylist });
     } catch (error: any) {
-      console.error("Create Playlist Error:", error);
-      return res.status(500).json({ error: "Failed to create playlist." });
+      if (error instanceof InvalidImageUploadError) {
+        return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.');
+      }
+      if (error instanceof PrivateMediaAccessError) {
+        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.');
+      }
+      return sendCorrelatedError(res, 500, ERROR_CODES.PLAYLIST_CREATE_FAILED, 'Failed to create playlist.', 'Create playlist error', error);
     }
   });
 
@@ -2041,21 +2679,18 @@ async function startServer() {
       if (typeof req.body.coverUrl === "string") {
         const cleanCover = req.body.coverUrl.trim();
         if (cleanCover.startsWith("data:")) {
-          const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
-          const base64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
-          if (!mimeMatch || !base64) return res.status(400).json({ error: "Invalid playlist cover image." });
-          persistentCoverUrl = await saveUploadedFile(base64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "playlist");
+          return res.status(400).json({ error: "Inline image uploads are disabled; use the presigned upload endpoint." });
         } else if (cleanCover) {
           if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Playlist cover URL must use HTTP(S) or an uploaded file." });
           persistentCoverUrl = cleanCover;
         }
       }
-
       const nextTitle = req.body.title === undefined ? existing.title : String(req.body.title).trim();
       if (!nextTitle) return res.status(400).json({ error: "Playlist title is required." });
       if (nextTitle.length > 120) return res.status(400).json({ error: "Playlist title cannot exceed 120 characters." });
       const nextDescription = req.body.description === undefined ? existing.description : String(req.body.description).trim();
       if (nextDescription.length > 1_000) return res.status(400).json({ error: "Playlist description cannot exceed 1000 characters." });
+      persistentCoverUrl = await publishManagedMedia(persistentCoverUrl, sessionUserId);
       db.playlists[index] = {
         ...existing,
         title: nextTitle,
@@ -2067,8 +2702,13 @@ async function startServer() {
       await writeDBAsync(db);
       return res.json({ success: true, playlist: db.playlists[index] });
     } catch (error: any) {
-      console.error("Update Playlist Error:", error);
-      return res.status(500).json({ error: "Failed to update playlist." });
+      if (error instanceof InvalidImageUploadError) {
+        return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.');
+      }
+      if (error instanceof PrivateMediaAccessError) {
+        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.');
+      }
+      return sendCorrelatedError(res, 500, ERROR_CODES.PLAYLIST_UPDATE_FAILED, 'Failed to update playlist.', 'Update playlist error', error);
     }
   });
 
@@ -2091,8 +2731,7 @@ async function startServer() {
       await writeDBAsync(db);
       return res.json({ success: true, deletedPlaylistId: target.id });
     } catch (error: any) {
-      console.error("Delete Playlist Error:", error);
-      return res.status(500).json({ error: "Failed to delete playlist." });
+      return sendCorrelatedError(res, 500, ERROR_CODES.PLAYLIST_DELETE_FAILED, 'Failed to delete playlist.', 'Delete playlist error', error);
     }
   });
 
@@ -2324,7 +2963,7 @@ function buildNvidiaMessages(
 }
 
   // NVIDIA NIM AI Chat Endpoint
-  app.post("/api/chat", chatLimiter, async (req, res) => {
+  app.post("/api/chat", async (req, res) => {
     const clientAbortController = new AbortController();
     let streamingResponse = false;
     const startActivityStream = () => {
@@ -2345,12 +2984,12 @@ function buildNvidiaMessages(
       sendStreamEvent({ type: "result", data: payload });
       return res.end();
     };
+    const correlationId = getCorrelationId(res);
     res.once("close", () => {
       if (!res.writableEnded) clientAbortController.abort();
     });
     const requestDiagnostics = {
       model: process.env.NVIDIA_CHAT_MODEL?.trim() || "openai/gpt-oss-120b",
-      keyFingerprint: "not-loaded",
       historyMessages: 0,
       historyCharacters: 0,
       webSearchRequested: false,
@@ -2390,6 +3029,8 @@ function buildNvidiaMessages(
         res.setHeader("Retry-After", String(cooldownSeconds));
         return res.status(429).json({
           error: AI_HIGH_DEMAND_MESSAGE,
+          code: ERROR_CODES.AI_RATE_LIMITED,
+          correlationId,
           rateLimited: true,
           quotaExhausted: nvidiaChatCooldownWasQuotaExhausted,
           retryAfterSeconds: cooldownSeconds,
@@ -2398,18 +3039,16 @@ function buildNvidiaMessages(
 
       const apiKey = process.env.NVIDIA_API_KEY?.trim();
       if (!apiKey) {
-        return res.status(500).json({
-          error: "The AI service is not configured. Please configure the server API key.",
-          configurationError: true,
-        });
+        return sendCorrelatedError(
+          res,
+          500,
+          ERROR_CODES.AI_NOT_CONFIGURED,
+          'The AI service is not configured.',
+          'AI chat configuration error',
+          new Error('NVIDIA_API_KEY is not configured.'),
+          { configurationError: true },
+        );
       }
-      // Diagnostics only need enough to tell which configured key was used,
-      // never a derivative of the secret itself. A single fast hash round
-      // over a low-entropy-ish credential is brute-forceable, so mask the
-      // key instead of hashing it.
-      requestDiagnostics.keyFingerprint = apiKey.length > 8
-        ? `${apiKey.slice(0, 4)}…${apiKey.slice(-4)}`
-        : "****";
 
       const ownerDB = await readDBAsync(req.method !== "GET");
       if (!ownerDB.users.some((user) => user.id === sessionUserId)) return res.status(404).json({ error: "User not found." });
@@ -2788,22 +3427,38 @@ function buildNvidiaMessages(
         return;
       }
       if (error?.configurationError) {
-        console.error("AI Chat Configuration Error:", error.message);
+        logCorrelatedError('AI chat configuration error', res, error);
         if (streamingResponse) {
-          sendStreamEvent({ type: "error", error: error.message, configurationError: true });
+          sendStreamEvent({
+            type: 'error',
+            error: 'The AI service is not configured.',
+            code: ERROR_CODES.AI_NOT_CONFIGURED,
+            correlationId,
+            configurationError: true,
+          });
           return res.end();
         }
-        return res.status(500).json({ error: error.message, configurationError: true });
+        return res.status(500).json({
+          error: 'The AI service is not configured.',
+          code: ERROR_CODES.AI_NOT_CONFIGURED,
+          correlationId,
+          configurationError: true,
+        });
       }
       const { message: cleanMsg, providerMessage, rateLimited, quotaExhausted, retryAfterSeconds } = parseCleanErrorMessage(error);
-      console.error("AI Chat Provider Error:", {
+      const webSearchFailed = requestDiagnostics.stage === "web-search-tool";
+      const clientRateLimited = rateLimited && !webSearchFailed;
+      const clientErrorCode = clientRateLimited
+        ? ERROR_CODES.AI_RATE_LIMITED
+        : webSearchFailed
+          ? ERROR_CODES.WEB_SEARCH_UNAVAILABLE
+          : ERROR_CODES.AI_PROVIDER_ERROR;
+      logCorrelatedError('AI chat provider error', res, {
         ...requestDiagnostics,
         rateLimited,
         quotaExhausted,
         message: providerMessage,
       });
-      const webSearchFailed = requestDiagnostics.stage === "web-search-tool";
-      const clientRateLimited = rateLimited && !webSearchFailed;
       if (clientRateLimited) {
         nvidiaChatCooldownUntil = Date.now() + retryAfterSeconds * 1_000;
         nvidiaChatCooldownWasQuotaExhausted = quotaExhausted;
@@ -2815,6 +3470,8 @@ function buildNvidiaMessages(
           error: requestDiagnostics.stage === "web-search-tool"
             ? "Web search is temporarily unavailable. Please try again."
             : cleanMsg,
+          code: clientErrorCode,
+          correlationId,
           rateLimited: clientRateLimited,
           quotaExhausted: clientRateLimited && quotaExhausted,
           retryAfterSeconds: clientRateLimited ? retryAfterSeconds : 0,
@@ -2823,15 +3480,11 @@ function buildNvidiaMessages(
       }
       return res.status(clientRateLimited ? 429 : webSearchFailed ? 502 : 500).json({
         error: webSearchFailed ? "Web search is temporarily unavailable. Please try again." : cleanMsg,
+        code: clientErrorCode,
+        correlationId,
         rateLimited: clientRateLimited,
         quotaExhausted: clientRateLimited && quotaExhausted,
         retryAfterSeconds: clientRateLimited ? retryAfterSeconds : 0,
-        diagnostics: clientRateLimited ? {
-          model: requestDiagnostics.model,
-          historyMessages: requestDiagnostics.historyMessages,
-          historyCharacters: requestDiagnostics.historyCharacters,
-          webSearchRequested: requestDiagnostics.webSearchRequested,
-        } : undefined,
       });
     }
   });
@@ -2870,15 +3523,15 @@ function buildNvidiaMessages(
     }));
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    const clientDistPath = path.join(process.cwd(), "dist", "client");
+    app.use(express.static(clientDistPath));
     app.get("/track/:trackId", pageLimiter, sendTrackPage(async () =>
-      fs.promises.readFile(path.join(distPath, "index.html"), "utf8")
+      fs.promises.readFile(path.join(clientDistPath, "index.html"), "utf8")
     ));
     // Unrated wildcard fallbacks are an easy DoS target (every unmatched GET
     // triggers a disk read), so this needs the same guard as the API routes.
     app.get("*", pageLimiter, (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(path.join(clientDistPath, "index.html"));
     });
   }
 

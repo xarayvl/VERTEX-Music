@@ -1,7 +1,82 @@
 import { Redis } from '@upstash/redis';
+import crypto from 'node:crypto';
 
 const UPSTASH_DB_KEY = 'app:spotify:db_v1';
 const UPSTASH_DB_BACKUP_KEY = 'app:spotify:db_v1:previous';
+const ENCRYPTED_JSON_PREFIX = 'enc:v1';
+const DEFAULT_CHAT_RETENTION_DAYS = 30;
+const DEFAULT_BACKUP_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+function readBoundedPositiveInteger(name: string, fallback: number, maximum: number): number {
+  const value = Number(process.env[name]);
+  return Number.isSafeInteger(value) && value > 0 && value <= maximum ? value : fallback;
+}
+
+function getChatRetentionMs(): number {
+  return readBoundedPositiveInteger('CHAT_RETENTION_DAYS', DEFAULT_CHAT_RETENTION_DAYS, 365) * 24 * 60 * 60 * 1_000;
+}
+
+function getBackupTtlSeconds(): number {
+  return readBoundedPositiveInteger('DB_BACKUP_TTL_SECONDS', DEFAULT_BACKUP_TTL_SECONDS, 90 * 24 * 60 * 60);
+}
+
+function getDataEncryptionKey(): Buffer {
+  const configured = process.env.DATA_ENCRYPTION_KEY?.trim() || '';
+  const key = /^[0-9a-f]{64}$/i.test(configured)
+    ? Buffer.from(configured, 'hex')
+    : Buffer.from(configured, 'base64');
+  if (key.length !== 32) {
+    throw new Error('DATA_ENCRYPTION_KEY must be a 32-byte key encoded as base64 or 64 hexadecimal characters.');
+  }
+  return key;
+}
+
+/** AES-256-GCM envelope used for canonical snapshots, backups, and user entities. */
+export function encryptPersistedJson(value: unknown, purpose: string): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', getDataEncryptionKey(), iv);
+  cipher.setAAD(Buffer.from(`vertex:${purpose}:v1`, 'utf8'));
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [ENCRYPTED_JSON_PREFIX, iv.toString('base64'), tag.toString('base64'), ciphertext.toString('base64')].join(':');
+}
+
+export function decryptPersistedJson<T>(envelope: string, purpose: string): T {
+  const parts = envelope.split(':');
+  if (parts.length !== 5 || `${parts[0]}:${parts[1]}` !== ENCRYPTED_JSON_PREFIX) {
+    throw new Error('Encrypted Redis payload has an unsupported format.');
+  }
+  const iv = Buffer.from(parts[2], 'base64');
+  const tag = Buffer.from(parts[3], 'base64');
+  const ciphertext = Buffer.from(parts[4], 'base64');
+  if (iv.length !== 12 || tag.length !== 16 || ciphertext.length === 0) {
+    throw new Error('Encrypted Redis payload is malformed.');
+  }
+  const decipher = crypto.createDecipheriv('aes-256-gcm', getDataEncryptionKey(), iv);
+  decipher.setAAD(Buffer.from(`vertex:${purpose}:v1`, 'utf8'));
+  decipher.setAuthTag(tag);
+  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  return JSON.parse(plaintext) as T;
+}
+
+type StoredDatabase = {
+  data: DBData;
+  encrypted: boolean;
+  sanitizedChanged: boolean;
+};
+
+function decodeStoredDatabase(value: unknown): StoredDatabase | null {
+  if (typeof value === 'string') {
+    const decrypted = decryptPersistedJson<Partial<DBData>>(value, 'canonical-db');
+    const data = sanitizeDBData(decrypted);
+    return { data, encrypted: true, sanitizedChanged: JSON.stringify(decrypted) !== JSON.stringify(data) };
+  }
+  if (value && typeof value === 'object') {
+    const data = sanitizeDBData(value as Partial<DBData>);
+    return { data, encrypted: false, sanitizedChanged: JSON.stringify(value) !== JSON.stringify(data) };
+  }
+  return null;
+}
 
 export interface UserRecord {
   id: string;
@@ -381,17 +456,20 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
   const rawHistories = input?.chatHistories && typeof input.chatHistories === 'object' ? input.chatHistories : {};
   const trackById = new Map(tracks.map((track) => [track.id, track]));
   const chatHistories: Record<string, ChatMessageRecord[]> = {};
+  const chatRetentionCutoff = Date.now() - getChatRetentionMs();
   for (const user of users) {
     const history = Array.isArray(rawHistories[user.id]) ? rawHistories[user.id] : [];
-    chatHistories[user.id] = history.slice(-200).filter((message): message is ChatMessageRecord =>
+    chatHistories[user.id] = history.filter((message): message is ChatMessageRecord =>
       Boolean(
         message &&
         typeof message.id === 'string' && message.id.trim() &&
         (message.sender === 'user' || message.sender === 'ai') &&
         typeof message.text === 'string' && message.text.trim() &&
-        typeof message.timestamp === 'string' && !Number.isNaN(Date.parse(message.timestamp))
+        typeof message.timestamp === 'string' &&
+        !Number.isNaN(Date.parse(message.timestamp)) &&
+        Date.parse(message.timestamp) >= chatRetentionCutoff
       )
-    ).map((message) => ({
+    ).slice(-200).map((message) => ({
       id: message.id.trim(),
       sender: message.sender,
       text: message.text.trim().slice(0, 20_000),
@@ -477,6 +555,77 @@ export function isUpstashConfigured(): boolean {
   return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
 }
 
+async function enforceBackupRetentionAndEncryption(redis: Redis): Promise<void> {
+  const storedBackup = await redis.get<unknown>(UPSTASH_DB_BACKUP_KEY);
+  if (storedBackup === null || storedBackup === undefined) return;
+
+  const backupTtlSeconds = getBackupTtlSeconds();
+  if (storedBackup && typeof storedBackup === 'object') {
+    const sanitized = sanitizeDBData(storedBackup as Partial<DBData>);
+    await redis.set(UPSTASH_DB_BACKUP_KEY, encryptPersistedJson(sanitized, 'backup-db'), { ex: backupTtlSeconds });
+    return;
+  }
+
+  if (typeof storedBackup === 'string' && storedBackup.startsWith(`${ENCRYPTED_JSON_PREFIX}:`)) {
+    try {
+      const decrypted = decryptPersistedJson<Partial<DBData>>(storedBackup, 'backup-db');
+      const sanitized = sanitizeDBData(decrypted);
+      if (JSON.stringify(decrypted) !== JSON.stringify(sanitized)) {
+        await redis.set(UPSTASH_DB_BACKUP_KEY, encryptPersistedJson(sanitized, 'backup-db'), { ex: backupTtlSeconds });
+        return;
+      }
+      const currentTtl = await redis.ttl(UPSTASH_DB_BACKUP_KEY);
+      if (!Number.isFinite(currentTtl) || currentTtl < 0 || currentTtl > backupTtlSeconds) {
+        await redis.expire(UPSTASH_DB_BACKUP_KEY, backupTtlSeconds);
+      }
+      return;
+    } catch {
+      // A backup is never authoritative. Delete an unreadable payload instead
+      // of retaining unknown/plaintext data indefinitely.
+    }
+  }
+
+  await redis.del(UPSTASH_DB_BACKUP_KEY);
+}
+
+/** Privacy deletion must also remove recovery copies containing old values. */
+export async function deleteDatabaseBackupFromRedis(): Promise<void> {
+  await getUpstashClient().del(UPSTASH_DB_BACKUP_KEY);
+  lastCanonicalBackupAt = Date.now();
+}
+
+async function enforceUserEntityEncryption(redis: Redis, data: DBData): Promise<void> {
+  const currentUserIds = data.users.map((user) => user.id);
+  const indexedUserIds = await redis.get<string[]>('app:users:ids');
+  const staleUserIds = Array.isArray(indexedUserIds)
+    ? indexedUserIds.filter((id) => typeof id === 'string' && !currentUserIds.includes(id))
+    : [];
+  if (staleUserIds.length > 0) {
+    await redis.del(...staleUserIds.map((id) => `app:user:${id}`));
+  }
+  if (!Array.isArray(indexedUserIds) || JSON.stringify(indexedUserIds) !== JSON.stringify(currentUserIds)) {
+    await redis.set('app:users:ids', currentUserIds);
+  }
+
+  // Small batches avoid a startup request burst for installations with many
+  // accounts while still repairing a partial prior migration.
+  for (let offset = 0; offset < data.users.length; offset += 25) {
+    await Promise.all(data.users.slice(offset, offset + 25).map(async (user) => {
+      const key = `app:user:${user.id}`;
+      const stored = await redis.get<unknown>(key);
+      if (typeof stored === 'string' && stored.startsWith(`${ENCRYPTED_JSON_PREFIX}:`)) {
+        try {
+          const decrypted = decryptPersistedJson<UserRecord>(stored, `user:${user.id}`);
+          if (JSON.stringify(decrypted) === JSON.stringify(user)) return;
+        } catch {
+          // Replace malformed, wrong-context, or old-key ciphertext below.
+        }
+      }
+      await redis.set(key, encryptPersistedJson(user, `user:${user.id}`));
+    }));
+  }
+}
+
 export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<void> {
   try {
     data = sanitizeDBData(data);
@@ -492,12 +641,15 @@ export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<vo
     // Compare against the previous canonical snapshot so routine mutations do
     // not rewrite every entity and every index. This is especially important
     // for listening-time updates, which only change one user record.
-    const previousCanonical = await redis.get<DBData>(UPSTASH_DB_KEY);
-    const previous = previousCanonical && typeof previousCanonical === 'object'
-      ? sanitizeDBData(previousCanonical)
-      : null;
+    const previousCanonical = await redis.get<unknown>(UPSTASH_DB_KEY);
+    const decodedPrevious = decodeStoredDatabase(previousCanonical);
+    const previous = decodedPrevious?.data || null;
+    const previousWasEncrypted = decodedPrevious?.encrypted === true;
     const nextCanonicalJson = JSON.stringify(data);
-    if (previous && JSON.stringify(previous) === nextCanonicalJson) return;
+    if (previousWasEncrypted && !decodedPrevious?.sanitizedChanged && previous && JSON.stringify(previous) === nextCanonicalJson) {
+      await enforceUserEntityEncryption(redis, data);
+      return;
+    }
 
     const previousUserIds = (previous?.users || []).map((item) => item.id);
     const previousTrackIds = (previous?.tracks || []).map((item) => item.id);
@@ -505,7 +657,9 @@ export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<vo
     const previousArtistIds = (previous?.users || [])
       .filter((user) => user.isArtist || previous?.tracks.some((track) => track.userId === user.id))
       .map((user) => user.id);
-    const indexPromises: Promise<any>[] = [redis.set(UPSTASH_DB_KEY, data)];
+    const indexPromises: Promise<any>[] = [
+      redis.set(UPSTASH_DB_KEY, encryptPersistedJson(data, 'canonical-db')),
+    ];
     const changed = (before: string[], after: string[]) => JSON.stringify(before) !== JSON.stringify(after);
     const structureChanged = !previous
       || changed(previousUserIds, userIds)
@@ -514,11 +668,14 @@ export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<vo
     // Keep recovery snapshots, but do not rewrite a full duplicate database
     // for every play counter, chat message, or listening-time tick.
     if (
-      previousCanonical &&
-      typeof previousCanonical === 'object' &&
+      previous &&
       (structureChanged || Date.now() - lastCanonicalBackupAt >= 15 * 60_000)
     ) {
-      await redis.set(UPSTASH_DB_BACKUP_KEY, previousCanonical);
+      await redis.set(
+        UPSTASH_DB_BACKUP_KEY,
+        encryptPersistedJson(previous, 'backup-db'),
+        { ex: getBackupTtlSeconds() },
+      );
       lastCanonicalBackupAt = Date.now();
     }
     if (!previous || changed(previousUserIds, userIds)) indexPromises.push(redis.set('app:users:ids', userIds));
@@ -536,8 +693,8 @@ export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<vo
     const previousPlaylists = new Map((previous?.playlists || []).map((item) => [item.id, JSON.stringify(item)]));
 
     for (const u of data.users || []) {
-      if (u.id && previousUsers.get(u.id) !== JSON.stringify(u)) {
-        entityPromises.push(redis.set(`app:user:${u.id}`, u));
+      if (u.id && (!previousWasEncrypted || previousUsers.get(u.id) !== JSON.stringify(u))) {
+        entityPromises.push(redis.set(`app:user:${u.id}`, encryptPersistedJson(u, `user:${u.id}`)));
       }
     }
 
@@ -581,15 +738,19 @@ export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<vo
 export async function initUpstashDB(): Promise<DBData> {
   const redis = getUpstashClient();
   console.log('⚡ Loading canonical database from Upstash Redis...');
-  const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
-  const data = remoteData && typeof remoteData === 'object'
-    ? sanitizeDBData(remoteData)
-    : sanitizeDBData({});
+  const remoteData = await redis.get<unknown>(UPSTASH_DB_KEY);
+  const decoded = decodeStoredDatabase(remoteData);
+  const data = decoded?.data || sanitizeDBData({});
 
-  if (!remoteData || typeof remoteData !== 'object') {
+  if (!decoded) {
     console.log('ℹ️ Upstash database is empty. Initializing a new canonical database in Redis...');
     await syncUpstashIndices(redis, data);
+  } else if (!decoded.encrypted || decoded.sanitizedChanged) {
+    console.log('🔐 Migrating canonical Redis data to encrypted, retention-limited storage...');
+    await syncUpstashIndices(redis, data);
   }
+  await enforceUserEntityEncryption(redis, data);
+  await enforceBackupRetentionAndEncryption(redis);
 
   cachedDB = data;
   cachedDBFetchedAt = Date.now();
@@ -602,17 +763,25 @@ export async function readDBAsync(forceRemote = false): Promise<DBData> {
   await writeChain.catch(() => undefined);
   const redis = getUpstashClient();
   if (!forceRemote && cachedDB && Date.now() - cachedDBFetchedAt < getRemoteCacheTtlMs()) {
-    return cachedDB;
+    const retentionSanitized = sanitizeDBData(cachedDB);
+    if (JSON.stringify(retentionSanitized) !== JSON.stringify(cachedDB)) {
+      await enqueueDatabaseWrite(retentionSanitized);
+    }
+    return retentionSanitized;
   }
 
-  const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
-  if (!remoteData || typeof remoteData !== 'object') {
+  const remoteData = await redis.get<unknown>(UPSTASH_DB_KEY);
+  const decoded = decodeStoredDatabase(remoteData);
+  if (!decoded) {
     cachedDB = null;
     cachedDBFetchedAt = 0;
     throw new Error('Canonical Upstash database is missing or invalid.');
   }
 
-  const validated = sanitizeDBData(remoteData);
+  const validated = decoded.data;
+  if (!decoded.encrypted || decoded.sanitizedChanged) {
+    await syncUpstashIndices(redis, validated);
+  }
   cachedDB = validated;
   cachedDBFetchedAt = Date.now();
   lastPersistedJson = JSON.stringify(validated);
@@ -648,31 +817,122 @@ export async function writeDBAsync(data: DBData): Promise<void> {
 // ==========================================
 // SESSION PERSISTENCE (Upstash required)
 // ==========================================
-// Sessions are kept in an in-memory Map for fast synchronous lookups on every
-// request, but are also mirrored to Upstash Redis (a single hash) so that:
-//  - sessions survive server restarts / redeploys / cold starts
-//  - sessions are shared across multiple server instances (horizontal scaling,
-//    or separate deployments pointed at the same Upstash database)
-const SESSIONS_HASH_KEY = 'app:sessions';
+// Every session has its own expiring Redis key. Only a SHA-256 digest of the
+// browser token is used in Redis keys and indices; the bearer secret itself is
+// never persisted server-side.
+const LEGACY_SESSIONS_HASH_KEY = 'app:sessions';
+const SESSION_KEY_PREFIX = 'app:session:';
+const USER_SESSIONS_KEY_PREFIX = 'app:user-sessions:';
+const USER_SESSION_VERSION_KEY_PREFIX = 'app:user-session-version:';
 
-/**
- * Loads all persisted sessions from Upstash Redis so the in-memory session
- * lookup cache can be hydrated once at server startup.
- */
-export async function loadSessionsFromRedis(): Promise<Record<string, string>> {
-  const redis = getUpstashClient();
-  const sessions = await redis.hgetall<Record<string, string>>(SESSIONS_HASH_KEY);
-  return sessions && typeof sessions === 'object' ? sessions : {};
+export interface SessionRecord {
+  userId: string;
+  createdAt: number;
+  absoluteExpiresAt: number;
+  sessionVersion: number;
 }
 
-export async function persistSessionToRedis(token: string, userId: string): Promise<void> {
-  if (!token || !userId) throw new Error('A session token and user ID are required.');
-  const redis = getUpstashClient();
-  await redis.hset(SESSIONS_HASH_KEY, { [token]: userId });
+function sessionKey(tokenDigest: string): string {
+  return `${SESSION_KEY_PREFIX}${tokenDigest}`;
 }
 
-export async function deleteSessionFromRedis(token: string): Promise<void> {
-  if (!token) return;
+function userSessionsKey(userId: string): string {
+  return `${USER_SESSIONS_KEY_PREFIX}${userId}`;
+}
+
+function userSessionVersionKey(userId: string): string {
+  return `${USER_SESSION_VERSION_KEY_PREFIX}${userId}`;
+}
+
+export async function getUserSessionVersionFromRedis(userId: string): Promise<number> {
+  const version = await getUpstashClient().get<number>(userSessionVersionKey(userId));
+  return Number.isSafeInteger(version) && Number(version) >= 0 ? Number(version) : 0;
+}
+
+/** Remove the old non-expiring hash, whose fields contained raw bearer tokens. */
+export async function purgeLegacySessionsFromRedis(): Promise<void> {
+  await getUpstashClient().del(LEGACY_SESSIONS_HASH_KEY);
+}
+
+export async function persistSessionToRedis(
+  tokenDigest: string,
+  record: SessionRecord,
+  idleTtlSeconds: number,
+): Promise<void> {
+  if (!tokenDigest || !record.userId) throw new Error('A session digest and user ID are required.');
   const redis = getUpstashClient();
-  await redis.hdel(SESSIONS_HASH_KEY, token);
+  const absoluteTtlSeconds = Math.max(1, Math.ceil((record.absoluteExpiresAt - Date.now()) / 1_000));
+  const keyTtlSeconds = Math.max(1, Math.min(idleTtlSeconds, absoluteTtlSeconds));
+
+  await redis.set(sessionKey(tokenDigest), record, { ex: keyTtlSeconds });
+  await redis.sadd(userSessionsKey(record.userId), tokenDigest);
+  // The index contains no bearer secrets. Its TTL is extended so it covers
+  // every session that can still be alive for this user.
+  await redis.expire(userSessionsKey(record.userId), absoluteTtlSeconds);
+}
+
+export async function readAndTouchSessionFromRedis(
+  tokenDigest: string,
+  idleTtlSeconds: number,
+): Promise<SessionRecord | null> {
+  if (!tokenDigest) return null;
+  const redis = getUpstashClient();
+  const key = sessionKey(tokenDigest);
+  const record = await redis.get<SessionRecord>(key);
+
+  if (
+    !record ||
+    typeof record.userId !== 'string' ||
+    !Number.isFinite(record.createdAt) ||
+    !Number.isFinite(record.absoluteExpiresAt) ||
+    !Number.isSafeInteger(record.sessionVersion)
+  ) {
+    return null;
+  }
+  const currentSessionVersion = await getUserSessionVersionFromRedis(record.userId);
+  if (record.sessionVersion !== currentSessionVersion) {
+    await redis.del(key);
+    await redis.srem(userSessionsKey(record.userId), tokenDigest);
+    return null;
+  }
+
+  const absoluteTtlSeconds = Math.ceil((record.absoluteExpiresAt - Date.now()) / 1_000);
+  if (absoluteTtlSeconds <= 0) {
+    await redis.del(key);
+    await redis.srem(userSessionsKey(record.userId), tokenDigest);
+    return null;
+  }
+
+  // Redis key expiry is the idle timeout. Touching it on an authenticated
+  // request can never extend the session beyond its absolute expiration.
+  await redis.expire(key, Math.max(1, Math.min(idleTtlSeconds, absoluteTtlSeconds)));
+  return record;
+}
+
+export async function deleteSessionFromRedis(tokenDigest: string, userId?: string): Promise<void> {
+  if (!tokenDigest) return;
+  const redis = getUpstashClient();
+  await redis.del(sessionKey(tokenDigest));
+  if (userId) await redis.srem(userSessionsKey(userId), tokenDigest);
+}
+
+export async function deleteAllUserSessionsFromRedis(userId: string): Promise<void> {
+  if (!userId) return;
+  const redis = getUpstashClient();
+  // Incrementing the generation invalidates every existing session
+  // immediately, even if an index cleanup is interrupted or another server
+  // has already read an older session record.
+  await redis.incr(userSessionVersionKey(userId));
+  try {
+    const indexKey = userSessionsKey(userId);
+    const tokenDigests = await redis.smembers<string[]>(indexKey);
+    if (Array.isArray(tokenDigests) && tokenDigests.length > 0) {
+      await redis.del(...tokenDigests.map(sessionKey));
+    }
+    await redis.del(indexKey);
+  } catch (error) {
+    // Generation invalidation above is authoritative; deletion is storage
+    // cleanup and must not turn a successful invalidation into a false failure.
+    console.error('Failed to clean up invalidated session keys:', error);
+  }
 }

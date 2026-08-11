@@ -3,6 +3,7 @@ import { AlertCircle, Image as ImageIcon, ListMusic, Plus, Sparkles, Upload, X }
 import { Playlist } from '../../types';
 import { DEFAULT_COVER_URL } from '../../utils/profilePlaceholders';
 import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
+import { uploadMediaFile } from '../../utils/mediaUpload';
 import { useI18n } from '../../i18n/I18nContext';
 
 export type NewPlaylistDraft = Pick<Playlist, 'title' | 'description' | 'coverUrl' | 'trackIds'>;
@@ -28,11 +29,11 @@ export const NewPlaylistModal: React.FC<NewPlaylistModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleCoverUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       setCoverError(t('Please select a valid image file.'));
       return;
     }
@@ -40,15 +41,13 @@ export const NewPlaylistModal: React.FC<NewPlaylistModalProps> = ({
       setCoverError(t('Playlist cover must be smaller than 8 MB.'));
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') return;
-      setSelectedCover(reader.result);
+    try {
+      setSelectedCover(await uploadMediaFile(file, 'image'));
       setCoverFileName(file.name);
       setCoverError('');
-    };
-    reader.onerror = () => setCoverError(t('Could not read the selected image.'));
-    reader.readAsDataURL(file);
+    } catch (uploadError: any) {
+      setCoverError(t(uploadError?.message || 'Could not upload the selected image.'));
+    }
   };
 
   const handleSubmit = (event: React.FormEvent) => {
@@ -157,9 +156,9 @@ export const NewPlaylistModal: React.FC<NewPlaylistModalProps> = ({
                   placeholder={t(selectedCover.startsWith('data:') ? 'Uploaded image selected' : 'Paste a real image URL, or leave empty')}
                   className="w-full rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-3.5 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[#C084FC]/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-[#A855F7]/10"
                 />
-                <input ref={coverFileInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+                <input ref={coverFileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleCoverUpload} className="hidden" />
                 <button type="button" onClick={() => coverFileInputRef.current?.click()} className="control-press mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#D946EF]/25 bg-[#D946EF]/10 px-4 py-3 text-xs font-black text-[#F0ABFC] hover:bg-[#D946EF]/15"><Upload className="h-4 w-4" /> {t('Upload cover image')}</button>
-                <p className="mt-2 truncate text-center text-[10px] text-zinc-500">{coverFileName || t('JPG, PNG, WebP or GIF · maximum 8 MB')}</p>
+                <p className="mt-2 truncate text-center text-[10px] text-zinc-500">{coverFileName || t('JPG, PNG or WebP · maximum 8 MB')}</p>
                 {coverError && <div className="mt-3 flex items-center gap-2 rounded-2xl border border-red-400/20 bg-red-400/[0.08] px-4 py-3 text-xs font-bold text-red-200"><AlertCircle className="h-4 w-4 shrink-0" /> {coverError}</div>}
               </div>
             </div>

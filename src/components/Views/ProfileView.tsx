@@ -43,6 +43,7 @@ import {
 import { UserProfile, Track, Playlist, Artist } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import { groupTracksByRelease } from '../../utils/artistUtils';
+import { uploadMediaFile } from '../../utils/mediaUpload';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface ProfileViewProps {
@@ -184,22 +185,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   };
 
 
-  const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       e.target.value = '';
       return;
     }
     setIsReadingAvatarFile(true);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) setAvatarUrl(result);
+    try {
+      setAvatarUrl(await uploadMediaFile(file, 'image'));
+    } catch {
+      // Keep the previous avatar when the upload is rejected.
+    } finally {
       setIsReadingAvatarFile(false);
-    };
-    reader.onerror = () => setIsReadingAvatarFile(false);
-    reader.readAsDataURL(file);
+    }
     e.target.value = '';
   };
 
@@ -858,14 +858,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     <p className="mx-auto mt-3 line-clamp-3 max-w-sm text-xs leading-5 text-zinc-400">{bio.trim() || t('Add a short bio to introduce yourself.')}</p>
                   </div>
 
-                  <input ref={avatarFileInputRef} type="file" accept="image/*" onChange={handleAvatarFileUpload} className="hidden" />
+                  <input ref={avatarFileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarFileUpload} className="hidden" />
                   <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                     <button type="button" onClick={() => avatarFileInputRef.current?.click()} disabled={isReadingAvatarFile} className="control-press flex items-center justify-center gap-2 rounded-2xl border border-[#D946EF]/25 bg-[#D946EF]/10 px-3 py-3 text-xs font-black text-[#F0ABFC] hover:bg-[#D946EF]/15 disabled:opacity-50">
                       <ImagePlus className="h-4 w-4" /> {t(isReadingAvatarFile ? 'Reading photo…' : 'Choose photo')}
                     </button>
                     <button type="button" onClick={() => setAvatarUrl('')} className="control-press rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-3 text-xs font-bold text-zinc-400 hover:bg-white/[0.08] hover:text-white">{t('Remove photo')}</button>
                   </div>
-                  <p className="mt-3 text-center text-[9px] font-semibold leading-4 text-zinc-600">{t('JPG, PNG, WebP or GIF. Uploaded photos are stored with your account.')}</p>
+                  <p className="mt-3 text-center text-[9px] font-semibold leading-4 text-zinc-600">{t('JPG, PNG or WebP. Uploaded photos are stored with your account.')}</p>
                 </section>
 
                 <section className="min-w-0 overflow-hidden rounded-3xl border border-white/[0.08] bg-black/15 p-4 sm:p-6">

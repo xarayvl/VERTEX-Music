@@ -18,6 +18,7 @@ import { Artist, Track, UserProfile } from '../../types';
 import { getArtistStats } from '../../utils/artistUtils';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import { getSafeImageUrl } from '../../utils/sanitizeMediaUrl';
+import { uploadMediaFile } from '../../utils/mediaUpload';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface EditArtistModalProps {
@@ -120,18 +121,22 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
   const { totalPlays } = getArtistStats(artist, artistTracks);
   const selectedPick = artistTracks.find((track) => track.id === artistPickTrackId);
 
-  const readImageFile = (
+  const readImageFile = async (
     event: React.ChangeEvent<HTMLInputElement>,
     setter: React.Dispatch<React.SetStateAction<string>>
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      event.target.value = '';
+      return;
+    }
 
-    const reader = new FileReader();
-    reader.onload = (loadEvent) => {
-      if (typeof loadEvent.target?.result === 'string') setter(loadEvent.target.result);
-    };
-    reader.readAsDataURL(file);
+    try {
+      setter(await uploadMediaFile(file, 'image'));
+    } catch {
+      // Keep the existing artwork when upload verification fails.
+    }
     event.target.value = '';
   };
 
@@ -304,7 +309,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                     <input
                       ref={avatarFileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp"
                       className="hidden"
                       onChange={(event) => readImageFile(event, setAvatarUrl)}
                     />
@@ -331,7 +336,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({
                     <input
                       ref={bannerFileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp"
                       className="hidden"
                       onChange={(event) => readImageFile(event, setBannerUrl)}
                     />
