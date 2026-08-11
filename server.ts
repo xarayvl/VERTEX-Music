@@ -4,7 +4,7 @@ import fs from "fs";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
-import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Ratelimit, type Duration } from "@upstash/ratelimit";
 import { createServer as createViteServer } from "vite";
@@ -14,9 +14,8 @@ import { getPublicOrigin, injectTrackSocialMeta } from "./server/socialMeta.js";
 import { searchLiveWeb, type WebSearchSource } from "./server/liveWebSearch.js";
 import { ALLOWED_IMAGE_MIME_TYPES, InvalidImageUploadError, validateImageBuffer } from "./server/mediaSecurity.js";
 import { classifyGoogleSignInAccount, getVerifiedGoogleIdentity, InvalidGoogleIdentityError } from "./server/googleAccountSecurity.js";
-import { classifyMediaStorageKey, getPrivateMediaOwner } from "./server/mediaAccessPolicy.js";
 import { getProductionPublicOrigin, requireHttps, securityHeaders } from "./server/httpSecurity.js";
-import { getConfiguredPublicBaseUrl, getOptionalPrivateR2BucketName, getRuntimePort } from "./server/runtimeConfig.js";
+import { getConfiguredPublicBaseUrl, getRuntimePort } from "./server/runtimeConfig.js";
 
 dotenv.config();
 
@@ -30,7 +29,6 @@ const USER_STORAGE_QUOTA_BYTES = readPositiveIntegerEnv("USER_STORAGE_QUOTA_BYTE
 const MAX_AUDIO_UPLOAD_BYTES = readPositiveIntegerEnv("MAX_AUDIO_UPLOAD_BYTES", 100 * 1024 * 1024);
 const UPLOAD_URL_TTL_SECONDS = 5 * 60;
 const UPLOAD_RESERVATION_TTL_SECONDS = 10 * 60;
-const PRIVATE_MEDIA_READ_TTL_SECONDS = 60;
 
 type SessionRequest = express.Request & {
   authSession?: { tokenDigest: string; userId: string };
@@ -51,7 +49,6 @@ const ERROR_CODES = {
   UPLOAD_URL_CREATE_FAILED: 'UPLOAD_URL_CREATE_FAILED',
   UPLOAD_VERIFICATION_FAILED: 'UPLOAD_VERIFICATION_FAILED',
   INVALID_IMAGE_UPLOAD: 'INVALID_IMAGE_UPLOAD',
-  PRIVATE_MEDIA_FORBIDDEN: 'PRIVATE_MEDIA_FORBIDDEN',
   PROFILE_UPDATE_FAILED: 'PROFILE_UPDATE_FAILED',
   TRACK_CREATE_FAILED: 'TRACK_CREATE_FAILED',
   RELEASE_UPDATE_FAILED: 'RELEASE_UPDATE_FAILED',
@@ -185,7 +182,7 @@ function isHttpUrl(value: string): boolean {
 }
 
 function isStoredMediaUrl(value: string): boolean {
-  return value.startsWith("/api/r2-file/") || value.startsWith("/api/r2-private/") || isHttpUrl(value);
+  return value.startsWith("/api/r2-file/") || isHttpUrl(value);
 }
 
 function normalizeCopyright(value: unknown, fallback: string): string {
@@ -331,12 +328,6 @@ function getR2BucketName(): string {
   return bucketName;
 }
 
-function getR2PrivateBucketName(): string {
-  const bucketName = getOptionalPrivateR2BucketName(process.env.R2_PRIVATE_BUCKET_NAME, getR2BucketName());
-  if (!bucketName) throw new Error("R2_PRIVATE_BUCKET_NAME is required for private upload staging.");
-  return bucketName;
-}
-
 function getR2PublicBaseUrl(): string | null {
   const configured = process.env.R2_PUBLIC_DOMAIN?.trim();
   if (!configured) return null;
@@ -355,7 +346,6 @@ function getManagedStorageKey(mediaUrl: string): string | null {
   try {
     let key = '';
     if (mediaUrl.startsWith('/api/r2-file/')) key = mediaUrl.slice('/api/r2-file/'.length);
-    else if (mediaUrl.startsWith('/api/r2-private/')) key = mediaUrl.slice('/api/r2-private/'.length);
     else if (isHttpUrl(mediaUrl) && getR2PublicBaseUrl()) {
       const media = new URL(mediaUrl);
       const configured = new URL(getR2PublicBaseUrl()!);
@@ -439,65 +429,9 @@ function resolveUploadExtension(kind: "audio" | "image", mimeType: string, fileN
   return audioType?.fileExtensions.includes(suppliedExtension) ? audioType.extension : null;
 }
 
-function publicMediaUrlForKey(key: string): string {
+function mediaUrlForKey(key: string): string {
   const publicDomain = getR2PublicBaseUrl();
   return publicDomain ? `${publicDomain}/${key}` : `/api/r2-file/${key}`;
-}
-
-function privateMediaUrlForKey(key: string): string {
-  return `/api/r2-private/${key}`;
-}
-
-function promotionRecordKey(key: string): string {
-  return `app:storage:promotion:${crypto.createHash("sha256").update(key).digest("hex")}`;
-}
-
-class PrivateMediaAccessError extends Error {}
-
-/** Move verified owner-only staging media into the public catalog bucket. */
-async function publishManagedMedia(mediaUrl: string, userId: string): Promise<string> {
-  const key = getManagedStorageKey(mediaUrl);
-  if (!key || classifyMediaStorageKey(key) !== 'private') return mediaUrl;
-
-  const safeUserId = sanitizeUserId(userId);
-  if (getPrivateMediaOwner(key) !== safeUserId) {
-    throw new PrivateMediaAccessError('Private media does not belong to the signed-in account.');
-  }
-
-  const redis = getUpstashClient();
-  const existingPromotion = await redis.get<string>(promotionRecordKey(key));
-  if (existingPromotion) {
-    const promotedKey = getManagedStorageKey(existingPromotion);
-    if (promotedKey && await redis.get(storageObjectRecordKey(promotedKey))) return existingPromotion;
-    await redis.del(promotionRecordKey(key));
-  }
-
-  const stored = await redis.get<{ userId: string; size: number }>(storageObjectRecordKey(key));
-  if (!stored || stored.userId !== userId || !Number.isSafeInteger(stored.size) || stored.size <= 0) {
-    throw new PrivateMediaAccessError('Private media is missing or has not completed verification.');
-  }
-
-  const r2 = getR2Client();
-  const privateBucket = getR2PrivateBucketName();
-  const publicBucket = getR2BucketName();
-  const head = await r2.send(new HeadObjectCommand({ Bucket: privateBucket, Key: key }));
-  const publicKey = `public/${safeUserId}/${path.basename(key)}`;
-  await r2.send(new CopyObjectCommand({
-    Bucket: publicBucket,
-    Key: publicKey,
-    CopySource: encodeURIComponent(`${privateBucket}/${key}`),
-    MetadataDirective: 'REPLACE',
-    ContentType: head.ContentType || 'application/octet-stream',
-    ContentDisposition: head.ContentDisposition || 'inline',
-    CacheControl: 'public, max-age=31536000, immutable',
-  }));
-
-  const publicUrl = publicMediaUrlForKey(publicKey);
-  await redis.set(storageObjectRecordKey(publicKey), stored);
-  await redis.set(promotionRecordKey(key), publicUrl);
-  await redis.del(storageObjectRecordKey(key));
-  await r2.send(new DeleteObjectCommand({ Bucket: privateBucket, Key: key })).catch(() => undefined);
-  return publicUrl;
 }
 
 async function deleteManagedFile(mediaUrl: string): Promise<void> {
@@ -505,8 +439,7 @@ async function deleteManagedFile(mediaUrl: string): Promise<void> {
   if (!key) return;
 
   const r2 = getR2Client();
-  const bucketName = classifyMediaStorageKey(key) === 'private' ? getR2PrivateBucketName() : getR2BucketName();
-  await r2.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
+  await r2.send(new DeleteObjectCommand({ Bucket: getR2BucketName(), Key: key }));
   const redis = getUpstashClient();
   const objectRecordKey = storageObjectRecordKey(key);
   const stored = await redis.getdel<{ userId: string; size: number }>(objectRecordKey);
@@ -527,21 +460,6 @@ function collectReferencedMediaUrls(db: { users: UserRecord[]; tracks: TrackReco
   }
   for (const playlist of db.playlists) if (playlist.coverUrl) refs.add(playlist.coverUrl);
   return refs;
-}
-
-async function isPublicCatalogKey(key: string): Promise<boolean> {
-  const scope = classifyMediaStorageKey(key);
-  if (scope === 'public') return true;
-  if (scope === 'private') return false;
-
-  // Backward compatibility is limited to legacy objects that are already
-  // referenced by a public catalog record. Unreferenced legacy keys are not
-  // reachable through the application proxy.
-  const db = await readDBAsync(false);
-  for (const mediaUrl of collectReferencedMediaUrls(db)) {
-    if (getManagedStorageKey(mediaUrl) === key) return true;
-  }
-  return false;
 }
 
 type RateLimitOptions = {
@@ -588,16 +506,7 @@ function createRateLimiter({ window, max, name, identity }: RateLimitOptions): e
 async function startServer() {
   // Refuse to start without the required remote persistence configuration.
   getR2Client();
-  const publicBucketName = getR2BucketName();
-  const privateBucketName = getOptionalPrivateR2BucketName(
-    process.env.R2_PRIVATE_BUCKET_NAME,
-    publicBucketName,
-  );
-  if (!privateBucketName) {
-    console.warn(
-      "R2_PRIVATE_BUCKET_NAME is not configured; media upload staging is disabled until a distinct private bucket is configured.",
-    );
-  }
+  getR2BucketName();
   const publicMediaBaseUrl = getR2PublicBaseUrl();
   const configuredPublicBaseUrl = getConfiguredPublicBaseUrl(process.env);
   const configuredAppUrl = configuredPublicBaseUrl || process.env.SITE_URL || process.env.APP_URL;
@@ -667,7 +576,7 @@ async function startServer() {
   // the app.use('/api', ...) wiring further down either.
   const pageLimiter = createRateLimiter({ window: '1 m', max: 120, name: 'page-ip', identity: ipIdentity });
 
-  // Only published catalog objects are available without authentication.
+  // Serve verified media stored in the single configured R2 bucket.
   app.all("/api/r2-file/*", generalIpLimiter, async (req, res) => {
     const key = getManagedStorageKey(`/api/r2-file/${String(req.params[0] || "").replace(/^\/+/, "")}`);
     const requestOrigin = typeof req.headers.origin === 'string' ? req.headers.origin : '';
@@ -689,19 +598,6 @@ async function startServer() {
     }
 
     if (!key) return res.status(404).send("File not found.");
-    try {
-      if (!(await isPublicCatalogKey(key))) return res.status(404).send("File not found.");
-    } catch (error) {
-      res.setHeader('Cache-Control', 'no-store');
-      return sendCorrelatedError(
-        res,
-        503,
-        ERROR_CODES.MEDIA_STORAGE_UNAVAILABLE,
-        'Media storage is temporarily unavailable.',
-        'Public media policy lookup error',
-        error,
-      );
-    }
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
 
     // Once a cookieless media origin is configured, old same-origin proxy URLs
@@ -810,43 +706,6 @@ async function startServer() {
     }
   });
 
-  // Staged uploads live in a distinct private bucket. The app authenticates
-  // ownership and returns a one-minute signed GET URL; private objects never
-  // use the public domain or the public proxy/cache policy.
-  app.get("/api/r2-private/*", generalIpLimiter, async (req, res) => {
-    const key = getManagedStorageKey(`/api/r2-private/${String(req.params[0] || "").replace(/^\/+/, "")}`);
-    if (!key || classifyMediaStorageKey(key) !== 'private') return res.status(404).send("File not found.");
-
-    const token = readCookie(req, SESSION_COOKIE_NAME);
-    if (!token) return res.status(401).json({ error: 'Unauthorized: Active session required.' });
-    try {
-      const session = await readAndTouchSessionFromRedis(hashSessionToken(token), SESSION_IDLE_TTL_SECONDS);
-      if (!session || getPrivateMediaOwner(key) !== sanitizeUserId(session.userId)) {
-        return res.status(404).send("File not found.");
-      }
-      const objectRecord = await getUpstashClient().get<{ userId: string; size: number }>(storageObjectRecordKey(key));
-      if (!objectRecord || objectRecord.userId !== session.userId) return res.status(404).send("File not found.");
-
-      const signedUrl = await getSignedUrl(
-        getR2Client(),
-        new GetObjectCommand({ Bucket: getR2PrivateBucketName(), Key: key }),
-        { expiresIn: PRIVATE_MEDIA_READ_TTL_SECONDS },
-      );
-      res.setHeader('Cache-Control', 'private, no-store, max-age=0');
-      res.setHeader('Referrer-Policy', 'no-referrer');
-      return res.redirect(307, signedUrl);
-    } catch (error) {
-      return sendCorrelatedError(
-        res,
-        503,
-        ERROR_CODES.MEDIA_STORAGE_UNAVAILABLE,
-        'Private media storage is temporarily unavailable.',
-        'Private R2 access error',
-        error,
-      );
-    }
-  });
-
   // IP limits run before session lookup and before any request body is parsed.
   // Route-specific expensive endpoints are likewise limited at this stage.
   app.use('/api', generalIpLimiter);
@@ -927,19 +786,6 @@ async function startServer() {
   });
 
   // The rest of the application can safely serve existing catalog media when
-  // staging is not configured. Upload operations fail explicitly instead of
-  // crashing the entire service or falling back to the public bucket.
-  app.use('/api/uploads', (req, res, next) => {
-    if (privateBucketName || !getUserIdFromToken(req)) return next();
-    return sendPublicError(
-      res,
-      503,
-      ERROR_CODES.MEDIA_STORAGE_UNAVAILABLE,
-      'Media uploads are unavailable until private storage is configured.',
-      { configurationError: true },
-    );
-  });
-
   // Large media bypasses Express entirely: the browser uploads directly to a
   // five-minute R2 URL, then asks the server to verify and finalize it.
   app.get('/api/uploads/quota', async (req, res) => {
@@ -972,7 +818,7 @@ async function startServer() {
     if (!extension) return res.status(400).json({ error: 'File extension does not match its MIME type.' });
 
     const uploadId = crypto.randomUUID();
-    const key = `private/${sanitizeUserId(userId)}/${kind}_${uploadId}.${extension}`;
+    const key = `${sanitizeUserId(userId)}/${kind}_${uploadId}.${extension}`;
     const safeDownloadName = fileName.replace(/[\r\n"\\]/g, '_');
     const contentDisposition = `inline; filename="${safeDownloadName}"`;
     const usedBytes = await reserveStorageQuota(userId, size);
@@ -987,12 +833,12 @@ async function startServer() {
       const uploadUrl = await getSignedUrl(
         getR2Client(),
         new PutObjectCommand({
-          Bucket: getR2PrivateBucketName(),
+          Bucket: getR2BucketName(),
           Key: key,
           ContentType: mimeType,
           ContentLength: size,
           ContentDisposition: contentDisposition,
-          CacheControl: 'private, no-store, max-age=0',
+          CacheControl: 'public, max-age=31536000, immutable',
         }),
         { expiresIn: UPLOAD_URL_TTL_SECONDS },
       );
@@ -1004,7 +850,7 @@ async function startServer() {
         requiredHeaders: {
           'Content-Type': mimeType,
           'Content-Disposition': contentDisposition,
-          'Cache-Control': 'private, no-store, max-age=0',
+          'Cache-Control': 'public, max-age=31536000, immutable',
         },
         storage: { usedBytes, quotaBytes: USER_STORAGE_QUOTA_BYTES },
       });
@@ -1035,7 +881,7 @@ async function startServer() {
 
     try {
       const r2 = getR2Client();
-      const bucket = getR2PrivateBucketName();
+      const bucket = getR2BucketName();
       const head = await r2.send(new HeadObjectCommand({ Bucket: bucket, Key: reservation.key }));
       const actualMime = normalizeUploadMimeType(head.ContentType);
       if (Number(head.ContentLength) !== reservation.size || actualMime !== reservation.mimeType) {
@@ -1050,11 +896,11 @@ async function startServer() {
       await redis.set(storageObjectRecordKey(reservation.key), { userId, size: reservation.size });
       return res.json({
         success: true,
-        url: privateMediaUrlForKey(reservation.key),
+        url: mediaUrlForKey(reservation.key),
         storage: { usedBytes: await redis.get<number>(storageUsageKey(userId)) || 0, quotaBytes: USER_STORAGE_QUOTA_BYTES },
       });
     } catch (error: any) {
-      await getR2Client().send(new DeleteObjectCommand({ Bucket: getR2PrivateBucketName(), Key: reservation.key })).catch(() => undefined);
+      await getR2Client().send(new DeleteObjectCommand({ Bucket: getR2BucketName(), Key: reservation.key })).catch(() => undefined);
       await releaseStorageQuota(userId, reservation.size).catch(() => undefined);
       return sendCorrelatedError(
         res,
@@ -1075,7 +921,7 @@ async function startServer() {
     const reservationKey = uploadReservationKey(uploadId);
     const reservation = await redis.getdel<UploadReservation>(reservationKey);
     if (!reservation || reservation.userId !== userId) return res.json({ success: true });
-    await getR2Client().send(new DeleteObjectCommand({ Bucket: getR2PrivateBucketName(), Key: reservation.key })).catch(() => undefined);
+    await getR2Client().send(new DeleteObjectCommand({ Bucket: getR2BucketName(), Key: reservation.key })).catch(() => undefined);
     await releaseStorageQuota(userId, reservation.size);
     return res.json({ success: true });
   });
@@ -1095,9 +941,7 @@ async function startServer() {
         process.env.R2_ACCOUNT_ID &&
         process.env.R2_ACCESS_KEY_ID &&
         process.env.R2_SECRET_ACCESS_KEY &&
-        process.env.R2_BUCKET_NAME &&
-        process.env.R2_PRIVATE_BUCKET_NAME &&
-        process.env.R2_BUCKET_NAME !== process.env.R2_PRIVATE_BUCKET_NAME
+        process.env.R2_BUCKET_NAME
       ),
       databaseStats: {
         usersCount: db.users.length,
@@ -1911,9 +1755,6 @@ async function startServer() {
           : current.artistPickComment
         : undefined;
 
-      if (avatarUrl && avatarUrl !== DEFAULT_AVATAR_URL) avatarUrl = await publishManagedMedia(avatarUrl, userId);
-      if (bannerUrl) bannerUrl = await publishManagedMedia(bannerUrl, userId);
-
       db.users[index] = {
         ...current,
         displayName,
@@ -1951,9 +1792,6 @@ async function startServer() {
     } catch (error: any) {
       if (error instanceof InvalidImageUploadError) {
         return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.');
-      }
-      if (error instanceof PrivateMediaAccessError) {
-        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.');
       }
       return sendCorrelatedError(res, 500, ERROR_CODES.PROFILE_UPDATE_FAILED, 'Failed to update user profile.', 'Update user error', error);
     }
@@ -2161,8 +1999,6 @@ async function startServer() {
       }
       const cleanCopyright = normalizeCopyright(copyright, `${cleanReleaseYear || currentYear} ${canonicalArtistName}`);
       if (cleanCopyright.length > 300) return res.status(400).json({ success: false, error: "Copyright text cannot exceed 300 characters." });
-      persistentAudioUrl = await publishManagedMedia(persistentAudioUrl, sessionUserId);
-      persistentCoverUrl = await publishManagedMedia(persistentCoverUrl, sessionUserId);
       const newTrack: TrackRecord = {
         id: createEntityId("trk"),
         userId: sessionUserId,
@@ -2199,9 +2035,6 @@ async function startServer() {
     } catch (error: any) {
       if (error instanceof InvalidImageUploadError) {
         return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.', { success: false });
-      }
-      if (error instanceof PrivateMediaAccessError) {
-        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.', { success: false });
       }
       return sendCorrelatedError(res, 500, ERROR_CODES.TRACK_CREATE_FAILED, 'Failed to add track.', 'Add track error', error, { success: false });
     }
@@ -2270,8 +2103,6 @@ async function startServer() {
           persistentCoverUrl = cleanCover;
         }
       }
-      persistentCoverUrl = await publishManagedMedia(persistentCoverUrl, sessionUserId);
-
       const sharedReleaseId = seedTrack.releaseId || createEntityId("rel");
       const updatedTracks = requestedTracks.map((requestedTrack: any, index: number) => {
         const existingIndex = db.tracks.findIndex((item) => item.id === requestedTrack.id);
@@ -2300,9 +2131,6 @@ async function startServer() {
     } catch (error: any) {
       if (error instanceof InvalidImageUploadError) {
         return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.');
-      }
-      if (error instanceof PrivateMediaAccessError) {
-        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.');
       }
       return sendCorrelatedError(res, 500, ERROR_CODES.RELEASE_UPDATE_FAILED, 'Failed to update release.', 'Update release error', error);
     }
@@ -2381,9 +2209,6 @@ async function startServer() {
         `${nextReleaseYear || currentYear} ${ownerArtistName}`,
       );
       if (nextCopyright.length > 300) return res.status(400).json({ error: "Copyright text cannot exceed 300 characters." });
-      persistentAudioUrl = await publishManagedMedia(persistentAudioUrl, sessionUserId);
-      persistentCoverUrl = await publishManagedMedia(persistentCoverUrl, sessionUserId);
-
       const updatedTrack: TrackRecord = {
         ...existingTrack,
         userId: sessionUserId,
@@ -2407,9 +2232,6 @@ async function startServer() {
     } catch (error: any) {
       if (error instanceof InvalidImageUploadError) {
         return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.');
-      }
-      if (error instanceof PrivateMediaAccessError) {
-        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.');
       }
       return sendCorrelatedError(res, 500, ERROR_CODES.TRACK_UPDATE_FAILED, 'Failed to update track.', 'Update track error', error);
     }
@@ -2648,8 +2470,6 @@ async function startServer() {
           persistentCoverUrl = cleanCover;
         }
       }
-      persistentCoverUrl = await publishManagedMedia(persistentCoverUrl, sessionUserId);
-
       const newPlaylist: PlaylistRecord = {
         id: createEntityId("pl"),
         userId: sessionUserId,
@@ -2669,9 +2489,6 @@ async function startServer() {
     } catch (error: any) {
       if (error instanceof InvalidImageUploadError) {
         return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.');
-      }
-      if (error instanceof PrivateMediaAccessError) {
-        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.');
       }
       return sendCorrelatedError(res, 500, ERROR_CODES.PLAYLIST_CREATE_FAILED, 'Failed to create playlist.', 'Create playlist error', error);
     }
@@ -2711,7 +2528,6 @@ async function startServer() {
       if (nextTitle.length > 120) return res.status(400).json({ error: "Playlist title cannot exceed 120 characters." });
       const nextDescription = req.body.description === undefined ? existing.description : String(req.body.description).trim();
       if (nextDescription.length > 1_000) return res.status(400).json({ error: "Playlist description cannot exceed 1000 characters." });
-      persistentCoverUrl = await publishManagedMedia(persistentCoverUrl, sessionUserId);
       db.playlists[index] = {
         ...existing,
         title: nextTitle,
@@ -2725,9 +2541,6 @@ async function startServer() {
     } catch (error: any) {
       if (error instanceof InvalidImageUploadError) {
         return sendPublicError(res, 400, ERROR_CODES.INVALID_IMAGE_UPLOAD, 'Uploaded image failed security validation.');
-      }
-      if (error instanceof PrivateMediaAccessError) {
-        return sendPublicError(res, 403, ERROR_CODES.PRIVATE_MEDIA_FORBIDDEN, 'Private media is not available to this account.');
       }
       return sendCorrelatedError(res, 500, ERROR_CODES.PLAYLIST_UPDATE_FAILED, 'Failed to update playlist.', 'Update playlist error', error);
     }

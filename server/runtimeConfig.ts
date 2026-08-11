@@ -1,17 +1,5 @@
 export type RuntimeEnvironment = NodeJS.ProcessEnv;
 
-export function getOptionalPrivateR2BucketName(
-  configuredName: string | undefined,
-  publicBucketName: string,
-): string | null {
-  const bucketName = configuredName?.trim();
-  if (!bucketName) return null;
-  if (bucketName === publicBucketName) {
-    throw new Error("R2_PRIVATE_BUCKET_NAME must be different from the public R2_BUCKET_NAME.");
-  }
-  return bucketName;
-}
-
 export function getRuntimePort(configuredPort: string | undefined): number {
   if (!configuredPort?.trim()) return 3000;
   const port = Number(configuredPort);

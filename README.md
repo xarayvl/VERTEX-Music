@@ -46,28 +46,16 @@ message with the globe button. Live web search uses the Tavily Search API. Set
   keep the key in the deployment secret manager, never in source control.
 - `UPSTASH_DB_CACHE_TTL_MS` controls only the in-process read cache and is not a
   Redis retention or deletion setting.
-- Cloudflare R2 is the only managed upload store. `R2_PRIVATE_BUCKET_NAME` is
-  the owner-only staging bucket and must be distinct from the public catalog
-  `R2_BUCKET_NAME`; the server refuses to start when they are the same. If the
-  private bucket is omitted, the server remains available for existing public
-  catalog media, but all `/api/uploads` endpoints return `503` until it is set.
-- Set every required Upstash and R2 variable shown in `.env.example` before
-  starting the application. Disable both r2.dev public access and custom
-  domains on the private bucket. `R2_PUBLIC_DOMAIN`, when used, must be attached
-  only to the public bucket and must be a separate cookieless HTTPS origin.
-- Browser uploads use five-minute presigned PUT URLs into the private bucket.
+- Cloudflare R2 is the only managed upload store. Images and audio use the
+  single bucket configured by `R2_BUCKET_NAME`; no private/public bucket split
+  or server-side copy/promotion step is required.
+- Browser uploads use five-minute presigned PUT URLs directly into that bucket.
   Configure its CORS policy for the exact `PUBLIC_BASE_URL` origin (no `*`) and
   allow `PUT`/`GET` plus `Content-Type`, `Content-Disposition`, `Cache-Control`,
-  and `Range`. Staged reads require an active owner session and redirect to a
-  one-minute signed GET URL with `private, no-store` caching.
-- A verified staged object is copied to the public bucket only when it is saved
-  into a profile, track/release, or playlist record. The public fallback proxy
-  serves only `public/` keys and referenced legacy catalog objects; its CORS
-  response is limited to `PUBLIC_BASE_URL` rather than wildcard access.
-- Before enabling the split-bucket deployment, migrate referenced legacy media
-  to the public bucket and remove unreferenced objects. The application cannot
-  inspect Cloudflare dashboard public-access switches, so the private bucket's
-  disabled public access remains a required deployment control.
+  and `Range`. Completed uploads immediately receive their permanent media URL.
+- `R2_PUBLIC_DOMAIN`, when used, must point to `R2_BUCKET_NAME` and remain a
+  separate cookieless HTTPS origin. Without it, the hardened `/api/r2-file/*`
+  proxy serves the same bucket.
 - Metadata still travels through Express and is limited to 64 KB.
 - `USER_STORAGE_QUOTA_BYTES` defaults to 2 GiB per account and
   `MAX_AUDIO_UPLOAD_BYTES` defaults to 100 MiB per file.
@@ -92,6 +80,5 @@ history, or chat history.
 - `PUBLIC_BASE_URL` remains recommended for custom domains. On Render, the
   platform-provided `RENDER_EXTERNAL_URL` is used when `PUBLIC_BASE_URL` is not
   set.
-- To enable uploads, create a second, non-public R2 bucket and set its exact
-  name as `R2_PRIVATE_BUCKET_NAME` in the Render service environment. Save and
-  redeploy the service; do not reuse `R2_BUCKET_NAME` for this value.
+- Set `R2_BUCKET_NAME` to the single bucket used by uploads and media reads;
+  no second R2 bucket is required.
