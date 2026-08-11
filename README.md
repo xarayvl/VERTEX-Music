@@ -51,13 +51,19 @@ message with the globe button. Live web search uses the Tavily Search API. Set
   or server-side copy/promotion step is required.
 - Browser uploads use five-minute presigned PUT URLs directly into that bucket.
   Configure its CORS policy for the exact `PUBLIC_BASE_URL` origin (no `*`) and
-  allow `PUT`/`GET` plus `Content-Type`, `Content-Disposition`, `Cache-Control`,
-  and `Range`. Completed uploads immediately receive their permanent media URL.
-- `R2_PUBLIC_DOMAIN`, when used, must point to `R2_BUCKET_NAME` and remain a
-  separate cookieless HTTPS origin. A custom domain is served directly.
-  Cloudflare's `*.r2.dev` development URL (and deployments without a public
-  domain) stays behind the hardened `/api/r2-file/*` proxy, so media reads do
-  not depend on public-development access or cross-origin Web Audio headers.
+  allow `PUT` plus `Content-Type`, `Content-Disposition`, and `Cache-Control`.
+  Completed uploads immediately receive their permanent same-origin proxy URL.
+- Image and audio reads always use the hardened `/api/r2-file/*` endpoint,
+  which fetches objects with the R2 SDK from `R2_BUCKET_NAME`. Public/custom
+  domains cannot bypass or point reads at another bucket. `R2_PUBLIC_DOMAIN`
+  is deprecated and is used only once to migrate URLs saved by older releases;
+  remove it after the first successful deployment. `R2_PRIVATE_BUCKET_NAME` is
+  unsupported and must be removed.
+- Startup performs a real R2 list probe and cross-checks up to 64 media object
+  keys referenced by Redis. It fails immediately if the account, bucket name,
+  credentials, or token scope is wrong, or if none of the checked Redis media
+  exists in that bucket; the app no longer serves a Redis-only catalog with
+  silently broken media. The admin system-status response reports missing keys.
 - Metadata still travels through Express and is limited to 64 KB.
 - `USER_STORAGE_QUOTA_BYTES` defaults to 2 GiB per account and
   `MAX_AUDIO_UPLOAD_BYTES` defaults to 100 MiB per file.

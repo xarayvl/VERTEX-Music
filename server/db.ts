@@ -1,6 +1,6 @@
 import { Redis } from '@upstash/redis';
 import crypto from 'node:crypto';
-import { canonicalizeLegacyR2DevMediaUrl } from './r2Media.js';
+import { canonicalizeManagedMediaUrl, normalizeR2PublicBaseUrl } from './r2Media.js';
 
 const UPSTASH_DB_KEY = 'app:spotify:db_v1';
 const UPSTASH_DB_BACKUP_KEY = 'app:spotify:db_v1:previous';
@@ -202,6 +202,17 @@ function isPersistedMediaUrl(value: string, expected: 'audio' | 'image'): boolea
   return expected === 'image' && /^data:image\/svg\+xml(?:;|,)/i.test(value);
 }
 
+function canonicalizePersistedMediaUrl(value: string): string {
+  let legacyPublicBaseUrl: string | null = null;
+  try {
+    legacyPublicBaseUrl = normalizeR2PublicBaseUrl(process.env.R2_PUBLIC_DOMAIN);
+  } catch {
+    // R2_PUBLIC_DOMAIN is deprecated. Invalid stale values must not affect the
+    // canonical one-bucket proxy path.
+  }
+  return canonicalizeManagedMediaUrl(value, legacyPublicBaseUrl);
+}
+
 function normalizedIsoDate(value: unknown): string {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value))
     ? new Date(value).toISOString()
@@ -256,13 +267,13 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
       ? rawUser.displayName.trim().slice(0, 80)
       : username;
     const avatarCandidate = typeof rawUser.avatarUrl === 'string'
-      ? canonicalizeLegacyR2DevMediaUrl(rawUser.avatarUrl.trim())
+      ? canonicalizePersistedMediaUrl(rawUser.avatarUrl.trim())
       : '';
     const avatarUrl = avatarCandidate && isPersistedMediaUrl(avatarCandidate, 'image')
       ? avatarCandidate
       : '';
     const bannerCandidate = typeof rawUser.bannerUrl === 'string'
-      ? canonicalizeLegacyR2DevMediaUrl(rawUser.bannerUrl.trim())
+      ? canonicalizePersistedMediaUrl(rawUser.bannerUrl.trim())
       : '';
     const bannerUrl = bannerCandidate && isPersistedMediaUrl(bannerCandidate, 'image')
       ? bannerCandidate
@@ -308,7 +319,7 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
     const owner = typeof rawTrack.userId === 'string' ? userById.get(rawTrack.userId) : undefined;
     const title = typeof rawTrack.title === 'string' ? rawTrack.title.trim() : '';
     const audioUrl = typeof rawTrack.audioUrl === 'string'
-      ? canonicalizeLegacyR2DevMediaUrl(rawTrack.audioUrl.trim())
+      ? canonicalizePersistedMediaUrl(rawTrack.audioUrl.trim())
       : '';
     const duration = Number(rawTrack.duration);
     if (
@@ -340,7 +351,7 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
       : currentYear;
     const trackNumber = Number(rawTrack.trackNumber);
     const coverCandidate = typeof rawTrack.coverUrl === 'string'
-      ? canonicalizeLegacyR2DevMediaUrl(rawTrack.coverUrl.trim())
+      ? canonicalizePersistedMediaUrl(rawTrack.coverUrl.trim())
       : '';
     const coverUrl = coverCandidate && isPersistedMediaUrl(coverCandidate, 'image')
       ? coverCandidate
@@ -393,7 +404,7 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
         ? Array.from(new Set(playlist.trackIds.filter((id) => typeof id === 'string' && trackIds.has(id))))
         : [];
       const coverCandidate = typeof playlist.coverUrl === 'string'
-        ? canonicalizeLegacyR2DevMediaUrl(playlist.coverUrl.trim())
+        ? canonicalizePersistedMediaUrl(playlist.coverUrl.trim())
         : '';
       const owner = userById.get(playlist.userId)!;
       return {

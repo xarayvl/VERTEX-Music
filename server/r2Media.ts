@@ -1,4 +1,8 @@
 const R2_PROXY_PREFIX = '/api/r2-file/';
+const LEGACY_R2_PRIVATE_PREFIX = '/api/r2-private/';
+const LEGACY_MEDIA_EXTENSIONS = new Set(['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'jpg', 'png', 'webp']);
+const UUID_PATTERN = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+const LEGACY_UPLOAD_FILE_PATTERN = new RegExp(`^(audio|image)_(${UUID_PATTERN})\\.([a-z0-9]+)$`, 'i');
 
 function normalizeStorageKey(value: string): string | null {
   try {
@@ -23,6 +27,24 @@ function isR2DevelopmentHostname(hostname: string): boolean {
   return normalized === 'r2.dev' || normalized.endsWith('.r2.dev');
 }
 
+function legacyPrivateStorageKey(value: string): string | null {
+  if (!value.startsWith(LEGACY_R2_PRIVATE_PREFIX) || /%(?:2e|2f|5c)/i.test(value)) return null;
+  const rawKey = value.slice(LEGACY_R2_PRIVATE_PREFIX.length);
+  if (rawKey.includes('?') || rawKey.includes('#')) return null;
+  const key = normalizeStorageKey(rawKey);
+  if (!key) return null;
+
+  const segments = key.split('/');
+  if (segments.length !== 3 || segments[0] !== 'private' || !/^[a-zA-Z0-9_-]+$/.test(segments[1])) return null;
+  const fileMatch = segments[2].match(LEGACY_UPLOAD_FILE_PATTERN);
+  if (!fileMatch || !LEGACY_MEDIA_EXTENSIONS.has(fileMatch[3].toLowerCase())) return null;
+  const kind = fileMatch[1].toLowerCase();
+  const extension = fileMatch[3].toLowerCase();
+  const isImageExtension = extension === 'jpg' || extension === 'png' || extension === 'webp';
+  if ((kind === 'image') !== isImageExtension) return null;
+  return key;
+}
+
 export function normalizeR2PublicBaseUrl(configured: string | undefined): string | null {
   const value = configured?.trim();
   if (!value) return null;
@@ -37,18 +59,7 @@ export function normalizeR2PublicBaseUrl(configured: string | undefined): string
   }
 }
 
-/**
- * Cloudflare's temporary r2.dev URL is useful for bucket setup, but it is not
- * a dependable production media origin: public development access may be
- * disabled and its CORS policy may not permit Web Audio. Custom domains can be
- * served directly; r2.dev objects stay behind the authenticated app proxy.
- */
-export function canServeR2MediaDirectly(publicBaseUrl: string | null): boolean {
-  if (!publicBaseUrl) return false;
-  return !isR2DevelopmentHostname(new URL(publicBaseUrl).hostname);
-}
-
-export function getManagedStorageKey(mediaUrl: string, publicBaseUrl: string | null): string | null {
+export function getManagedStorageKey(mediaUrl: string, legacyPublicBaseUrl: string | null = null): string | null {
   try {
     // URL normalizers collapse encoded dot segments before exposing pathname.
     // Reject them (and encoded separators) while the original text is intact.
@@ -57,9 +68,11 @@ export function getManagedStorageKey(mediaUrl: string, publicBaseUrl: string | n
     if (mediaUrl.startsWith(R2_PROXY_PREFIX)) {
       rawKey = mediaUrl.slice(R2_PROXY_PREFIX.length);
       if (rawKey.includes('?') || rawKey.includes('#')) return null;
-    } else if (publicBaseUrl) {
+    } else if (mediaUrl.startsWith(LEGACY_R2_PRIVATE_PREFIX)) {
+      return legacyPrivateStorageKey(mediaUrl);
+    } else if (legacyPublicBaseUrl) {
       const media = new URL(mediaUrl);
-      const configured = new URL(publicBaseUrl);
+      const configured = new URL(legacyPublicBaseUrl);
       if (media.origin !== configured.origin || media.search || media.hash) return null;
       const configuredPath = configured.pathname.replace(/^\/+|\/+$/g, '');
       const mediaPath = media.pathname.replace(/^\/+/, '');
@@ -72,23 +85,27 @@ export function getManagedStorageKey(mediaUrl: string, publicBaseUrl: string | n
   }
 }
 
-export function mediaUrlForKey(key: string, publicBaseUrl: string | null): string {
+/** Every managed read goes through the SDK-backed proxy and one R2 bucket. */
+export function mediaUrlForKey(key: string): string {
   const normalizedKey = normalizeStorageKey(key);
   if (!normalizedKey) throw new Error('Invalid R2 object key.');
-  const encodedKey = encodedStorageKey(normalizedKey);
-  return canServeR2MediaDirectly(publicBaseUrl)
-    ? `${publicBaseUrl}/${encodedKey}`
-    : `${R2_PROXY_PREFIX}${encodedKey}`;
+  return `${R2_PROXY_PREFIX}${encodedStorageKey(normalizedKey)}`;
 }
 
-/** Convert URLs persisted by older releases back to the reliable proxy form. */
-export function canonicalizeLegacyR2DevMediaUrl(value: string): string {
+/** Convert every legacy managed URL to the one-bucket proxy representation. */
+export function canonicalizeManagedMediaUrl(value: string, legacyPublicBaseUrl: string | null = null): string {
   try {
+    const privateKey = legacyPrivateStorageKey(value);
+    if (privateKey) return mediaUrlForKey(privateKey);
+
+    const configuredKey = getManagedStorageKey(value, legacyPublicBaseUrl);
+    if (configuredKey) return mediaUrlForKey(configuredKey);
+
     if (/%(?:2e|2f|5c)/i.test(value)) return value;
     const parsed = new URL(value);
     if (parsed.protocol !== 'https:' || !isR2DevelopmentHostname(parsed.hostname)) return value;
     const key = normalizeStorageKey(parsed.pathname.replace(/^\/+/, ''));
-    return key ? `${R2_PROXY_PREFIX}${encodedStorageKey(key)}` : value;
+    return key ? mediaUrlForKey(key) : value;
   } catch {
     return value;
   }

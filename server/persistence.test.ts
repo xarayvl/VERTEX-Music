@@ -180,3 +180,58 @@ test("database hydration rejects media that bypasses R2 upload persistence", () 
   assert.equal(result.tracks[1].coverUrl, "/api/r2-file/user_remote_media/cover%20art.jpg");
   assert.equal(result.tracks[1].audioUrl, "/api/r2-file/user_remote_media/audio%20file.mp3");
 });
+
+test("database hydration preserves strict legacy private media in the single bucket proxy", () => {
+  const userId = "legacy_private_user";
+  const image = (uuid: string, extension = "jpg") =>
+    `/api/r2-private/private/${userId}/image_${uuid}.${extension}`;
+  const audio = (uuid: string) =>
+    `/api/r2-private/private/${userId}/audio_${uuid}.mp3`;
+  const user = {
+    id: userId,
+    username: "legacy-private",
+    email: "legacy-private@example.com",
+    password: "stored-password-hash",
+    displayName: "Legacy Private",
+    avatarUrl: image("123e4567-e89b-42d3-a456-426614174010"),
+    bannerUrl: image("123e4567-e89b-42d3-a456-426614174011", "webp"),
+    bio: "",
+    favoriteGenres: [],
+    createdAt: "2026-08-11T00:00:00.000Z",
+  };
+
+  const result = sanitizeDBData({
+    users: [user],
+    playlists: [{
+      id: "legacy_private_playlist",
+      userId,
+      title: "Legacy playlist",
+      description: "",
+      coverUrl: image("123e4567-e89b-42d3-a456-426614174012", "png"),
+      trackIds: ["legacy_private_track"],
+      trackCount: 1,
+      createdAt: "2026-08-11T00:00:00.000Z",
+    }],
+    tracks: [{
+      id: "legacy_private_track",
+      userId,
+      title: "Legacy Track",
+      artist: "Legacy Private",
+      album: "Single",
+      coverUrl: image("123e4567-e89b-42d3-a456-426614174013"),
+      audioUrl: audio("123e4567-e89b-42d3-a456-426614174014"),
+      duration: 180,
+      genre: "Electronic",
+      createdAt: "2026-08-11T00:00:00.000Z",
+    }],
+    userStates: {},
+    chatHistories: {},
+  });
+
+  assert.equal(result.tracks.length, 1, "a legacy private audio URL must not drop the track");
+  assert.equal(result.users[0].avatarUrl, image("123e4567-e89b-42d3-a456-426614174010").replace("r2-private", "r2-file"));
+  assert.equal(result.users[0].bannerUrl, image("123e4567-e89b-42d3-a456-426614174011", "webp").replace("r2-private", "r2-file"));
+  assert.equal(result.tracks[0].coverUrl, image("123e4567-e89b-42d3-a456-426614174013").replace("r2-private", "r2-file"));
+  assert.equal(result.tracks[0].audioUrl, audio("123e4567-e89b-42d3-a456-426614174014").replace("r2-private", "r2-file"));
+  assert.equal(result.playlists[0].coverUrl, image("123e4567-e89b-42d3-a456-426614174012", "png").replace("r2-private", "r2-file"));
+});

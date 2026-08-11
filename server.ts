@@ -17,11 +17,11 @@ import { classifyGoogleSignInAccount, getVerifiedGoogleIdentity, InvalidGoogleId
 import { getProductionPublicOrigin, requireHttps, securityHeaders } from "./server/httpSecurity.js";
 import { getConfiguredPublicBaseUrl, getRuntimePort } from "./server/runtimeConfig.js";
 import {
-  canServeR2MediaDirectly,
   getManagedStorageKey as resolveManagedStorageKey,
   mediaUrlForKey as buildMediaUrlForKey,
   normalizeR2PublicBaseUrl,
 } from "./server/r2Media.js";
+import { auditSingleR2BucketReferences, probeSingleR2Bucket } from "./server/r2Storage.js";
 
 dotenv.config();
 
@@ -334,12 +334,18 @@ function getR2BucketName(): string {
   return bucketName;
 }
 
-function getR2PublicBaseUrl(): string | null {
-  return normalizeR2PublicBaseUrl(process.env.R2_PUBLIC_DOMAIN);
+function getLegacyR2PublicBaseUrl(): string | null {
+  try {
+    return normalizeR2PublicBaseUrl(process.env.R2_PUBLIC_DOMAIN);
+  } catch {
+    // This variable is deprecated and never participates in live media reads.
+    // Ignore a stale malformed value instead of breaking the one-bucket path.
+    return null;
+  }
 }
 
 function getManagedStorageKey(mediaUrl: string): string | null {
-  return resolveManagedStorageKey(mediaUrl, getR2PublicBaseUrl());
+  return resolveManagedStorageKey(mediaUrl, getLegacyR2PublicBaseUrl());
 }
 
 function storageUsageKey(userId: string): string {
@@ -409,7 +415,7 @@ function resolveUploadExtension(kind: "audio" | "image", mimeType: string, fileN
 }
 
 function mediaUrlForKey(key: string): string {
-  return buildMediaUrlForKey(key, getR2PublicBaseUrl());
+  return buildMediaUrlForKey(key);
 }
 
 async function deleteManagedFile(mediaUrl: string): Promise<void> {
@@ -438,6 +444,15 @@ function collectReferencedMediaUrls(db: { users: UserRecord[]; tracks: TrackReco
   }
   for (const playlist of db.playlists) if (playlist.coverUrl) refs.add(playlist.coverUrl);
   return refs;
+}
+
+function collectReferencedStorageKeys(db: { users: UserRecord[]; tracks: TrackRecord[]; playlists: PlaylistRecord[] }): Set<string> {
+  const keys = new Set<string>();
+  for (const mediaUrl of collectReferencedMediaUrls(db)) {
+    const key = getManagedStorageKey(mediaUrl);
+    if (key) keys.add(key);
+  }
+  return keys;
 }
 
 type RateLimitOptions = {
@@ -482,23 +497,15 @@ function createRateLimiter({ window, max, name, identity }: RateLimitOptions): e
 
 
 async function startServer() {
-  // Refuse to start without the required remote persistence configuration.
-  getR2Client();
-  getR2BucketName();
-  const publicMediaBaseUrl = getR2PublicBaseUrl();
+  // Refuse to serve a Redis catalog when its one configured media bucket is
+  // wrong or unreachable. This is a real R2 request, not an env-presence check.
+  const initialR2Probe = await probeSingleR2Bucket(getR2Client(), getR2BucketName());
+  console.log(`✅ Verified single R2 bucket: ${initialR2Probe.bucketName}`);
   const configuredPublicBaseUrl = getConfiguredPublicBaseUrl(process.env);
-  const configuredAppUrl = configuredPublicBaseUrl || process.env.SITE_URL || process.env.APP_URL;
   const isProduction = process.env.NODE_ENV === "production";
   const productionPublicOrigin = isProduction
     ? getProductionPublicOrigin(configuredPublicBaseUrl)
     : null;
-  if (publicMediaBaseUrl && configuredAppUrl) {
-    const appOrigin = new URL(configuredAppUrl).origin;
-    if (new URL(publicMediaBaseUrl).origin === appOrigin) {
-      throw new Error("R2_PUBLIC_DOMAIN must use a separate cookieless origin from the application.");
-    }
-  }
-
   const app = express();
   const PORT = getRuntimePort(process.env.PORT);
   app.set('trust proxy', 1);
@@ -512,8 +519,27 @@ async function startServer() {
   app.use(securityHeaders(isProduction));
   if (productionPublicOrigin) app.use(requireHttps(productionPublicOrigin));
 
-  // Initialize the required Upstash Redis database.
-  await initUpstashDB();
+  // Initialize the required Upstash Redis database, then prove that its media
+  // references actually belong to the selected bucket. This distinguishes a
+  // valid-but-wrong bucket from the application's real single media bucket.
+  const initialDatabase = await initUpstashDB();
+  const initialReferenceAudit = await auditSingleR2BucketReferences(
+    getR2Client(),
+    initialR2Probe.bucketName,
+    collectReferencedStorageKeys(initialDatabase),
+  );
+  if (initialReferenceAudit.checkedObjectCount > 0 && initialReferenceAudit.foundObjectCount === 0) {
+    throw new Error(
+      `R2_BUCKET_NAME points to an accessible bucket, but none of ${initialReferenceAudit.checkedObjectCount} checked Redis media objects exist there. Missing keys: ${initialReferenceAudit.missingKeys.join(', ')}`,
+    );
+  }
+  if (initialReferenceAudit.missingObjectCount > 0) {
+    console.warn(
+      `R2 media reference audit: ${initialReferenceAudit.missingObjectCount}/${initialReferenceAudit.checkedObjectCount} checked objects are missing from bucket "${initialR2Probe.bucketName}".`,
+    );
+  } else {
+    console.log(`✅ Verified ${initialReferenceAudit.checkedObjectCount} Redis media references in the single R2 bucket.`);
+  }
 
   // Enforce chat retention even on a long-lived instance with no database
   // mutations. The unref'd timer never keeps an otherwise idle process alive;
@@ -577,15 +603,6 @@ async function startServer() {
 
     if (!key) return res.status(404).send("File not found.");
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-
-    // Once a cookieless media origin is configured, old same-origin proxy URLs
-    // are redirected there too. App cookies are host-only and are never sent
-    // to this separate origin.
-    const publicMediaBaseUrl = getR2PublicBaseUrl();
-    if (canServeR2MediaDirectly(publicMediaBaseUrl)) {
-      const encodedKey = key.split('/').map(encodeURIComponent).join('/');
-      return res.redirect(307, `${publicMediaBaseUrl}/${encodedKey}`);
-    }
 
     try {
       const r2 = getR2Client();
@@ -912,21 +929,41 @@ async function startServer() {
     const requestingUser = db.users.find((user) => user.id === sessionUserId);
     if (!requestingUser?.isAdmin) return res.status(403).json({ error: "Forbidden: Admin access required." });
 
-    return res.json({
-      status: "ok",
-      upstashRedisConfigured: isUpstashConfigured(),
-      cloudflareR2Configured: Boolean(
-        process.env.R2_ACCOUNT_ID &&
-        process.env.R2_ACCESS_KEY_ID &&
-        process.env.R2_SECRET_ACCESS_KEY &&
-        process.env.R2_BUCKET_NAME
-      ),
-      databaseStats: {
-        usersCount: db.users.length,
-        tracksCount: db.tracks.length,
-        playlistsCount: db.playlists.length,
-      },
-    });
+    try {
+      const r2Probe = await probeSingleR2Bucket(getR2Client(), getR2BucketName());
+      const mediaReferenceAudit = await auditSingleR2BucketReferences(
+        getR2Client(),
+        r2Probe.bucketName,
+        collectReferencedStorageKeys(db),
+      );
+      const status = mediaReferenceAudit.missingObjectCount > 0 ? 'degraded' : 'ok';
+      return res.status(status === 'ok' ? 200 : 503).json({
+        status,
+        upstashRedisConfigured: isUpstashConfigured(),
+        cloudflareR2Configured: true,
+        cloudflareR2: {
+          reachable: true,
+          bucketName: r2Probe.bucketName,
+          sampledObjectCount: r2Probe.sampledObjectCount,
+          mediaReferenceAudit,
+        },
+        databaseStats: {
+          usersCount: db.users.length,
+          tracksCount: db.tracks.length,
+          playlistsCount: db.playlists.length,
+        },
+      });
+    } catch (error) {
+      return sendCorrelatedError(
+        res,
+        503,
+        ERROR_CODES.MEDIA_STORAGE_UNAVAILABLE,
+        'The configured R2 bucket is unreachable.',
+        'R2 system status probe error',
+        error,
+        { status: 'degraded', upstashRedisConfigured: isUpstashConfigured(), cloudflareR2Configured: false },
+      );
+    }
   });
 
   // ==========================================
