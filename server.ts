@@ -16,6 +16,7 @@ import { ALLOWED_IMAGE_MIME_TYPES, InvalidImageUploadError, validateImageBuffer 
 import { classifyGoogleSignInAccount, getVerifiedGoogleIdentity, InvalidGoogleIdentityError } from "./server/googleAccountSecurity.js";
 import { classifyMediaStorageKey, getPrivateMediaOwner } from "./server/mediaAccessPolicy.js";
 import { getProductionPublicOrigin, requireHttps, securityHeaders } from "./server/httpSecurity.js";
+import { getConfiguredPublicBaseUrl, getOptionalPrivateR2BucketName, getRuntimePort } from "./server/runtimeConfig.js";
 
 dotenv.config();
 
@@ -331,11 +332,8 @@ function getR2BucketName(): string {
 }
 
 function getR2PrivateBucketName(): string {
-  const bucketName = process.env.R2_PRIVATE_BUCKET_NAME?.trim();
+  const bucketName = getOptionalPrivateR2BucketName(process.env.R2_PRIVATE_BUCKET_NAME, getR2BucketName());
   if (!bucketName) throw new Error("R2_PRIVATE_BUCKET_NAME is required for private upload staging.");
-  if (bucketName === getR2BucketName()) {
-    throw new Error("R2_PRIVATE_BUCKET_NAME must be different from the public R2_BUCKET_NAME.");
-  }
   return bucketName;
 }
 
@@ -590,13 +588,22 @@ function createRateLimiter({ window, max, name, identity }: RateLimitOptions): e
 async function startServer() {
   // Refuse to start without the required remote persistence configuration.
   getR2Client();
-  getR2BucketName();
-  getR2PrivateBucketName();
+  const publicBucketName = getR2BucketName();
+  const privateBucketName = getOptionalPrivateR2BucketName(
+    process.env.R2_PRIVATE_BUCKET_NAME,
+    publicBucketName,
+  );
+  if (!privateBucketName) {
+    console.warn(
+      "R2_PRIVATE_BUCKET_NAME is not configured; media upload staging is disabled until a distinct private bucket is configured.",
+    );
+  }
   const publicMediaBaseUrl = getR2PublicBaseUrl();
-  const configuredAppUrl = process.env.PUBLIC_BASE_URL || process.env.SITE_URL || process.env.APP_URL;
+  const configuredPublicBaseUrl = getConfiguredPublicBaseUrl(process.env);
+  const configuredAppUrl = configuredPublicBaseUrl || process.env.SITE_URL || process.env.APP_URL;
   const isProduction = process.env.NODE_ENV === "production";
   const productionPublicOrigin = isProduction
-    ? getProductionPublicOrigin(process.env.PUBLIC_BASE_URL)
+    ? getProductionPublicOrigin(configuredPublicBaseUrl)
     : null;
   if (publicMediaBaseUrl && configuredAppUrl) {
     const appOrigin = new URL(configuredAppUrl).origin;
@@ -606,7 +613,7 @@ async function startServer() {
   }
 
   const app = express();
-  const PORT = 3000;
+  const PORT = getRuntimePort(process.env.PORT);
   app.set('trust proxy', 1);
   app.use((_req, res, next) => {
     const correlationId = crypto.randomUUID();
@@ -917,6 +924,20 @@ async function startServer() {
       return res.status(413).json({ error: 'Request body exceeds the metadata limit.' });
     }
     return next(error);
+  });
+
+  // The rest of the application can safely serve existing catalog media when
+  // staging is not configured. Upload operations fail explicitly instead of
+  // crashing the entire service or falling back to the public bucket.
+  app.use('/api/uploads', (req, res, next) => {
+    if (privateBucketName || !getUserIdFromToken(req)) return next();
+    return sendPublicError(
+      res,
+      503,
+      ERROR_CODES.MEDIA_STORAGE_UNAVAILABLE,
+      'Media uploads are unavailable until private storage is configured.',
+      { configurationError: true },
+    );
   });
 
   // Large media bypasses Express entirely: the browser uploads directly to a

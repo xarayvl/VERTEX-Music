@@ -48,7 +48,9 @@ message with the globe button. Live web search uses the Tavily Search API. Set
   Redis retention or deletion setting.
 - Cloudflare R2 is the only managed upload store. `R2_PRIVATE_BUCKET_NAME` is
   the owner-only staging bucket and must be distinct from the public catalog
-  `R2_BUCKET_NAME`; the server refuses to start when they are the same.
+  `R2_BUCKET_NAME`; the server refuses to start when they are the same. If the
+  private bucket is omitted, the server remains available for existing public
+  catalog media, but all `/api/uploads` endpoints return `503` until it is set.
 - Set every required Upstash and R2 variable shown in `.env.example` before
   starting the application. Disable both r2.dev public access and custom
   domains on the private bucket. `R2_PUBLIC_DOMAIN`, when used, must be attached
@@ -83,3 +85,13 @@ The repository ships with no local database. If the configured Upstash database
 has no canonical key, the server initializes an empty remote database; it never
 creates demo users, tracks, artists, playlists, likes, follows, listening
 history, or chat history.
+
+## Render deployment
+
+- The server listens on Render's `PORT` automatically.
+- `PUBLIC_BASE_URL` remains recommended for custom domains. On Render, the
+  platform-provided `RENDER_EXTERNAL_URL` is used when `PUBLIC_BASE_URL` is not
+  set.
+- To enable uploads, create a second, non-public R2 bucket and set its exact
+  name as `R2_PRIVATE_BUCKET_NAME` in the Render service environment. Save and
+  redeploy the service; do not reuse `R2_BUCKET_NAME` for this value.
