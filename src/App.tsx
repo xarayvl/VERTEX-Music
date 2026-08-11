@@ -114,8 +114,6 @@ export default function App() {
   // that was created or edited while that request was still in flight.
   const playlistMutationVersionRef = useRef(0);
   const activePlaylistMutationsRef = useRef(0);
-  const backgroundDataRequestInFlightRef = useRef(false);
-  const lastBackgroundRefreshAtRef = useRef(0);
   const chatHydratedUserIdRef = useRef<string | null>(null);
   const lastSavedChatHistoryRef = useRef('');
   const pendingPlayTimerRef = useRef<number | null>(null);
@@ -575,31 +573,20 @@ export default function App() {
     };
   }, [followedArtistIds, artists]);
 
-  // Fetch application data (uploaded tracks, saved state, chat history) from Express server.
-  // `includeChatAndUser` is turned off for background refreshes so a periodic poll doesn't
-  // reset chat messages the person is actively looking at or clobber in-flight profile edits —
-  // background polls only need to keep the shared tracks/playlists lists (i.e. other users'
-  // uploads) up to date.
-  const fetchServerData = React.useCallback(async (includeChatAndUser: boolean = true) => {
-    if (!includeChatAndUser && backgroundDataRequestInFlightRef.current) return;
-    if (!includeChatAndUser) backgroundDataRequestInFlightRef.current = true;
+  // Fetch application data once on initial load (and once more only if the
+  // authenticated account changes). Shared data is intentionally not polled:
+  // idle browser tabs must not keep the server awake.
+  const fetchServerData = React.useCallback(async () => {
     const playlistVersionAtRequestStart = playlistMutationVersionRef.current;
     try {
       const token = localStorage.getItem('vertex_session_token');
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(includeChatAndUser ? '/api/data' : '/api/data?scope=shared', { headers });
+      const res = await fetch('/api/data', { headers });
       if (res.ok) {
         const data = await res.json();
         const serverTracks: Track[] = Array.isArray(data.tracks) ? data.tracks : [];
-        if (includeChatAndUser) {
-          const likedIds: string[] = Array.isArray(data.likedTrackIds) ? data.likedTrackIds : [];
-          setTracks(serverTracks.map((track) => ({ ...track, isLiked: likedIds.includes(track.id) })));
-        } else {
-          setTracks((previous) => {
-            const likedById = new Map(previous.map((track) => [track.id, track.isLiked]));
-            return serverTracks.map((track) => ({ ...track, isLiked: likedById.get(track.id) || false }));
-          });
-        }
+        const likedIds: string[] = Array.isArray(data.likedTrackIds) ? data.likedTrackIds : [];
+        setTracks(serverTracks.map((track) => ({ ...track, isLiked: likedIds.includes(track.id) })));
         if (
           activePlaylistMutationsRef.current === 0 &&
           playlistMutationVersionRef.current === playlistVersionAtRequestStart
@@ -607,60 +594,35 @@ export default function App() {
           setPlaylists(Array.isArray(data.playlists) ? data.playlists : []);
         }
         setArtists(Array.isArray(data.artists) ? data.artists.map(normalizePublicArtist).filter((artist: Artist) => artist.id && artist.name) : []);
-        if (includeChatAndUser) {
-          const recentIds: string[] = Array.isArray(data.recentTrackIds) ? data.recentTrackIds : [];
-          const trackById = new Map(serverTracks.map((track) => [track.id, track]));
-          setFollowedArtistIds(Array.isArray(data.followedArtistIds) ? data.followedArtistIds : []);
-          setRecentlyPlayed(recentIds.map((id) => trackById.get(id)).filter((track): track is Track => Boolean(track)));
-          const serverChatHistory = Array.isArray(data.chatHistory) ? data.chatHistory : [];
-          const hydratedUserId = data.user?.id || null;
-          chatHydratedUserIdRef.current = hydratedUserId;
-          lastSavedChatHistoryRef.current = JSON.stringify(serverChatHistory);
-          setChatMessages(serverChatHistory);
-          if (data.user) {
-            setUserProfile((previous) => (previous ? { ...previous, ...data.user } : data.user));
-          } else if (token) {
-            localStorage.removeItem('vertex_session_token');
-            setUserProfile(null);
-            setIsAuthModalOpen(true);
-          }
+        const recentIds: string[] = Array.isArray(data.recentTrackIds) ? data.recentTrackIds : [];
+        const trackById = new Map(serverTracks.map((track) => [track.id, track]));
+        setFollowedArtistIds(Array.isArray(data.followedArtistIds) ? data.followedArtistIds : []);
+        setRecentlyPlayed(recentIds.map((id) => trackById.get(id)).filter((track): track is Track => Boolean(track)));
+        const serverChatHistory = Array.isArray(data.chatHistory) ? data.chatHistory : [];
+        const hydratedUserId = data.user?.id || null;
+        chatHydratedUserIdRef.current = hydratedUserId;
+        lastSavedChatHistoryRef.current = JSON.stringify(serverChatHistory);
+        setChatMessages(serverChatHistory);
+        if (data.user) {
+          setUserProfile((previous) => (previous ? { ...previous, ...data.user } : data.user));
+        } else if (token) {
+          localStorage.removeItem('vertex_session_token');
+          setUserProfile(null);
+          setIsAuthModalOpen(true);
         }
       }
     } catch (err) {
       console.error('Error syncing server data:', err);
     } finally {
-      if (!includeChatAndUser) {
-        backgroundDataRequestInFlightRef.current = false;
-      }
-      lastBackgroundRefreshAtRef.current = Date.now();
       setServerDataLoaded(true);
     }
   }, []);
 
   useEffect(() => {
     if (userProfile?.id && chatHydratedUserIdRef.current === userProfile.id) return;
-    fetchServerData(true);
+    fetchServerData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile?.id]);
-
-  // Refresh shared tracks/playlists when the tab regains focus. Avoid background
-  // polling so an otherwise idle browser does not keep the server awake.
-  useEffect(() => {
-    const FOCUS_REFRESH_COOLDOWN_MS = 15000;
-    const refreshSharedData = () => {
-      if (document.visibilityState !== 'visible') return;
-      if (Date.now() - lastBackgroundRefreshAtRef.current < FOCUS_REFRESH_COOLDOWN_MS) return;
-      void fetchServerData(false);
-    };
-
-    window.addEventListener('focus', refreshSharedData);
-    document.addEventListener('visibilitychange', refreshSharedData);
-
-    return () => {
-      window.removeEventListener('focus', refreshSharedData);
-      document.removeEventListener('visibilitychange', refreshSharedData);
-    };
-  }, [fetchServerData]);
 
   const handleLogout = () => {
     const token = localStorage.getItem('vertex_session_token');
