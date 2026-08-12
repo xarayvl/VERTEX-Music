@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowUp, BrainCog, Globe, Sparkles, Square, Trash2 } from 'lucide-react';
+import { ArrowUp, BrainCog, Globe, ImagePlus, Sparkles, Square, Trash2 } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface AiPromptBoxProps {
@@ -17,6 +17,9 @@ interface AiPromptBoxProps {
   onWebSearchChange: (enabled: boolean) => void;
   highReasoningEnabled: boolean;
   onHighReasoningChange: (enabled: boolean) => void;
+  imageGenerationEnabled: boolean;
+  onImageGenerationChange: (enabled: boolean) => void;
+  isGeneratingImage?: boolean;
   modelLabel?: string;
   className?: string;
 }
@@ -37,6 +40,9 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
   onWebSearchChange,
   highReasoningEnabled,
   onHighReasoningChange,
+  imageGenerationEnabled,
+  onImageGenerationChange,
+  isGeneratingImage = false,
   modelLabel = 'GPT-OSS 120B',
   className = '',
 }, forwardedRef) => {
@@ -59,7 +65,9 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
     onSubmit();
   };
 
-  const activePlaceholder = webSearchEnabled && highReasoningEnabled
+  const activePlaceholder = imageGenerationEnabled
+    ? t('Describe the image you want to generate...')
+    : webSearchEnabled && highReasoningEnabled
     ? t('Search the web and reason carefully...')
     : webSearchEnabled
       ? t('Search the web...')
@@ -87,7 +95,9 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
         rows={1}
         maxLength={20_000}
         disabled={controlsDisabled}
-        placeholder={isLoading ? t('AI DJ is responding...') : activePlaceholder}
+        placeholder={isLoading
+          ? t(isGeneratingImage ? 'Qwen Image is generating...' : 'AI DJ is responding...')
+          : activePlaceholder}
         aria-label={t('Message AI DJ')}
         className="custom-scrollbar block min-h-10 max-h-[180px] w-full resize-none overflow-y-hidden border-0 bg-transparent px-3 py-2 text-[16px] leading-6 text-zinc-100 outline-none placeholder:text-zinc-600 disabled:cursor-not-allowed disabled:opacity-55 sm:text-[15px]"
       />
@@ -157,6 +167,41 @@ export const AiPromptBox = React.forwardRef<HTMLDivElement, AiPromptBoxProps>(({
                   className="overflow-hidden whitespace-nowrap text-[11px] font-black"
                 >
                   {t('High reasoning')}
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </button>
+
+          <ToolDivider />
+
+          <button
+            type="button"
+            onClick={() => onImageGenerationChange(!imageGenerationEnabled)}
+            disabled={controlsDisabled}
+            aria-pressed={imageGenerationEnabled}
+            title={t('Generate an image with Qwen Image')}
+            className={`flex h-8 flex-none items-center gap-1 overflow-hidden rounded-full border px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              imageGenerationEnabled
+                ? 'border-[#D946EF]/55 bg-[#D946EF]/15 text-[#F0ABFC]'
+                : 'border-transparent text-zinc-500 hover:bg-white/5 hover:text-zinc-200'
+            }`}
+          >
+            <motion.span
+              animate={{ rotate: imageGenerationEnabled ? 360 : 0, scale: imageGenerationEnabled ? 1.06 : 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+              className="flex h-5 w-5 items-center justify-center"
+            >
+              <ImagePlus className="h-4 w-4" />
+            </motion.span>
+            <AnimatePresence initial={false}>
+              {imageGenerationEnabled && (
+                <motion.span
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: 'auto', opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  className="overflow-hidden whitespace-nowrap text-[11px] font-black"
+                >
+                  {t('Image generation')}
                 </motion.span>
               )}
             </AnimatePresence>

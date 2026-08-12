@@ -100,6 +100,9 @@ export interface ChatMessageRecord {
   reasoning?: string;
   reasoningTimeline?: ChatReasoningTimelineEntry[];
   thinkingSeconds?: number;
+  imageUrl?: string;
+  imagePrompt?: string;
+  imageModel?: string;
 }
 
 export interface DBData {
@@ -128,6 +131,33 @@ function isPersistedMediaUrl(value: string, expected: 'audio' | 'image'): boolea
   return expected === 'audio'
     ? /^data:audio\/[^;]+;base64,/i.test(value)
     : /^data:image\/[^;]+;base64,/i.test(value) || /^data:image\/svg\+xml/i.test(value);
+}
+
+function isOwnedGeneratedImageUrl(value: unknown, userId: string): value is string {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  const cleanValue = value.trim();
+  const safeUserId = userId.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!safeUserId) return false;
+  const generatedFilePattern = /^ai-image_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:png|jpe?g|webp)$/i;
+
+  for (const prefix of [`/uploads/${safeUserId}/`, `/api/r2-file/${safeUserId}/`]) {
+    if (cleanValue.startsWith(prefix)) return generatedFilePattern.test(cleanValue.slice(prefix.length));
+  }
+  const publicDomain = process.env.R2_PUBLIC_DOMAIN?.trim();
+  if (!publicDomain || !isHttpUrl(cleanValue)) return false;
+
+  try {
+    const generatedUrl = new URL(cleanValue);
+    const configuredUrl = new URL(publicDomain.startsWith('http') ? publicDomain : `https://${publicDomain}`);
+    const cleanPath = decodeURIComponent(generatedUrl.pathname).replace(/^\/+/, '');
+    const configuredPath = decodeURIComponent(configuredUrl.pathname).replace(/^\/+|\/+$/g, '');
+    const ownedPathPrefix = configuredPath ? `${configuredPath}/${safeUserId}/` : `${safeUserId}/`;
+    return generatedUrl.host === configuredUrl.host
+      && cleanPath.startsWith(ownedPathPrefix)
+      && generatedFilePattern.test(cleanPath.slice(ownedPathPrefix.length));
+  } catch {
+    return false;
+  }
 }
 
 function normalizedIsoDate(value: unknown): string {
@@ -442,6 +472,15 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
         : undefined,
       thinkingSeconds: Number.isFinite(message.thinkingSeconds)
         ? Math.max(1, Math.min(600, Math.round(message.thinkingSeconds!)))
+        : undefined,
+      imageUrl: message.sender === 'ai' && isOwnedGeneratedImageUrl(message.imageUrl, user.id)
+        ? message.imageUrl.trim()
+        : undefined,
+      imagePrompt: message.sender === 'ai' && isOwnedGeneratedImageUrl(message.imageUrl, user.id) && typeof message.imagePrompt === 'string'
+        ? message.imagePrompt.trim().slice(0, 20_000) || undefined
+        : undefined,
+      imageModel: message.sender === 'ai' && isOwnedGeneratedImageUrl(message.imageUrl, user.id) && typeof message.imageModel === 'string'
+        ? message.imageModel.trim().slice(0, 160) || undefined
         : undefined,
     }));
   }

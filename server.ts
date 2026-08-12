@@ -10,6 +10,7 @@ import { OAuth2Client } from "google-auth-library";
 import { readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
 import { getPublicOrigin, injectTrackSocialMeta } from "./server/socialMeta.js";
 import { searchLiveWeb, type WebSearchSource } from "./server/liveWebSearch.js";
+import { buildImageGenerationsUrl, parseGeneratedImageResponse } from "./server/imageGeneration.js";
 
 dotenv.config();
 
@@ -50,6 +51,33 @@ function isStoredMediaUrl(value: string): boolean {
   return value.startsWith("/uploads/") || value.startsWith("/api/r2-file/") || isHttpUrl(value);
 }
 
+function isOwnedGeneratedImageUrl(value: unknown, userId: string): value is string {
+  if (typeof value !== "string" || !value.trim()) return false;
+  const cleanValue = value.trim();
+  const safeUserId = userId.replace(/[^a-zA-Z0-9_-]/g, "");
+  if (!safeUserId) return false;
+  const generatedFilePattern = /^ai-image_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:png|jpe?g|webp)$/i;
+
+  for (const prefix of [`/uploads/${safeUserId}/`, `/api/r2-file/${safeUserId}/`]) {
+    if (cleanValue.startsWith(prefix)) return generatedFilePattern.test(cleanValue.slice(prefix.length));
+  }
+  const publicDomain = process.env.R2_PUBLIC_DOMAIN?.trim();
+  if (!publicDomain || !isHttpUrl(cleanValue)) return false;
+
+  try {
+    const generatedUrl = new URL(cleanValue);
+    const configuredUrl = new URL(publicDomain.startsWith("http") ? publicDomain : `https://${publicDomain}`);
+    const cleanPath = decodeURIComponent(generatedUrl.pathname).replace(/^\/+/, "");
+    const configuredPath = decodeURIComponent(configuredUrl.pathname).replace(/^\/+|\/+$/g, "");
+    const ownedPathPrefix = configuredPath ? `${configuredPath}/${safeUserId}/` : `${safeUserId}/`;
+    return generatedUrl.host === configuredUrl.host
+      && cleanPath.startsWith(ownedPathPrefix)
+      && generatedFilePattern.test(cleanPath.slice(ownedPathPrefix.length));
+  } catch {
+    return false;
+  }
+}
+
 function normalizeCopyright(value: unknown, fallback: string): string {
   const raw = typeof value === "string" ? value.trim() : "";
   const fallbackMatch = fallback.trim().match(/^(\d{4})(?:\s+(.*))?$/);
@@ -86,7 +114,7 @@ function parseAudioDataUrl(value: string, fileName: unknown): { base64Data: stri
   return { base64Data: match[2], mimeType };
 }
 
-function sanitizeChatHistory(value: unknown, tracks: TrackRecord[] = []): any[] {
+function sanitizeChatHistory(value: unknown, tracks: TrackRecord[] = [], userId = ""): any[] {
   if (!Array.isArray(value)) return [];
   const trackById = new Map(tracks.map((track) => [track.id, track]));
   return value.slice(-200).flatMap((message: any) => {
@@ -143,6 +171,15 @@ function sanitizeChatHistory(value: unknown, tracks: TrackRecord[] = []): any[] 
       reasoning: reasoning || undefined,
       reasoningTimeline: reasoningTimeline.length > 0 ? reasoningTimeline : undefined,
       thinkingSeconds,
+      imageUrl: message.sender === "ai" && isOwnedGeneratedImageUrl(message.imageUrl, userId)
+        ? message.imageUrl.trim()
+        : undefined,
+      imagePrompt: message.sender === "ai" && isOwnedGeneratedImageUrl(message.imageUrl, userId) && typeof message.imagePrompt === "string"
+        ? message.imagePrompt.trim().slice(0, 20_000) || undefined
+        : undefined,
+      imageModel: message.sender === "ai" && isOwnedGeneratedImageUrl(message.imageUrl, userId) && typeof message.imageModel === "string"
+        ? message.imageModel.trim().slice(0, 160) || undefined
+        : undefined,
     }];
   });
 }
@@ -346,6 +383,7 @@ async function saveUploadedFile(base64Data: string, mimeType: string, folderUser
   if (ext === 'mpeg' || ext === 'mp3') ext = 'mp3';
   if (ext === 'jpeg' || ext === 'jpg') ext = 'jpg';
   if (ext === 'png') ext = 'png';
+  if (ext === 'webp') ext = 'webp';
   if (ext === 'ogg') ext = 'ogg';
   if (ext === 'wav') ext = 'wav';
   if (ext === 'webm') ext = 'webm';
@@ -368,6 +406,7 @@ async function saveUploadedFile(base64Data: string, mimeType: string, folderUser
     else if (ext === 'webm') cleanMime = 'audio/webm';
     else if (ext === 'jpg' || ext === 'jpeg') cleanMime = 'image/jpeg';
     else if (ext === 'png') cleanMime = 'image/png';
+    else if (ext === 'webp') cleanMime = 'image/webp';
     else cleanMime = filePrefix.includes('audio') ? 'audio/mpeg' : 'image/jpeg';
   }
 
@@ -453,6 +492,7 @@ async function startServer() {
   const authLimiter = createRateLimiter({ windowMs: 15 * 60_000, max: 20, name: 'auth' });
   const usernameAvailabilityLimiter = createRateLimiter({ windowMs: 60_000, max: 60, name: 'username-availability' });
   const chatLimiter = createRateLimiter({ windowMs: 60_000, max: 12, name: 'chat' });
+  const imageGenerationLimiter = createRateLimiter({ windowMs: 60_000, max: 4, name: 'image-generation' });
   const trackPlayLimiter = createRateLimiter({ windowMs: 60_000, max: 30, name: 'track-play' });
   // Also used for full-page/document requests below (SPA fallback, shared
   // track pages) which sit outside the /api prefix and so aren't covered by
@@ -514,6 +554,7 @@ async function startServer() {
         else if (lowerKey.endsWith(".webm")) contentType = "audio/webm";
         else if (lowerKey.endsWith(".png")) contentType = "image/png";
         else if (lowerKey.endsWith(".jpg") || lowerKey.endsWith(".jpeg")) contentType = "image/jpeg";
+        else if (lowerKey.endsWith(".webp")) contentType = "image/webp";
       }
 
       res.setHeader("Content-Type", contentType);
@@ -989,12 +1030,26 @@ async function startServer() {
         return res.status(404).json({ error: "User not found." });
       }
 
-      const sanitizedHistory = sanitizeChatHistory(chatHistory, db.tracks);
+      const previousGeneratedImageUrls = (db.chatHistories[userId] || [])
+        .map((message) => message.imageUrl)
+        .filter((imageUrl): imageUrl is string => isOwnedGeneratedImageUrl(imageUrl, userId));
+      const sanitizedHistory = sanitizeChatHistory(chatHistory, db.tracks, userId);
       if (JSON.stringify(db.chatHistories[userId] || []) === JSON.stringify(sanitizedHistory)) {
         return res.json({ success: true, chatHistory: sanitizedHistory, unchanged: true });
       }
       db.chatHistories[userId] = sanitizedHistory;
       await writeDBAsync(db);
+      const retainedGeneratedImageUrls = new Set(
+        sanitizedHistory
+          .map((message) => message.imageUrl)
+          .filter((imageUrl): imageUrl is string => isOwnedGeneratedImageUrl(imageUrl, userId)),
+      );
+      const referencedMedia = collectReferencedMediaUrls(db);
+      await Promise.all(
+        previousGeneratedImageUrls
+          .filter((imageUrl) => !retainedGeneratedImageUrls.has(imageUrl) && !referencedMedia.has(imageUrl))
+          .map((imageUrl) => deleteManagedFile(imageUrl)),
+      );
 
       return res.json({ success: true, chatHistory: db.chatHistories[userId] });
     } catch (error: any) {
@@ -1115,8 +1170,17 @@ async function startServer() {
         return res.status(404).json({ error: "User not found." });
       }
 
+      const generatedImageUrls = (db.chatHistories[userId] || [])
+        .map((message) => message.imageUrl)
+        .filter((imageUrl): imageUrl is string => isOwnedGeneratedImageUrl(imageUrl, userId));
       db.chatHistories[userId] = [];
       await writeDBAsync(db);
+      const referencedMedia = collectReferencedMediaUrls(db);
+      await Promise.all(
+        generatedImageUrls
+          .filter((imageUrl) => !referencedMedia.has(imageUrl))
+          .map((imageUrl) => deleteManagedFile(imageUrl)),
+      );
 
       return res.json({ success: true, chatHistory: [] });
     } catch (error: any) {
@@ -2393,6 +2457,129 @@ function buildNvidiaMessages(
   }
   return messages;
 }
+
+  // Qwen-Image runs on a Visual GenAI NIM endpoint, separate from the
+  // GPT-OSS chat-completions endpoint. Keeping this route separate guarantees
+  // normal AI DJ messages never invoke image generation accidentally.
+  app.post("/api/image-generation", imageGenerationLimiter, async (req, res) => {
+    const clientAbortController = new AbortController();
+    res.once("close", () => {
+      if (!res.writableEnded) clientAbortController.abort();
+    });
+
+    try {
+      const { prompt, userId } = req.body || {};
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      }
+      if (userId !== undefined && typeof userId !== "string") {
+        return res.status(400).json({ error: "userId must be a string." });
+      }
+      if (userId && userId !== sessionUserId) {
+        return res.status(403).json({ error: "Forbidden: You can only use your own account context." });
+      }
+      if (typeof prompt !== "string" || !prompt.trim()) {
+        return res.status(400).json({ error: "Image prompt is required." });
+      }
+      const cleanPrompt = prompt.trim();
+      if (cleanPrompt.length > 20_000) {
+        return res.status(400).json({ error: "Image prompt cannot exceed 20000 characters." });
+      }
+
+      const ownerDB = await readDBAsync(req.method !== "GET");
+      if (!ownerDB.users.some((user) => user.id === sessionUserId)) {
+        return res.status(404).json({ error: "User not found." });
+      }
+
+      const configuredBaseUrl = process.env.NVIDIA_IMAGE_API_BASE_URL?.trim();
+      if (!configuredBaseUrl) {
+        return res.status(500).json({
+          error: "Image generation is not configured. Set NVIDIA_IMAGE_API_BASE_URL.",
+          configurationError: true,
+        });
+      }
+
+      let imageGenerationsUrl: string;
+      try {
+        imageGenerationsUrl = buildImageGenerationsUrl(configuredBaseUrl);
+      } catch (error: any) {
+        return res.status(500).json({
+          error: error?.message || "The image generation endpoint is invalid.",
+          configurationError: true,
+        });
+      }
+
+      const imageModel = process.env.NVIDIA_IMAGE_MODEL?.trim() || "qwen/qwen-image-2512";
+      const imageApiKey = process.env.NVIDIA_IMAGE_API_KEY?.trim();
+      const headers: Record<string, string> = {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      };
+      if (imageApiKey) headers.Authorization = `Bearer ${imageApiKey}`;
+
+      const providerResponse = await fetch(imageGenerationsUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: imageModel,
+          prompt: cleanPrompt,
+          n: 1,
+          response_format: "b64_json",
+        }),
+        signal: withTimeoutSignal(clientAbortController.signal, 240_000),
+      });
+      const responseBody: any = await providerResponse.json().catch(() => ({}));
+      if (!providerResponse.ok) {
+        const providerMessage = typeof responseBody?.error?.message === "string"
+          ? responseBody.error.message
+          : typeof responseBody?.detail === "string"
+            ? responseBody.detail
+            : `Image provider request failed (${providerResponse.status}).`;
+        const rateLimited = providerResponse.status === 429;
+        const retryAfterSeconds = rateLimited
+          ? Math.max(1, Math.min(300, Math.ceil(Number(providerResponse.headers.get("retry-after") || 30))))
+          : 0;
+        console.error("Qwen Image Provider Error:", {
+          model: imageModel,
+          status: providerResponse.status,
+          message: providerMessage,
+        });
+        if (rateLimited) res.setHeader("Retry-After", String(retryAfterSeconds));
+        return res.status(rateLimited ? 429 : 502).json({
+          error: rateLimited
+            ? AI_HIGH_DEMAND_MESSAGE
+            : "Image generation is temporarily unavailable. Please try again.",
+          rateLimited,
+          retryAfterSeconds,
+        });
+      }
+
+      const generatedImage = parseGeneratedImageResponse(responseBody);
+      const imageUrl = await saveUploadedFile(
+        generatedImage.base64Data,
+        generatedImage.mimeType,
+        sessionUserId,
+        "ai-image",
+      );
+
+      return res.json({
+        success: true,
+        imageUrl,
+        imagePrompt: cleanPrompt,
+        imageModel,
+      });
+    } catch (error: any) {
+      if (clientAbortController.signal.aborted || res.destroyed) {
+        console.info("Qwen image request cancelled by the client.");
+        return;
+      }
+      console.error("Qwen Image Generation Error:", error?.message || error);
+      return res.status(502).json({
+        error: "Image generation is temporarily unavailable. Please try again.",
+      });
+    }
+  });
 
   // NVIDIA NIM AI Chat Endpoint
   app.post("/api/chat", chatLimiter, async (req, res) => {

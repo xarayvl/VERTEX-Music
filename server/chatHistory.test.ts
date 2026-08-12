@@ -45,3 +45,53 @@ test("chat history keeps completed reasoning details across database hydration",
   ]);
   assert.equal(restoredMessage.thinkingSeconds, 5);
 });
+
+test("chat history keeps only user-owned generated image URLs", () => {
+  const userId = "user_image_history";
+  const baseData = {
+    users: [{
+      id: userId,
+      username: "visual-listener",
+      email: "visual@example.com",
+      password: "stored-password-hash",
+      displayName: "Visual Listener",
+      avatarUrl: "",
+      bio: "",
+      favoriteGenres: [],
+      createdAt: "2026-08-10T10:00:00.000Z",
+    }],
+    playlists: [],
+    tracks: [],
+    userStates: {},
+  };
+
+  const result = sanitizeDBData({
+    ...baseData,
+    chatHistories: {
+      [userId]: [{
+        id: "ai_image",
+        sender: "ai" as const,
+        text: "Generated with Qwen Image.",
+        timestamp: "2026-08-10T10:01:00.000Z",
+        imageUrl: `/uploads/${userId}/ai-image_12345678-1234-4234-8234-123456789abc.png`,
+        imagePrompt: "A neon album cover",
+        imageModel: "qwen/qwen-image-2512",
+      }, {
+        id: "ai_foreign_image",
+        sender: "ai" as const,
+        text: "This URL must not survive.",
+        timestamp: "2026-08-10T10:02:00.000Z",
+        imageUrl: "/uploads/another_user/ai-image_87654321-4321-4321-8321-cba987654321.png",
+        imagePrompt: "Untrusted prompt",
+        imageModel: "untrusted/model",
+      }],
+    },
+  });
+
+  assert.equal(result.chatHistories[userId][0].imageUrl, `/uploads/${userId}/ai-image_12345678-1234-4234-8234-123456789abc.png`);
+  assert.equal(result.chatHistories[userId][0].imagePrompt, "A neon album cover");
+  assert.equal(result.chatHistories[userId][0].imageModel, "qwen/qwen-image-2512");
+  assert.equal(result.chatHistories[userId][1].imageUrl, undefined);
+  assert.equal(result.chatHistories[userId][1].imagePrompt, undefined);
+  assert.equal(result.chatHistories[userId][1].imageModel, undefined);
+});
