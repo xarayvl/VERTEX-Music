@@ -25,13 +25,6 @@ when current information requires it. Users can require a search for a specific
 message with the globe button. Live web search uses the Tavily Search API. Set
 `TAVILY_API_KEY` to enable it.
 
-The image-generation button uses Qwen Image through a separate NVIDIA Visual
-GenAI NIM. Set `NVIDIA_IMAGE_API_BASE_URL` to that NIM's base URL (for example,
-`http://localhost:8000`), optionally set `NVIDIA_IMAGE_API_KEY` when the endpoint
-requires bearer authentication, and use `NVIDIA_IMAGE_MODEL` to override the
-default `qwen/qwen-image-2512`. Generated images are saved to the signed-in
-user's normal local/R2 media storage before they are added to chat history.
-
 ## Persistence
 
 - Without Upstash, canonical application data is stored in `data/db.json`.

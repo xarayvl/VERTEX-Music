@@ -119,9 +119,6 @@ export interface ChatMessage {
   reasoning?: string;
   reasoningTimeline?: ReasoningTimelineEntry[];
   thinkingSeconds?: number;
-  imageUrl?: string;
-  imagePrompt?: string;
-  imageModel?: string;
 }
 
 // Chronological trace of a completed reply: chunks of the model's reasoning

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bot, Sparkles, Play, Music, Globe, Search, ChevronDown, BrainCircuit, Image as ImageIcon } from 'lucide-react';
+import { Bot, Sparkles, Play, Music, Globe, Search, ChevronDown, BrainCircuit } from 'lucide-react';
 import { Track, ChatMessage, ReasoningTimelineEntry } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import { AgentPlanning, type PlanStep } from '../ui/ai-planning';
@@ -212,8 +212,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [quotaNotice, setQuotaNotice] = useState('');
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [highReasoningEnabled, setHighReasoningEnabled] = useState(false);
-  const [imageGenerationEnabled, setImageGenerationEnabled] = useState(false);
-  const [activeRequestMode, setActiveRequestMode] = useState<'chat' | 'image' | null>(null);
   const [liveActivities, setLiveActivities] = useState<LiveChatActivity[]>([]);
   const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -260,13 +258,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (!customText) setInput('');
     const webSearchForced = webSearchEnabled;
     const highReasoningRequested = highReasoningEnabled;
-    const imageGenerationRequested = imageGenerationEnabled;
     setWebSearchEnabled(false);
     setHighReasoningEnabled(false);
-    setImageGenerationEnabled(false);
     setLiveActivities([]);
     setIsLoading(true);
-    setActiveRequestMode(imageGenerationRequested ? 'image' : 'chat');
     const requestController = new AbortController();
     chatRequestAbortRef.current = requestController;
 
@@ -287,19 +282,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
 
-      const res = await fetch(imageGenerationRequested ? '/api/image-generation' : '/api/chat', {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers,
-        body: JSON.stringify(imageGenerationRequested
-          ? { prompt: textToSend.trim(), userId }
-          : {
-              message: textToSend.trim(),
-              history: historyPayload,
-              userId,
-              forceWebSearch: webSearchForced,
-              reasoningEffort: highReasoningRequested ? 'high' : 'medium',
-              streamActivity: true,
-            }),
+        body: JSON.stringify({
+          message: textToSend.trim(),
+          history: historyPayload,
+          userId,
+          forceWebSearch: webSearchForced,
+          reasoningEffort: highReasoningRequested ? 'high' : 'medium',
+          streamActivity: true,
+        }),
         signal: requestController.signal,
       });
 
@@ -313,27 +306,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
       };
 
       let data: any = {};
-      if (imageGenerationRequested) {
-        data = await res.json().catch(() => ({}));
-        if (!res.ok) throw createResponseError(data);
-        if (typeof data.imageUrl !== 'string' || !data.imageUrl.trim()) {
-          throw new Error(t('The image provider returned no image.'));
-        }
-
-        const aiImageMessage: ChatMessage = {
-          id: createMessageId('ai'),
-          sender: 'ai',
-          text: t('Generated with Qwen Image.'),
-          timestamp: new Date().toISOString(),
-          imageUrl: data.imageUrl.trim(),
-          imagePrompt: typeof data.imagePrompt === 'string' ? data.imagePrompt.trim() : textToSend.trim(),
-          imageModel: typeof data.imageModel === 'string' ? data.imageModel.trim() : 'qwen/qwen-image-2512',
-        };
-        onUpdateMessages((prev) => [...prev, aiImageMessage]);
-        setQuotaNotice('');
-        return;
-      }
-
       const isActivityStream = res.headers.get('Content-Type')?.includes('application/x-ndjson') === true;
 
       if (res.ok && isActivityStream) {
@@ -412,7 +384,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         onUpdateMessages((prev) => [...prev, cancelledMsg]);
         return;
       }
-      console.error(imageGenerationRequested ? 'AI image generation request failed.' : 'AI chat request failed.');
+      console.error('AI chat request failed.');
       const isRateLimited = !!err?.rateLimited;
       const retryAfterSeconds = Math.max(0, Math.min(300, Math.ceil(Number(err?.retryAfterSeconds || 0))));
       if (isRateLimited) {
@@ -432,7 +404,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
     } finally {
       if (chatRequestAbortRef.current === requestController) chatRequestAbortRef.current = null;
       setIsLoading(false);
-      setActiveRequestMode(null);
     }
   };
 
@@ -640,24 +611,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     </div>
                   )}
 
-                  {msg.sender === 'ai' && msg.imageUrl && (
-                    <a
-                      href={msg.imageUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={t('Open generated image')}
-                      className="group block overflow-hidden rounded-2xl border border-white/10 bg-black/20"
-                    >
-                      <img
-                        src={msg.imageUrl}
-                        alt={msg.imagePrompt || t('AI-generated image')}
-                        loading="lazy"
-                        className="max-h-[560px] w-full object-contain transition-transform duration-300 group-hover:scale-[1.01]"
-                      />
-                    </a>
-                  )}
-
-                  <div className={`min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${msg.sender === 'ai' ? 'text-[14px]' : ''} ${msg.imageUrl ? 'mt-3' : ''}`}>{renderFormattedText(msg.text)}</div>
+                  <div className={`min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${msg.sender === 'ai' ? 'text-[14px]' : ''}`}>{renderFormattedText(msg.text)}</div>
 
                   {msg.matchedTracks && msg.matchedTracks.length > 0 && (
                     <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
@@ -708,12 +662,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   <span className="absolute -inset-1 animate-ping rounded-2xl border border-[#D946EF]/35" />
                 </div>
                 <div className="min-w-0 max-w-[calc(100%_-_40px)] flex-1 sm:max-w-lg sm:flex-none">
-                  {activeRequestMode !== 'image' && liveReasoningSteps.length > 0 ? (
+                  {liveReasoningSteps.length > 0 ? (
                     <AgentPlanning title={t('Reasoning')} steps={liveReasoningSteps} />
                   ) : (
-                    <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-[#202020] px-4 py-3 text-[13px] font-black text-zinc-300">
-                      {activeRequestMode === 'image' && <ImageIcon className="h-4 w-4 animate-pulse text-[#F0ABFC]" />}
-                      {t(activeRequestMode === 'image' ? 'Generating image' : 'Reasoning')}
+                    <div className="rounded-2xl border border-white/[0.08] bg-[#202020] px-4 py-3 text-[13px] font-black text-zinc-300">
+                      {t('Reasoning')}
                     </div>
                   )}
                 </div>
@@ -765,25 +718,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
               ? t('AI paused · retry in {{seconds}}s', { seconds: rateLimitSeconds })
               : t('Ask about music, artists, genres or your next playlist...')}
             webSearchEnabled={webSearchEnabled}
-            onWebSearchChange={(enabled) => {
-              setWebSearchEnabled(enabled);
-              if (enabled) setImageGenerationEnabled(false);
-            }}
+            onWebSearchChange={setWebSearchEnabled}
             highReasoningEnabled={highReasoningEnabled}
-            onHighReasoningChange={(enabled) => {
-              setHighReasoningEnabled(enabled);
-              if (enabled) setImageGenerationEnabled(false);
-            }}
-            imageGenerationEnabled={imageGenerationEnabled}
-            onImageGenerationChange={(enabled) => {
-              setImageGenerationEnabled(enabled);
-              if (enabled) {
-                setWebSearchEnabled(false);
-                setHighReasoningEnabled(false);
-              }
-            }}
-            isGeneratingImage={activeRequestMode === 'image'}
-            modelLabel={imageGenerationEnabled || activeRequestMode === 'image' ? 'QWEN IMAGE' : 'GPT-OSS 120B'}
+            onHighReasoningChange={setHighReasoningEnabled}
           />
           <p className="mt-2 hidden px-2 text-center text-[9px] font-medium text-zinc-600 sm:block">
             {t('AI responses can be inaccurate. Verify important music and artist information.')}
