@@ -538,6 +538,7 @@ const turkishTranslations: Record<string, string> = {
   'Log In': 'Giriş yap',
   'Log out': 'Çıkış yap',
   'Log out of this session': 'Bu oturumdan çık',
+  'Could not log out. Please try again.': 'Çıkış yapılamadı. Lütfen tekrar dene.',
   'Login & security': 'Giriş ve güvenlik',
   'Main navigation': 'Ana gezinme',
   'Music': 'Müzik',

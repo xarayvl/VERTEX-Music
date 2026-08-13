@@ -30,6 +30,17 @@ message with the globe button. Live web search uses the Tavily Search API. Set
 - Without Upstash, canonical application data is stored in `data/db.json`.
 - Without Cloudflare R2, uploaded media is stored under `data/uploads`.
 - Upstash and R2 credentials are optional but recommended for deployed environments.
+- The admin Error log retains up to 1,000 redacted server/browser errors in
+  Redis and uses `data/error-log.jsonl` as a bounded local fallback. Override
+  the fallback path with `VERTEX_ERROR_LOG_FILE` when needed.
+
+Authentication uses a `Secure`, `HttpOnly`, `SameSite=Lax` host cookie. Session
+records are digest-keyed in Redis with a 7-day absolute lifetime and 24-hour
+idle lifetime by default; `SESSION_ABSOLUTE_TTL_SECONDS` and
+`SESSION_IDLE_TTL_SECONDS` can shorten those limits. Set `PUBLIC_BASE_URL` to
+the deployed HTTPS origin so mutation requests can be checked against the
+canonical same-origin value. Multi-instance deployments must configure
+Upstash; without it, sessions intentionally fall back to the current process.
 
 ## Shared track previews
 

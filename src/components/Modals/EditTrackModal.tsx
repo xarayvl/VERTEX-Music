@@ -198,9 +198,7 @@ export const EditTrackModal: React.FC<EditTrackModalProps> = ({
     setError(null);
 
     try {
-      const token = localStorage.getItem('vertex_session_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
 
       const finalAlbum = releaseType === 'Single' ? 'Single' : releaseTitle.trim();
       let updatedTracks: Track[] = [];

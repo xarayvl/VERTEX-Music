@@ -374,11 +374,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     const finalAlbumName = album === '__NEW__' ? (customAlbumName.trim() || 'Single') : album;
 
     try {
-      const token = localStorage.getItem('vertex_session_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
 
       const res = await fetch('/api/tracks', {
         method: 'POST',
@@ -442,11 +438,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
     const finalAlbumName = (album === '__NEW__' ? customAlbumName.trim() : album).trim();
     const sharedReleaseId = crypto.randomUUID();
 
-    const token = localStorage.getItem('vertex_session_token');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
 
     const createdTracks: Track[] = [];
 
@@ -503,7 +495,7 @@ export const AddTrackModal: React.FC<AddTrackModalProps> = ({
       if (createdTracks.length > 0) {
         await Promise.allSettled(
           createdTracks.map((track) =>
-            fetch(`/api/tracks/${track.id}`, { method: 'DELETE', headers: token ? { Authorization: `Bearer ${token}` } : {} })
+            fetch(`/api/tracks/${track.id}`, { method: 'DELETE' })
           )
         );
       }

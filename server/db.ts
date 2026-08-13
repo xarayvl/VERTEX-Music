@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { Redis } from '@upstash/redis';
+import { isStoredSessionRecord, remainingSessionTtlMs, type StoredSessionRecord } from './sessionSecurity.js';
 
 const DB_FILE = process.env.VERTEX_DB_FILE
   ? path.resolve(process.env.VERTEX_DB_FILE)
@@ -849,68 +850,173 @@ export async function writeDBAsync(data: DBData): Promise<void> {
 }
 
 // ==========================================
-// SESSION PERSISTENCE (Upstash-backed, in-memory fallback)
+// SESSION PERSISTENCE (digest-keyed Redis records, in-memory fallback)
 // ==========================================
-// Sessions are kept in an in-memory Map for fast synchronous lookups on every
-// request, but are also mirrored to Upstash Redis (a single hash) so that:
-//  - sessions survive server restarts / redeploys / cold starts
-//  - sessions are shared across multiple server instances (horizontal scaling,
-//    or separate deployments pointed at the same Upstash database)
-const SESSIONS_HASH_KEY = 'app:sessions';
+// The raw bearer secret exists only in the browser's HttpOnly cookie and
+// transient request memory. Redis and this fallback map are keyed exclusively
+// by SHA-256 digests, with one TTL-bearing Redis key per session.
+const LEGACY_SESSIONS_HASH_KEY = 'app:sessions';
+const SESSION_KEY_PREFIX = 'app:session:';
+const USER_SESSIONS_KEY_PREFIX = 'app:user-sessions:';
+const USER_SESSION_VERSION_KEY_PREFIX = 'app:user-session-version:';
+const inMemorySessions = new Map<string, StoredSessionRecord>();
+const inMemoryUserSessionVersions = new Map<string, number>();
 
-/**
- * Loads all persisted sessions from Upstash Redis (if configured) so the
- * in-memory session Map can be hydrated once at server startup.
- * Returns an empty object if Upstash isn't configured or the call fails.
- */
-export async function loadSessionsFromRedis(): Promise<Record<string, string>> {
+function sessionKey(digest: string): string {
+  return `${SESSION_KEY_PREFIX}${digest}`;
+}
+
+function userSessionsKey(userId: string): string {
+  const userDigest = crypto.createHash('sha256').update(userId, 'utf8').digest('hex');
+  return `${USER_SESSIONS_KEY_PREFIX}${userDigest}`;
+}
+
+function userSessionVersionKey(userId: string): string {
+  const userDigest = crypto.createHash('sha256').update(userId, 'utf8').digest('hex');
+  return `${USER_SESSION_VERSION_KEY_PREFIX}${userDigest}`;
+}
+
+function validSessionDigest(digest: string): boolean {
+  return /^[a-f0-9]{64}$/.test(digest);
+}
+
+function ttlSeconds(record: StoredSessionRecord): number {
+  return Math.max(1, Math.ceil(remainingSessionTtlMs(record) / 1_000));
+}
+
+export async function deleteLegacySessionsFromRedis(): Promise<number> {
   const redis = getUpstashClient();
-  if (!redis) return {};
+  if (!redis) return 0;
+  return redis.del(LEGACY_SESSIONS_HASH_KEY);
+}
+
+export async function createSessionInStore(digest: string, record: StoredSessionRecord): Promise<void> {
+  if (!validSessionDigest(digest) || !isStoredSessionRecord(record) || remainingSessionTtlMs(record) <= 0) {
+    throw new Error('Refusing to persist an invalid session record.');
+  }
+
+  const redis = getUpstashClient();
+  if (!redis) {
+    inMemorySessions.set(digest, { ...record });
+    return;
+  }
+
+  const recordKey = sessionKey(digest);
+  const indexKey = userSessionsKey(record.userId);
   try {
-    const sessions = await redis.hgetall<Record<string, string>>(SESSIONS_HASH_KEY);
-    return sessions && typeof sessions === 'object' ? sessions : {};
-  } catch (err) {
-    console.error('Failed to load sessions from Upstash Redis:', err);
-    return {};
+    await Promise.all([
+      redis.set(recordKey, record, { ex: ttlSeconds(record) }),
+      redis.sadd(indexKey, digest),
+    ]);
+    await redis.expire(indexKey, Math.max(1, Math.ceil((record.absoluteExpiresAt - Date.now()) / 1_000)));
+  } catch (error) {
+    await Promise.allSettled([redis.del(recordKey), redis.srem(indexKey, digest)]);
+    throw error;
   }
 }
 
-/**
- * Fire-and-forget persistence of a single session token -> userId mapping.
- * Does not block the caller; safe to call from a synchronous code path.
- */
-export function persistSessionToRedis(token: string, userId: string): void {
+export async function readSessionFromStore(digest: string): Promise<StoredSessionRecord | null> {
+  if (!validSessionDigest(digest)) return null;
   const redis = getUpstashClient();
-  if (!redis || !token || !userId) return;
-  redis.hset(SESSIONS_HASH_KEY, { [token]: userId }).catch((err) => {
-    console.error('Failed to persist session to Upstash Redis:', err);
-  });
-}
-
-/**
- * Fire-and-forget removal of a session token (e.g. on logout).
- */
-export function deleteSessionFromRedis(token: string): void {
-  const redis = getUpstashClient();
-  if (!redis || !token) return;
-  redis.hdel(SESSIONS_HASH_KEY, token).catch((err) => {
-    console.error('Failed to delete session from Upstash Redis:', err);
-  });
-}
-
-/** Remove every persisted session belonging to a user (used by moderation). */
-export async function deleteSessionsForUserFromRedis(userId: string): Promise<number> {
-  const redis = getUpstashClient();
-  if (!redis || !userId) return 0;
-  try {
-    const sessions = await redis.hgetall<Record<string, string>>(SESSIONS_HASH_KEY);
-    const tokens = Object.entries(sessions || {})
-      .filter(([, ownerId]) => ownerId === userId)
-      .map(([token]) => token);
-    if (tokens.length > 0) await redis.hdel(SESSIONS_HASH_KEY, ...tokens);
-    return tokens.length;
-  } catch (err) {
-    console.error('Failed to revoke user sessions from Upstash Redis:', err);
-    return 0;
+  if (redis) {
+    const record = await redis.get<StoredSessionRecord>(sessionKey(digest));
+    return isStoredSessionRecord(record) ? record : null;
   }
+
+  const record = inMemorySessions.get(digest);
+  if (!record) return null;
+  if (!isStoredSessionRecord(record) || remainingSessionTtlMs(record) <= 0) {
+    inMemorySessions.delete(digest);
+    return null;
+  }
+  return { ...record };
+}
+
+export async function readUserSessionVersionFromStore(userId: string): Promise<number> {
+  if (!userId) return -1;
+  const redis = getUpstashClient();
+  if (redis) {
+    const version = await redis.get<number>(userSessionVersionKey(userId));
+    return Number.isInteger(version) && Number(version) >= 0 ? Number(version) : 0;
+  }
+  return inMemoryUserSessionVersions.get(userId) || 0;
+}
+
+/** Refresh idle expiry without resurrecting a concurrently revoked Redis key. */
+export async function touchSessionInStore(digest: string, record: StoredSessionRecord): Promise<boolean> {
+  if (!validSessionDigest(digest) || !isStoredSessionRecord(record) || remainingSessionTtlMs(record) <= 0) return false;
+  const redis = getUpstashClient();
+  if (redis) {
+    const result = await redis.set(sessionKey(digest), record, { ex: ttlSeconds(record), xx: true });
+    return result !== null;
+  }
+  if (!inMemorySessions.has(digest)) return false;
+  inMemorySessions.set(digest, { ...record });
+  return true;
+}
+
+export async function deleteSessionFromStore(digest: string, userId?: string): Promise<number> {
+  if (!validSessionDigest(digest)) return 0;
+  const redis = getUpstashClient();
+  if (redis) {
+    let ownerId = userId;
+    if (!ownerId) {
+      const record = await redis.get<StoredSessionRecord>(sessionKey(digest));
+      if (isStoredSessionRecord(record)) ownerId = record.userId;
+    }
+    const deleted = await redis.del(sessionKey(digest));
+    if (ownerId) await redis.srem(userSessionsKey(ownerId), digest);
+    return deleted;
+  }
+  return inMemorySessions.delete(digest) ? 1 : 0;
+}
+
+export async function deleteSessionsForUserFromStore(userId: string): Promise<number> {
+  if (!userId) return 0;
+  const redis = getUpstashClient();
+  if (redis) {
+    // The version bump is the authoritative invalidation. Even if cleanup of
+    // individual expired/orphaned keys later fails, no old record can pass the
+    // version check performed by any application instance.
+    await redis.incr(userSessionVersionKey(userId));
+    const indexKey = userSessionsKey(userId);
+    try {
+      const digests = await redis.smembers<string[]>(indexKey);
+      const keys = digests.filter(validSessionDigest).map(sessionKey);
+      if (keys.length > 0) await redis.del(...keys);
+      await redis.del(indexKey);
+      return keys.length;
+    } catch (error) {
+      console.error('Session keys could not be cleaned after version invalidation:', error);
+      return 0;
+    }
+  }
+
+  inMemoryUserSessionVersions.set(userId, (inMemoryUserSessionVersions.get(userId) || 0) + 1);
+  let deleted = 0;
+  for (const [digest, record] of inMemorySessions) {
+    if (record.userId !== userId) continue;
+    inMemorySessions.delete(digest);
+    deleted += 1;
+  }
+  return deleted;
+}
+
+export async function countSessionsInStore(): Promise<number> {
+  const redis = getUpstashClient();
+  if (redis) {
+    let cursor: string | number = 0;
+    let count = 0;
+    do {
+      const [nextCursor, keys] = await redis.scan(cursor, { match: `${SESSION_KEY_PREFIX}*`, count: 1_000 });
+      cursor = nextCursor;
+      count += keys.length;
+    } while (String(cursor) !== '0');
+    return count;
+  }
+
+  for (const [digest, record] of inMemorySessions) {
+    if (remainingSessionTtlMs(record) <= 0) inMemorySessions.delete(digest);
+  }
+  return inMemorySessions.size;
 }

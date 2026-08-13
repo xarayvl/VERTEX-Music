@@ -4,6 +4,7 @@ import {
   Archive,
   Ban,
   BarChart3,
+  Bug,
   CheckCircle2,
   Clock3,
   FileAudio,
@@ -73,6 +74,22 @@ type AdminActivity = {
   detail: string;
 };
 
+type AdminError = {
+  id: string;
+  correlationId: string;
+  timestamp: string;
+  origin: 'server' | 'client';
+  source: string;
+  message: string;
+  code: string | null;
+  status: number | null;
+  method: string | null;
+  path: string | null;
+  userId: string | null;
+  instanceId: string;
+  details: Record<string, unknown> | null;
+};
+
 type SelectedUserDetails = {
   user: AdminUser | null;
   state: { likedTrackIds: string[]; recentTrackIds: string[]; followedArtistIds: string[] };
@@ -115,10 +132,11 @@ type AdminSnapshot = {
   playlists: AdminPlaylist[];
   activity: AdminActivity[];
   auditLog: AdminAudit[];
+  errorLog: AdminError[];
   topGenres: { genre: string; plays: number }[];
 };
 
-type AdminSection = 'overview' | 'users' | 'content' | 'audit';
+type AdminSection = 'overview' | 'users' | 'content' | 'audit' | 'errors';
 
 type ProfileForm = {
   displayName: string;
@@ -219,10 +237,7 @@ export const AdminDashboard: React.FC = () => {
   const loadSnapshot = useCallback(async () => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('vertex_session_token');
-      const response = await fetch(`/api/admin/overview?userId=${encodeURIComponent(selectedUserId)}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const response = await fetch(`/api/admin/overview?userId=${encodeURIComponent(selectedUserId)}`);
       const data = await response.json().catch(() => null);
       if (!response.ok || !data) throw new Error(data?.error || 'Unable to load admin overview.');
       setSnapshot(data as AdminSnapshot);
@@ -267,10 +282,9 @@ export const AdminDashboard: React.FC = () => {
     setMutationError(null);
     setMutationMessage(null);
     try {
-      const token = localStorage.getItem('vertex_session_token');
       const response = await fetch(path, {
         method,
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const data = await response.json().catch(() => null);
@@ -305,6 +319,22 @@ export const AdminDashboard: React.FC = () => {
     const normalized = query.trim().toLowerCase();
     if (!snapshot || !normalized) return snapshot?.auditLog || [];
     return snapshot.auditLog.filter((entry) => [entry.action, entry.actorId, entry.targetType, entry.targetId, entry.reason].some((value) => value.toLowerCase().includes(normalized)));
+  }, [query, snapshot]);
+  const filteredErrors = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!snapshot || !normalized) return snapshot?.errorLog || [];
+    return snapshot.errorLog.filter((entry) => [
+      entry.source,
+      entry.message,
+      entry.code,
+      entry.correlationId,
+      entry.origin,
+      entry.method,
+      entry.path,
+      entry.userId,
+      entry.instanceId,
+      entry.status === null ? null : String(entry.status),
+    ].some((value) => value?.toLowerCase().includes(normalized)));
   }, [query, snapshot]);
 
   const submitStats = async (event: FormEvent) => {
@@ -399,7 +429,7 @@ export const AdminDashboard: React.FC = () => {
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-2 overflow-x-auto pb-1">{(['overview', 'users', 'content', 'audit'] as AdminSection[]).map((item) => <button key={item} type="button" onClick={() => { setSection(item); setQuery(''); }} className={`${buttonClass} ${section === item ? 'bg-white text-black' : 'border border-white/10 bg-white/[0.04] text-zinc-400'}`}>{item === 'audit' ? 'Audit log' : item}</button>)}</div>
+        <div className="flex gap-2 overflow-x-auto pb-1">{(['overview', 'users', 'content', 'audit', 'errors'] as AdminSection[]).map((item) => <button key={item} type="button" onClick={() => { setSection(item); setQuery(''); }} className={`${buttonClass} ${section === item ? 'bg-white text-black' : 'border border-white/10 bg-white/[0.04] text-zinc-400'}`}>{item === 'audit' ? 'Audit log' : item === 'errors' ? 'Error log' : item}</button>)}</div>
         {section !== 'overview' && <div className="relative w-full sm:w-80"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${section}…`} className={`${inputClass} pl-10`} /></div>}
       </div>
 
@@ -435,6 +465,37 @@ export const AdminDashboard: React.FC = () => {
       </div>}
 
       {section === 'audit' && <section className={`${panelClass} overflow-hidden`}><div className="border-b border-white/[0.07] p-5"><div className="flex items-center gap-2 text-sm font-black text-white"><History className="h-4 w-4 text-amber-300" /> Persistent admin audit log <span className="text-xs font-medium text-zinc-500">{filteredAudit.length} shown</span></div><p className="mt-1 text-xs text-zinc-500">Credential values and hashes are excluded from summaries.</p></div><div className="divide-y divide-white/[0.06]">{filteredAudit.map((entry) => <article key={entry.id} className="p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="text-xs font-black text-white">{entry.action}</span><span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] uppercase text-zinc-400">{entry.targetType}</span></div><span className="text-[10px] text-zinc-600">{formatDate(entry.timestamp)}</span></div><p className="mt-2 text-xs text-zinc-300">{entry.reason}</p><p className="mt-1 break-all font-mono text-[10px] text-zinc-600">actor {entry.actorId} · target {entry.targetId}</p><details className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3"><summary className="cursor-pointer text-[10px] font-black uppercase text-zinc-500">Safe before / after summary</summary><div className="mt-3 grid gap-3 lg:grid-cols-2"><pre className="overflow-x-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-zinc-400">{JSON.stringify(entry.before, null, 2)}</pre><pre className="overflow-x-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-zinc-400">{JSON.stringify(entry.after, null, 2)}</pre></div></details></article>)}{!filteredAudit.length && <p className="p-8 text-center text-xs text-zinc-500">No audit entries match this search.</p>}</div></section>}
+
+      {section === 'errors' && <section className={`${panelClass} overflow-hidden`}>
+        <div className="border-b border-white/[0.07] p-5">
+          <div className="flex items-center gap-2 text-sm font-black text-white"><Bug className="h-4 w-4 text-red-300" /> Persistent application error log <span className="text-xs font-medium text-zinc-500">{filteredErrors.length} shown</span></div>
+          <p className="mt-1 text-xs text-zinc-500">Server and browser errors are redacted, bounded, rate-limited, and linked by correlation ID.</p>
+        </div>
+        <div className="divide-y divide-white/[0.06]">
+          {filteredErrors.map((entry) => <article key={entry.id} className="p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-black text-white">{entry.source}</span>
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${entry.origin === 'server' ? 'bg-red-400/10 text-red-300' : 'bg-sky-400/10 text-sky-300'}`}>{entry.origin}</span>
+                  {entry.code && <span className="rounded-full bg-white/[0.06] px-2 py-1 font-mono text-[10px] text-zinc-400">{entry.code}</span>}
+                  {entry.status !== null && <span className="rounded-full bg-amber-400/10 px-2 py-1 font-mono text-[10px] text-amber-300">HTTP {entry.status}</span>}
+                </div>
+                <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5 text-zinc-300">{entry.message}</p>
+              </div>
+              <span className="shrink-0 text-[10px] text-zinc-600">{formatDate(entry.timestamp)}</span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] text-zinc-600">
+              <span className="break-all">CID {entry.correlationId}</span>
+              {(entry.method || entry.path) && <span>{entry.method || 'CLIENT'} {entry.path || '—'}</span>}
+              {entry.userId && <span className="break-all">user {entry.userId}</span>}
+              <span className="break-all">instance {entry.instanceId}</span>
+            </div>
+            {entry.details && <details className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3"><summary className="cursor-pointer text-[10px] font-black uppercase text-zinc-500">Redacted error details</summary><pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-zinc-400">{JSON.stringify(entry.details, null, 2)}</pre></details>}
+          </article>)}
+          {!filteredErrors.length && <p className="p-8 text-center text-xs text-zinc-500">No error entries match this search.</p>}
+        </div>
+      </section>}
 
       {isMutating && <div className="fixed bottom-6 right-6 flex items-center gap-2 rounded-xl border border-fuchsia-400/25 bg-[#21152b] px-4 py-3 text-xs font-black text-white shadow-2xl"><Loader2 className="h-4 w-4 animate-spin text-fuchsia-300" /> Applying admin operation…</div>}
     </div>

@@ -7,11 +7,121 @@ import dotenv from "dotenv";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createServer as createViteServer } from "vite";
 import { OAuth2Client } from "google-auth-library";
-import { readDB, readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, deleteSessionsForUserFromRedis, ADMIN_USER_ID, UserRecord, PlaylistRecord, TrackRecord, DBData, AdminAuditLogRecord } from "./server/db.js";
+import { readDB, readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, deleteLegacySessionsFromRedis, createSessionInStore, readSessionFromStore, readUserSessionVersionFromStore, touchSessionInStore, deleteSessionFromStore, deleteSessionsForUserFromStore, countSessionsInStore, ADMIN_USER_ID, UserRecord, PlaylistRecord, TrackRecord, DBData, AdminAuditLogRecord } from "./server/db.js";
 import { getPublicOrigin, injectTrackSocialMeta } from "./server/socialMeta.js";
 import { searchLiveWeb, type WebSearchSource } from "./server/liveWebSearch.js";
+import { getVerifiedGoogleIdentity, resolveGoogleSignIn, type GoogleIdentityResult } from "./server/googleAuthSecurity.js";
+import { createOpaqueSessionToken, digestSessionToken, isValidOpaqueSessionToken, readCookie, remainingSessionTtlMs, type StoredSessionRecord } from "./server/sessionSecurity.js";
+import { buildPublicError, createCorrelationId, safeErrorDetails } from "./server/errorSecurity.js";
+import { configureErrorLogSecrets, installProcessErrorCapture, installSecureConsoleErrorCapture, readAdminErrorLog, recordAdminError, runWithErrorContext, setErrorContextUserId, type ErrorRequestContext } from "./server/errorLog.js";
 
 dotenv.config();
+
+const SESSION_COOKIE_NAME = "__Host-vertex_session";
+
+function configuredDurationMs(name: string, fallbackSeconds: number, maximumSeconds: number): number {
+  const configured = Number(process.env[name]);
+  const seconds = Number.isFinite(configured) && configured >= 1
+    ? Math.min(Math.floor(configured), maximumSeconds)
+    : fallbackSeconds;
+  return seconds * 1_000;
+}
+
+const SESSION_ABSOLUTE_TTL_MS = configuredDurationMs("SESSION_ABSOLUTE_TTL_SECONDS", 7 * 24 * 60 * 60, 30 * 24 * 60 * 60);
+const SESSION_IDLE_TTL_MS = Math.min(
+  SESSION_ABSOLUTE_TTL_MS,
+  configuredDurationMs("SESSION_IDLE_TTL_SECONDS", 24 * 60 * 60, 7 * 24 * 60 * 60),
+);
+const SESSION_TOUCH_INTERVAL_MS = Math.max(1_000, Math.min(5 * 60_000, Math.floor(SESSION_IDLE_TTL_MS / 4)));
+const REQUEST_SESSION = Symbol("vertexRequestSession");
+const REQUEST_CORRELATION_ID = Symbol("vertexRequestCorrelationId");
+
+type RequestSessionContext = { digest: string; record: StoredSessionRecord };
+type RequestWithSecurityContext = express.Request & {
+  [REQUEST_SESSION]?: RequestSessionContext | null;
+  [REQUEST_CORRELATION_ID]?: string;
+};
+
+type PublicErrorCode =
+  | "MEDIA_NOT_FOUND"
+  | "STORAGE_UPLOAD_FAILED"
+  | "RELEASE_UPDATE_FAILED"
+  | "AI_CONFIGURATION_ERROR"
+  | "AI_PROVIDER_ERROR"
+  | "AI_RATE_LIMITED"
+  | "WEB_SEARCH_FAILED"
+  | "INTERNAL_SERVER_ERROR";
+
+function getRequestCorrelationId(req: express.Request): string {
+  const request = req as RequestWithSecurityContext;
+  if (!request[REQUEST_CORRELATION_ID]) request[REQUEST_CORRELATION_ID] = createCorrelationId();
+  return request[REQUEST_CORRELATION_ID]!;
+}
+
+function configuredServerSecrets(): Array<string | undefined> {
+  return [
+    process.env.NVIDIA_API_KEY,
+    process.env.TAVILY_API_KEY,
+    process.env.R2_ACCESS_KEY_ID,
+    process.env.R2_SECRET_ACCESS_KEY,
+    process.env.UPSTASH_REDIS_REST_TOKEN,
+    process.env.GOOGLE_CLIENT_SECRET,
+  ];
+}
+
+function logRequestError(
+  context: string,
+  correlationId: string,
+  error: unknown,
+  metadata: Record<string, unknown> = {},
+): void {
+  console.error(context, {
+    correlationId,
+    ...metadata,
+    error: safeErrorDetails(error, configuredServerSecrets()),
+  });
+}
+
+function sendPublicError(
+  req: express.Request,
+  res: express.Response,
+  status: number,
+  code: PublicErrorCode,
+  message: string,
+  extra: Record<string, unknown> = {},
+): express.Response {
+  const correlationId = getRequestCorrelationId(req);
+  res.removeHeader("Content-Length");
+  res.removeHeader("Content-Range");
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("X-Correlation-ID", correlationId);
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(status).json(buildPublicError(code, message, correlationId, extra));
+}
+
+configureErrorLogSecrets(configuredServerSecrets);
+installSecureConsoleErrorCapture();
+installProcessErrorCapture();
+
+function getCsrfOrigin(req: express.Request): string | null {
+  const configuredOrigin = process.env.PUBLIC_BASE_URL || process.env.SITE_URL || process.env.APP_URL || "";
+  if (configuredOrigin) {
+    try {
+      const parsed = new URL(configuredOrigin);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") return parsed.origin;
+    } catch {
+      return null;
+    }
+  }
+
+  const host = req.get("host");
+  if (!host) return null;
+  try {
+    return new URL(`${req.protocol}://${host}`).origin;
+  } catch {
+    return null;
+  }
+}
 
 // Google Sign-In (OAuth) client id. Used both to verify ID tokens sent by the
 // frontend and as the audience the tokens must have been issued for.
@@ -289,7 +399,7 @@ function getManagedStorageKey(mediaUrl: string): string | null {
   }
 }
 
-async function deleteManagedFile(mediaUrl: string): Promise<void> {
+async function deleteManagedFile(mediaUrl: string, correlationId = createCorrelationId()): Promise<void> {
   const key = getManagedStorageKey(mediaUrl);
   if (!key) return;
 
@@ -299,7 +409,7 @@ async function deleteManagedFile(mediaUrl: string): Promise<void> {
     try {
       if (fs.existsSync(target) && fs.statSync(target).isFile()) fs.rmSync(target, { force: true });
     } catch (error) {
-      console.error('Failed to delete local managed media file:', error);
+      logRequestError("Local media deletion failed", correlationId, error, { operation: "delete-local-media" });
     }
   }
 
@@ -309,7 +419,7 @@ async function deleteManagedFile(mediaUrl: string): Promise<void> {
     try {
       await r2.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
     } catch (error) {
-      console.error('Failed to delete Cloudflare R2 media object:', error);
+      logRequestError("Cloudflare R2 media deletion failed", correlationId, error, { operation: "delete-r2-media" });
     }
   }
 }
@@ -376,7 +486,13 @@ function createRateLimiter({ windowMs, max, name }: RateLimitOptions): express.R
 }
 
 
-async function saveUploadedFile(base64Data: string, mimeType: string, folderUserId: string, filePrefix: string): Promise<string> {
+async function saveUploadedFile(
+  base64Data: string,
+  mimeType: string,
+  folderUserId: string,
+  filePrefix: string,
+  correlationId = createCorrelationId(),
+): Promise<string> {
   const safeUserId = sanitizeUserId(folderUserId);
   const fileId = crypto.randomUUID();
 
@@ -436,7 +552,9 @@ async function saveUploadedFile(base64Data: string, mimeType: string, folderUser
         return `/api/r2-file/${key}`;
       }
     } catch (r2Error) {
-      console.error("Cloudflare R2 Upload failed, using local disk fallback:", r2Error);
+      logRequestError("Cloudflare R2 upload failed; using local fallback", correlationId, r2Error, {
+        operation: "upload-r2-media",
+      });
     }
   }
 
@@ -449,28 +567,41 @@ async function startServer() {
   const configuredPort = Number(process.env.PORT);
   const PORT = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65_535 ? configuredPort : 3000;
   app.set('trust proxy', 1);
+  app.disable('x-powered-by');
+  app.use((req, res, next) => {
+    const correlationId = createCorrelationId();
+    const errorContext: ErrorRequestContext = {
+      correlationId,
+      method: req.method,
+      path: req.path,
+      userId: null,
+      errorRecorded: false,
+    };
+    (req as RequestWithSecurityContext)[REQUEST_CORRELATION_ID] = correlationId;
+    res.setHeader("X-Correlation-ID", correlationId);
+    runWithErrorContext(errorContext, () => {
+      res.once("finish", () => {
+        if (res.statusCode < 500 || errorContext.errorRecorded) return;
+        recordAdminError({
+          origin: "server",
+          source: "HTTP request failed",
+          message: `Request completed with HTTP ${res.statusCode}.`,
+          code: "HTTP_SERVER_ERROR",
+          status: res.statusCode,
+          correlationId,
+          method: req.method,
+          path: req.path,
+        });
+      });
+      next();
+    });
+  });
 
-  // Initialize Upstash Redis database sync (if UPSTASH_REDIS_REST_URL is present)
-  const initialDB = await initUpstashDB();
-
-  // Hydrate active login sessions from Upstash Redis (if configured) so that
-  // logged-in users stay authenticated across server restarts/redeploys and
-  // across multiple server instances, instead of losing their session every
-  // time the process restarts.
-  const persistedSessions = await loadSessionsFromRedis();
-  const restorableSessions = Object.fromEntries(
-    Object.entries(persistedSessions).filter(([, userId]) => {
-      const user = initialDB.users.find((candidate) => candidate.id === userId);
-      return Boolean(user && !user.bannedAt && !user.archivedAt);
-    })
-  );
-  for (const token of Object.keys(persistedSessions)) {
-    if (!Object.prototype.hasOwnProperty.call(restorableSessions, token)) deleteSessionFromRedis(token);
-  }
-  const persistedSessionCount = Object.keys(restorableSessions).length;
-  if (persistedSessionCount > 0) {
-    console.log(`⚡ Restored ${persistedSessionCount} active session(s) from Upstash Redis.`);
-  }
+  // Initialize the database, then remove the legacy plaintext-token hash.
+  // Legacy Bearer sessions are intentionally invalidated during this migration.
+  await initUpstashDB();
+  const removedLegacySessionStore = await deleteLegacySessionsFromRedis();
+  if (removedLegacySessionStore > 0) console.log("🔒 Removed legacy plaintext session storage from Redis.");
 
   // Ensure uploads root directory exists
   const uploadsRootDir = path.join(process.cwd(), "data", "uploads");
@@ -482,8 +613,8 @@ async function startServer() {
   app.use("/uploads", (req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Authorization, X-Requested-With, *");
-    res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type");
+    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type, X-Correlation-ID");
     res.setHeader("Accept-Ranges", "bytes");
     if (req.method === "OPTIONS") {
       return res.status(200).end();
@@ -503,6 +634,7 @@ async function startServer() {
   const usernameAvailabilityLimiter = createRateLimiter({ windowMs: 60_000, max: 60, name: 'username-availability' });
   const chatLimiter = createRateLimiter({ windowMs: 60_000, max: 12, name: 'chat' });
   const trackPlayLimiter = createRateLimiter({ windowMs: 60_000, max: 30, name: 'track-play' });
+  const clientErrorLimiter = createRateLimiter({ windowMs: 5 * 60_000, max: 30, name: 'client-error' });
   // Also used for full-page/document requests below (SPA fallback, shared
   // track pages) which sit outside the /api prefix and so aren't covered by
   // the app.use('/api', ...) wiring further down either.
@@ -516,8 +648,8 @@ async function startServer() {
     const keyIsSafe = Boolean(key) && localPathForKey.startsWith(`${r2UploadsRoot}${path.sep}`);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Authorization, X-Requested-With, *");
-    res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type");
+    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type, X-Correlation-ID");
     res.setHeader("Accept-Ranges", "bytes");
 
     if (req.method === "OPTIONS") {
@@ -529,7 +661,7 @@ async function startServer() {
       const bucketName = process.env.R2_BUCKET_NAME;
 
       if (!keyIsSafe) {
-        return res.status(404).send("File not found.");
+        return sendPublicError(req, res, 404, "MEDIA_NOT_FOUND", "File not found.");
       }
 
       // Check local disk first as fast fallback if R2 is not configured
@@ -537,7 +669,7 @@ async function startServer() {
         if (fs.existsSync(localPathForKey) && fs.statSync(localPathForKey).isFile()) {
           return res.sendFile(localPathForKey);
         }
-        return res.status(404).send("File not found and R2 storage not configured.");
+        return sendPublicError(req, res, 404, "MEDIA_NOT_FOUND", "File not found.");
       }
 
       const rangeHeader = req.headers.range;
@@ -594,18 +726,20 @@ async function startServer() {
         if (bytes) {
           res.send(Buffer.from(bytes));
         } else {
-          res.status(404).send("File content empty");
+          sendPublicError(req, res, 404, "MEDIA_NOT_FOUND", "File not found.");
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Local disk fallback on R2 fetch failure (e.g. NoSuchKey or network error)
       if (keyIsSafe) {
         if (fs.existsSync(localPathForKey) && fs.statSync(localPathForKey).isFile()) {
           return res.sendFile(localPathForKey);
         }
       }
-      console.error("R2 File Express Route Error:", err);
-      return res.status(404).send("File not found");
+      const correlationId = getRequestCorrelationId(req);
+      logRequestError("Cloudflare R2 media fetch failed", correlationId, err, { operation: "fetch-r2-media" });
+      if (res.headersSent) return res.destroy();
+      return sendPublicError(req, res, 404, "MEDIA_NOT_FOUND", "File not found.");
     }
   });
 
@@ -620,12 +754,63 @@ async function startServer() {
     }
     next();
   });
+  app.use('/api', (req, res, next) => {
+    if (req.method !== 'POST' && req.method !== 'PUT' && req.method !== 'PATCH' && req.method !== 'DELETE') return next();
+
+    const originHeader = req.get('origin');
+    const fetchSite = req.get('sec-fetch-site');
+    let originMatches = false;
+    try {
+      originMatches = Boolean(originHeader && new URL(originHeader).origin === getCsrfOrigin(req));
+    } catch {
+      originMatches = false;
+    }
+    if (!originMatches || fetchSite === 'cross-site' || fetchSite === 'same-site') {
+      return res.status(403).json({ error: "Forbidden: Same-origin request required." });
+    }
+    next();
+  });
+  app.use('/api', (req, res, next) => {
+    void resolveRequestSession(req, res, next);
+  });
 
   // Increase payload limit for custom track audio uploads or images. Rate
   // limiting runs first so rejected clients cannot repeatedly force parsing
   // of a 100 MB JSON body.
   app.use(express.json({ limit: "100mb" }));
   app.use(express.urlencoded({ extended: true, limit: "100mb" }));
+
+  // Browser runtime failures are funneled into the same bounded, redacted log
+  // as server errors. The same-origin gate and a dedicated limiter protect the
+  // unauthenticated login surface without losing its pre-session failures.
+  app.post("/api/client-errors", clientErrorLimiter, async (req, res) => {
+    const sessionUserId = getUserIdFromToken(req);
+
+    const kind = req.body?.kind === "window.error" || req.body?.kind === "unhandledrejection" || req.body?.kind === "console.error"
+      ? req.body.kind
+      : "client.error";
+    const message = typeof req.body?.message === "string" ? req.body.message.trim().slice(0, 2_000) : "";
+    if (!message) return res.status(400).json({ error: "A client error message is required." });
+    const pathname = typeof req.body?.path === "string" && req.body.path.startsWith("/")
+      ? req.body.path.slice(0, 500)
+      : null;
+    const line = Number.isInteger(req.body?.line) && req.body.line >= 0 ? Math.min(req.body.line, 10_000_000) : null;
+    const column = Number.isInteger(req.body?.column) && req.body.column >= 0 ? Math.min(req.body.column, 10_000_000) : null;
+
+    recordAdminError({
+      origin: "client",
+      source: kind,
+      message,
+      code: "CLIENT_RUNTIME_ERROR",
+      status: null,
+      correlationId: getRequestCorrelationId(req),
+      method: req.method,
+      path: pathname || req.path,
+      userId: sessionUserId || null,
+      details: line === null && column === null ? null : { line, column },
+    });
+    return res.status(204).end();
+  });
 
   // System status endpoint to check Upstash & R2 integration status
   app.get("/api/system-status", async (req, res) => {
@@ -664,6 +849,7 @@ async function startServer() {
       if (!canAccessAdminPanel(requestingUser, sessionUserId)) {
         return res.status(403).json({ error: "Forbidden: Admin access required." });
       }
+      const errorLog = await readAdminErrorLog(500);
 
       const adminUsers = db.users.map(({ password: _password, googleId: _googleId, ...user }) => ({
         ...user,
@@ -780,6 +966,14 @@ async function startServer() {
           title: entry.action,
           detail: `${entry.targetType}:${entry.targetId} · ${entry.reason}`,
         })),
+        ...errorLog.map((entry) => ({
+          id: `error-${entry.id}`,
+          type: "error",
+          timestamp: entry.timestamp,
+          userId: entry.userId || "system",
+          title: entry.source,
+          detail: `${entry.code || "APPLICATION_ERROR"} · ${entry.message}`,
+        })),
       ]
         .filter((entry) => !Number.isNaN(Date.parse(entry.timestamp)))
         .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp))
@@ -823,7 +1017,7 @@ async function startServer() {
           totalPlays,
           totalListeningSeconds,
           chatMessageCount,
-          activeSessions: activeSessions.size,
+          activeSessions: await countSessionsInStore(),
         },
         system: {
           uptimeSeconds: Math.round(process.uptime()),
@@ -842,6 +1036,7 @@ async function startServer() {
           : playlist),
         activity,
         auditLog: orderedAuditLog,
+        errorLog,
         topGenres: [...genreCounts.entries()]
           .map(([genre, plays]) => ({ genre, plays }))
           .sort((left, right) => right.plays - left.plays)
@@ -856,55 +1051,117 @@ async function startServer() {
   // ==========================================
   // AUTHENTICATION & SESSION MANAGEMENT
   // ==========================================
-  // token -> userId. Hydrated from Upstash Redis at startup (see persistedSessions
-  // above), and mirrored back to Redis on every new token issuance so sessions
-  // survive restarts and are shared across instances. Falls back to
-  // in-memory-only behavior automatically if Upstash isn't configured.
-  const activeSessions = new Map<string, string>(Object.entries(restorableSessions));
   const recentPlayEvents = new Map<string, number>();
 
-  function issueSessionToken(userId: string): string {
+  function setSessionCookie(res: express.Response, token: string): void {
+    res.cookie(SESSION_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: SESSION_ABSOLUTE_TTL_MS,
+    });
+    res.setHeader("Cache-Control", "no-store");
+  }
+
+  function clearSessionCookie(res: express.Response): void {
+    res.cookie(SESSION_COOKIE_NAME, "", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+      expires: new Date(0),
+    });
+    res.setHeader("Cache-Control", "no-store");
+  }
+
+  async function issueSessionCookie(userId: string, res: express.Response): Promise<void> {
     const user = readDB().users.find((candidate) => candidate.id === userId);
-    if (!userId || !user || user.bannedAt || user.archivedAt) return "";
-    const token = `sess_${crypto.randomBytes(32).toString("hex")}`;
-    activeSessions.set(token, userId);
-    persistSessionToRedis(token, userId); // fire-and-forget, doesn't block the request
-    return token;
+    if (!userId || !user || user.bannedAt || user.archivedAt) throw new Error("Cannot create a session for this account.");
+
+    // A concurrent password reset may bump the user's auth version while a
+    // login is being issued. Verify the version after persistence and retry
+    // once rather than handing the browser a session that was already stale.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const now = Date.now();
+      const token = createOpaqueSessionToken();
+      const digest = digestSessionToken(token);
+      const authVersion = await readUserSessionVersionFromStore(userId);
+      const record: StoredSessionRecord = {
+        userId,
+        authVersion,
+        createdAt: now,
+        lastSeenAt: now,
+        idleExpiresAt: now + SESSION_IDLE_TTL_MS,
+        absoluteExpiresAt: now + SESSION_ABSOLUTE_TTL_MS,
+      };
+      await createSessionInStore(digest, record);
+      if (await readUserSessionVersionFromStore(userId) === authVersion) {
+        setSessionCookie(res, token);
+        return;
+      }
+      await deleteSessionFromStore(digest, userId);
+    }
+    throw new Error("Session invalidation raced with session creation.");
   }
 
   function getUserIdFromToken(req: express.Request): string | null {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return null;
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    if (!token) return null;
-
-    if (activeSessions.has(token)) {
-      const userId = activeSessions.get(token) || "";
-      const user = readDB().users.find((candidate) => candidate.id === userId);
-      if (!user || user.bannedAt || user.archivedAt) {
-        revokeSessionToken(token);
-        return null;
-      }
-      return userId;
-    }
-    return null;
+    return (req as RequestWithSecurityContext)[REQUEST_SESSION]?.record.userId || null;
   }
 
-  function revokeSessionToken(token: string): void {
-    if (!token) return;
-    activeSessions.delete(token);
-    deleteSessionFromRedis(token); // fire-and-forget
+  async function resolveRequestSession(req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> {
+    const request = req as RequestWithSecurityContext;
+    request[REQUEST_SESSION] = null;
+    const token = readCookie(req.headers.cookie, SESSION_COOKIE_NAME);
+    if (!token) return next();
+    if (!isValidOpaqueSessionToken(token)) {
+      clearSessionCookie(res);
+      return next();
+    }
+
+    const digest = digestSessionToken(token);
+    try {
+      let record = await readSessionFromStore(digest);
+      if (!record) {
+        clearSessionCookie(res);
+        return next();
+      }
+
+      const now = Date.now();
+      const user = readDB().users.find((candidate) => candidate.id === record!.userId);
+      const authVersion = await readUserSessionVersionFromStore(record.userId);
+      if (remainingSessionTtlMs(record, now) <= 0 || record.authVersion !== authVersion || !user || user.bannedAt || user.archivedAt) {
+        await deleteSessionFromStore(digest, record.userId);
+        clearSessionCookie(res);
+        return next();
+      }
+
+      if (now - record.lastSeenAt >= SESSION_TOUCH_INTERVAL_MS) {
+        record = {
+          ...record,
+          lastSeenAt: now,
+          idleExpiresAt: Math.min(record.absoluteExpiresAt, now + SESSION_IDLE_TTL_MS),
+        };
+        if (!await touchSessionInStore(digest, record)) {
+          clearSessionCookie(res);
+          return next();
+        }
+      }
+
+      request[REQUEST_SESSION] = { digest, record };
+      setErrorContextUserId(record.userId);
+      res.setHeader("Cache-Control", "no-store");
+      res.vary("Cookie");
+      next();
+    } catch (error) {
+      console.error("Session store lookup failed:", error);
+      res.status(503).json({ error: "Authentication service is temporarily unavailable." });
+    }
   }
 
   async function revokeAllSessionsForUser(userId: string): Promise<number> {
-    let revokedLocally = 0;
-    for (const [token, ownerId] of activeSessions) {
-      if (ownerId !== userId) continue;
-      activeSessions.delete(token);
-      revokedLocally += 1;
-    }
-    await deleteSessionsForUserFromRedis(userId);
-    return revokedLocally;
+    return deleteSessionsForUserFromStore(userId);
   }
 
   async function requireAdminMutation(
@@ -1253,7 +1510,7 @@ async function startServer() {
           const mimeMatch = clean.match(/^data:(image\/[^;]+);base64,/);
           const base64 = clean.includes(",") ? clean.split(",")[1] : "";
           if (!mimeMatch || !base64) throw new Error("INVALID_MEDIA");
-          return saveUploadedFile(base64, mimeMatch[1], current.id, prefix);
+          return saveUploadedFile(base64, mimeMatch[1], current.id, prefix, getRequestCorrelationId(req));
         }
         if (!isStoredMediaUrl(clean)) throw new Error("INVALID_MEDIA");
         return clean;
@@ -1307,7 +1564,7 @@ async function startServer() {
       const referencedMedia = collectReferencedMediaUrls(saved);
       await Promise.all([current.avatarUrl, current.bannerUrl]
         .filter((mediaUrl): mediaUrl is string => Boolean(mediaUrl && mediaUrl !== savedUser.avatarUrl && mediaUrl !== savedUser.bannerUrl && !referencedMedia.has(mediaUrl)))
-        .map((mediaUrl) => deleteManagedFile(mediaUrl)));
+        .map((mediaUrl) => deleteManagedFile(mediaUrl, getRequestCorrelationId(req))));
       return res.json({ success: true, user: safeAdminUser(savedUser), auditId: audit.id });
     } catch (error) {
       console.error("Admin User Profile Error:", error);
@@ -1330,8 +1587,9 @@ async function startServer() {
       if (typeof confirmPassword !== "string" || confirmPassword !== newPassword) {
         return res.status(400).json({ error: "Password confirmation does not match." });
       }
-      target.password = await bcrypt.hash(newPassword, 10);
+      const nextPasswordHash = await bcrypt.hash(newPassword, 10);
       const reason = mutationReason(req.body?.reason, "Administrative authentication reset")!;
+      const revokedBeforeWrite = await revokeAllSessionsForUser(target.id);
       const audit = appendAdminAudit(
         db,
         actorId,
@@ -1342,8 +1600,11 @@ async function startServer() {
         { resetCompleted: false },
         { resetCompleted: true }
       );
+      target.password = nextPasswordHash;
       await writeDBAsync(db);
-      return res.json({ success: true, auditId: audit.id });
+      const revokedAfterWrite = await revokeAllSessionsForUser(target.id);
+      if (target.id === actorId) clearSessionCookie(res);
+      return res.json({ success: true, auditId: audit.id, revokedSessions: revokedBeforeWrite + revokedAfterWrite });
     } catch (error) {
       console.error("Admin Password Reset Error:", error);
       return res.status(500).json({ error: "Failed to reset password." });
@@ -1492,10 +1753,10 @@ async function startServer() {
       db.userStates[newUser.id] = { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
       await writeDBAsync(db);
 
-      const token = issueSessionToken(newUser.id);
+      await issueSessionCookie(newUser.id, res);
       // Omit password from returned user object
       const { password: _, ...userWithoutPassword } = newUser;
-      return res.json({ success: true, user: userWithoutPassword, token });
+      return res.json({ success: true, user: userWithoutPassword });
     } catch (error: any) {
       console.error("Register Error:", error);
       return res.status(500).json({ error: "Failed to register user." });
@@ -1549,18 +1810,31 @@ async function startServer() {
         return res.status(403).json({ error: "This account is archived.", archived: true });
       }
 
-      const token = issueSessionToken(user.id);
+      await issueSessionCookie(user.id, res);
       const { password: _, ...userWithoutPassword } = user;
-      return res.json({ success: true, user: userWithoutPassword, token });
+      return res.json({ success: true, user: userWithoutPassword });
     } catch (error: any) {
       console.error("Login Error:", error);
       return res.status(500).json({ error: "Failed to log in." });
     }
   });
 
-  // Sign in (or register) with Google. The frontend sends the ID token
-  // ("credential") produced by Google Identity Services; we verify it
-  // server-side before trusting any of its claims.
+  async function verifyGoogleCredential(credential: string): Promise<GoogleIdentityResult> {
+    try {
+      const ticket = await googleOAuthClient.verifyIdToken({
+        idToken: credential,
+        audience: GOOGLE_CLIENT_ID,
+      });
+      return getVerifiedGoogleIdentity(ticket.getPayload());
+    } catch (verifyError) {
+      console.error("Google token verification failed:", verifyError);
+      return { ok: false, reason: "invalid" } as const;
+    }
+  }
+
+  // Sign in (or register) with Google. Existing Google accounts are resolved
+  // only by the provider subject (`sub`). Email collisions deliberately stop
+  // here and must go through the authenticated, stepped-up link route below.
   app.post("/api/auth/google", authLimiter, async (req, res) => {
     try {
       const { credential } = req.body || {};
@@ -1568,40 +1842,26 @@ async function startServer() {
         return res.status(400).json({ error: "Missing Google credential." });
       }
 
-      let payload;
-      try {
-        const ticket = await googleOAuthClient.verifyIdToken({
-          idToken: credential,
-          audience: GOOGLE_CLIENT_ID,
-        });
-        payload = ticket.getPayload();
-      } catch (verifyError) {
-        console.error("Google token verification failed:", verifyError);
+      const identityResult = await verifyGoogleCredential(credential);
+      if (identityResult.ok === false) {
+        if (identityResult.reason === "email_unverified") {
+          return res.status(401).json({ error: "Google account email is not verified." });
+        }
         return res.status(401).json({ error: "Invalid Google credential." });
       }
-
-      if (!payload || !payload.sub || !payload.email) {
-        return res.status(401).json({ error: "Invalid Google credential." });
-      }
-      if (payload.email_verified === false) {
-        return res.status(401).json({ error: "Google account email is not verified." });
-      }
-
-      const googleId = payload.sub;
-      const email = payload.email.trim().toLowerCase();
-      const name = typeof payload.name === "string" ? payload.name.trim() : "";
-      const picture = typeof payload.picture === "string" ? payload.picture.trim() : "";
+      const { googleId, email, name, picture } = identityResult.identity;
 
       const db = await readDBAsync(req.method !== "GET");
-
-      let user = db.users.find((u) => u.googleId === googleId);
-      let isNewUser = false;
-
-      if (!user) {
-        // Fall back to matching by email so an existing password account can
-        // be linked to Google instead of creating a duplicate account.
-        user = db.users.find((u) => u.email.toLowerCase() === email);
+      const resolution = resolveGoogleSignIn(db.users, identityResult.identity);
+      if (resolution.kind === "email_conflict") {
+        return res.status(409).json({
+          error: "An account already exists for this email. Sign in with your password before using the secure Google account-linking flow.",
+          code: "ACCOUNT_LINK_REQUIRED",
+        });
       }
+
+      let user = resolution.kind === "linked_account" ? resolution.user : undefined;
+      let isNewUser = false;
 
       if (user) {
         if (user.bannedAt) {
@@ -1609,10 +1869,6 @@ async function startServer() {
         }
         if (user.archivedAt) {
           return res.status(403).json({ error: "This account is archived.", archived: true });
-        }
-        if (!user.googleId) {
-          user.googleId = googleId;
-          await writeDBAsync(db);
         }
       } else {
         isNewUser = true;
@@ -1657,21 +1913,106 @@ async function startServer() {
         user = newUser;
       }
 
-      const token = issueSessionToken(user.id);
+      await issueSessionCookie(user.id, res);
       const { password: _pw, ...userWithoutPassword } = user;
-      return res.json({ success: true, user: userWithoutPassword, token, isNewUser });
+      return res.json({ success: true, user: userWithoutPassword, isNewUser });
     } catch (error: any) {
       console.error("Google Auth Error:", error);
       return res.status(500).json({ error: "Failed to sign in with Google." });
     }
   });
 
-  // Revoke the current session token on logout.
-  app.post("/api/auth/logout", (req, res) => {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    if (token) revokeSessionToken(token);
-    return res.json({ success: true });
+  // Link Google to the currently authenticated password account. Possession
+  // of a Google credential alone is insufficient: the caller must also prove
+  // control of the existing session and current password. Linking is limited
+  // to the same explicitly verified email, and rotates every existing session.
+  app.post("/api/auth/google/link", authLimiter, async (req, res) => {
+    try {
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      }
+
+      const { credential, password } = req.body || {};
+      if (typeof credential !== "string" || !credential.trim() || typeof password !== "string" || !password) {
+        return res.status(400).json({ error: "Google credential and current password are required." });
+      }
+      if (password.length > 128) {
+        return res.status(400).json({ error: "Invalid password input." });
+      }
+
+      const db = await readDBAsync(req.method !== "GET");
+      const user = db.users.find((candidate) => candidate.id === sessionUserId);
+      if (!user || user.bannedAt || user.archivedAt) {
+        return res.status(401).json({ error: "Unauthorized: Active session required." });
+      }
+
+      const usesBcrypt = user.password.startsWith("$2a$") || user.password.startsWith("$2b$") || user.password.startsWith("$2y$");
+      const passwordMatches = usesBcrypt
+        ? await bcrypt.compare(password, user.password)
+        : user.password === password;
+      if (!passwordMatches) {
+        return res.status(401).json({ error: "Current password is incorrect." });
+      }
+
+      const identityResult = await verifyGoogleCredential(credential);
+      if (identityResult.ok === false) {
+        if (identityResult.reason === "email_unverified") {
+          return res.status(401).json({ error: "Google account email is not verified." });
+        }
+        return res.status(401).json({ error: "Invalid Google credential." });
+      }
+
+      const { googleId, email } = identityResult.identity;
+      if (user.email.trim().toLowerCase() !== email) {
+        return res.status(409).json({
+          error: "The verified Google email must match the email on this account.",
+          code: "GOOGLE_EMAIL_MISMATCH",
+        });
+      }
+      if (user.googleId) {
+        return res.status(409).json({
+          error: "This account is already linked to Google.",
+          code: "GOOGLE_ALREADY_LINKED",
+        });
+      }
+      if (db.users.some((candidate) => candidate.id !== user.id && candidate.googleId === googleId)) {
+        return res.status(409).json({
+          error: "This Google account is already linked to another account.",
+          code: "GOOGLE_ACCOUNT_IN_USE",
+        });
+      }
+
+      const upgradedPassword = !usesBcrypt ? await bcrypt.hash(password, 10) : null;
+      const revokedBeforeWrite = await revokeAllSessionsForUser(user.id);
+      user.googleId = googleId;
+      if (upgradedPassword) user.password = upgradedPassword;
+      await writeDBAsync(db);
+
+      // The caller's current session is intentionally revoked with every
+      // other session. Only the freshly issued replacement cookie remains.
+      const revokedAfterWrite = await revokeAllSessionsForUser(user.id);
+      await issueSessionCookie(user.id, res);
+
+      const { password: _password, googleId: _googleId, ...userWithoutSecrets } = user;
+      return res.json({ success: true, user: userWithoutSecrets, googleLinked: true, revokedSessions: revokedBeforeWrite + revokedAfterWrite });
+    } catch (error: any) {
+      console.error("Google Link Error:", error);
+      return res.status(500).json({ error: "Failed to link Google account." });
+    }
+  });
+
+  // Revoke the central digest record so every instance rejects this cookie.
+  app.post("/api/auth/logout", async (req, res) => {
+    const context = (req as RequestWithSecurityContext)[REQUEST_SESSION];
+    try {
+      if (context) await deleteSessionFromStore(context.digest, context.record.userId);
+      clearSessionCookie(res);
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Logout session revocation failed:", error);
+      return res.status(503).json({ error: "Session revocation is temporarily unavailable." });
+    }
   });
 
   // Fetch Application Data (Tracks, Playlists, User State, Chat History)
@@ -2061,13 +2402,13 @@ async function startServer() {
         const mimeMatch = avatarUrl.match(/^data:(image\/[^;]+);base64,/);
         const b64 = avatarUrl.includes(",") ? avatarUrl.split(",")[1] : "";
         if (!mimeMatch || !b64) return res.status(400).json({ error: "Invalid avatar image." });
-        avatarUrl = await saveUploadedFile(b64, mimeMatch?.[1] || "image/jpeg", userId, "avatar");
+        avatarUrl = await saveUploadedFile(b64, mimeMatch?.[1] || "image/jpeg", userId, "avatar", getRequestCorrelationId(req));
       }
       if (bannerUrl.startsWith("data:")) {
         const mimeMatch = bannerUrl.match(/^data:(image\/[^;]+);base64,/);
         const b64 = bannerUrl.includes(",") ? bannerUrl.split(",")[1] : "";
         if (!mimeMatch || !b64) return res.status(400).json({ error: "Invalid banner image." });
-        bannerUrl = await saveUploadedFile(b64, mimeMatch?.[1] || "image/jpeg", userId, "banner");
+        bannerUrl = await saveUploadedFile(b64, mimeMatch?.[1] || "image/jpeg", userId, "banner", getRequestCorrelationId(req));
       }
       if (avatarUrl && avatarUrl !== DEFAULT_AVATAR_URL && !isStoredMediaUrl(avatarUrl)) return res.status(400).json({ error: "Avatar URL must use HTTP(S) or an uploaded file." });
       if (bannerUrl && !isStoredMediaUrl(bannerUrl)) return res.status(400).json({ error: "Banner URL must use HTTP(S) or an uploaded file." });
@@ -2166,7 +2507,7 @@ async function startServer() {
       await writeDBAsync(db);
       if (previousAvatarUrl && previousAvatarUrl !== db.users[index].avatarUrl) {
         const referencedMedia = collectReferencedMediaUrls(db);
-        if (!referencedMedia.has(previousAvatarUrl)) await deleteManagedFile(previousAvatarUrl);
+        if (!referencedMedia.has(previousAvatarUrl)) await deleteManagedFile(previousAvatarUrl, getRequestCorrelationId(req));
       }
       const { password: _, ...updatedUser } = db.users[index];
       return res.json({ success: true, user: updatedUser });
@@ -2216,9 +2557,13 @@ async function startServer() {
         return res.status(401).json({ error: "Current password is incorrect." });
       }
 
-      db.users[index] = { ...user, password: await bcrypt.hash(newPassword, 10) };
+      const nextPasswordHash = await bcrypt.hash(newPassword, 10);
+      const revokedBeforeWrite = await revokeAllSessionsForUser(user.id);
+      db.users[index] = { ...user, password: nextPasswordHash };
       await writeDBAsync(db);
-      return res.json({ success: true });
+      const revokedAfterWrite = await revokeAllSessionsForUser(user.id);
+      await issueSessionCookie(user.id, res);
+      return res.json({ success: true, revokedSessions: revokedBeforeWrite + revokedAfterWrite });
     } catch (error: any) {
       console.error("Change Password Error:", error);
       return res.status(500).json({ error: "Failed to change password." });
@@ -2335,14 +2680,14 @@ async function startServer() {
       if (persistentAudioUrl.startsWith("data:")) {
         const parsedAudio = parseAudioDataUrl(persistentAudioUrl, audioFileName);
         if (!parsedAudio) return res.status(400).json({ success: false, error: "Unsupported audio file. Use MP3, WAV, OGG, M4A, AAC, or FLAC." });
-        persistentAudioUrl = await saveUploadedFile(parsedAudio.base64Data, parsedAudio.mimeType, sessionUserId, "audio");
+        persistentAudioUrl = await saveUploadedFile(parsedAudio.base64Data, parsedAudio.mimeType, sessionUserId, "audio", getRequestCorrelationId(req));
       }
       if (persistentCoverUrl.startsWith("data:")) {
         const mimeMatch = persistentCoverUrl.match(/^data:(image\/[^;]+);base64,/);
         if (!mimeMatch) return res.status(400).json({ success: false, error: "Cover upload must contain an image MIME type." });
         const imgBase64 = persistentCoverUrl.includes(",") ? persistentCoverUrl.split(",")[1] : "";
         if (!imgBase64) return res.status(400).json({ success: false, error: "Invalid cover image." });
-        persistentCoverUrl = await saveUploadedFile(imgBase64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "cover");
+        persistentCoverUrl = await saveUploadedFile(imgBase64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "cover", getRequestCorrelationId(req));
       }
       if (!isStoredMediaUrl(persistentAudioUrl)) return res.status(400).json({ success: false, error: "Audio URL must use HTTP(S) or an uploaded file." });
       if (persistentCoverUrl && !isStoredMediaUrl(persistentCoverUrl)) return res.status(400).json({ success: false, error: "Cover URL must use HTTP(S) or an uploaded file." });
@@ -2413,9 +2758,10 @@ async function startServer() {
       db.tracks.unshift(newTrack);
       await writeDBAsync(db);
       return res.json({ success: true, track: newTrack });
-    } catch (error: any) {
-      console.error("Add Track Error:", error);
-      return res.status(500).json({ success: false, error: error?.message || "Failed to add track." });
+    } catch (error: unknown) {
+      const correlationId = getRequestCorrelationId(req);
+      logRequestError("Track creation failed", correlationId, error, { operation: "create-track" });
+      return sendPublicError(req, res, 500, "STORAGE_UPLOAD_FAILED", "Failed to add track.", { success: false });
     }
   });
 
@@ -2479,7 +2825,7 @@ async function startServer() {
           const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
           const imageBase64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
           if (!mimeMatch || !imageBase64) return res.status(400).json({ error: "Invalid cover image." });
-          persistentCoverUrl = await saveUploadedFile(imageBase64, mimeMatch[1], sessionUserId, "cover");
+          persistentCoverUrl = await saveUploadedFile(imageBase64, mimeMatch[1], sessionUserId, "cover", getRequestCorrelationId(req));
         } else {
           if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Cover URL must use HTTP(S) or an uploaded file." });
           persistentCoverUrl = cleanCover;
@@ -2511,9 +2857,10 @@ async function startServer() {
 
       await writeDBAsync(db);
       return res.json({ success: true, tracks: updatedTracks });
-    } catch (error: any) {
-      console.error("Update Release Error:", error);
-      return res.status(500).json({ error: error?.message || "Failed to update release." });
+    } catch (error: unknown) {
+      const correlationId = getRequestCorrelationId(req);
+      logRequestError("Release update failed", correlationId, error, { operation: "update-release" });
+      return sendPublicError(req, res, 500, "RELEASE_UPDATE_FAILED", "Failed to update release.");
     }
   });
 
@@ -2544,7 +2891,7 @@ async function startServer() {
           const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
           const imgBase64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
           if (!mimeMatch || !imgBase64) return res.status(400).json({ error: "Invalid cover image." });
-          persistentCoverUrl = await saveUploadedFile(imgBase64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "cover");
+          persistentCoverUrl = await saveUploadedFile(imgBase64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "cover", getRequestCorrelationId(req));
         } else if (cleanCover) {
           if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Cover URL must use HTTP(S) or an uploaded file." });
           persistentCoverUrl = cleanCover;
@@ -2557,7 +2904,7 @@ async function startServer() {
         if (cleanAudio.startsWith("data:")) {
           const parsedAudio = parseAudioDataUrl(cleanAudio, audioFileName);
           if (!parsedAudio) return res.status(400).json({ error: "Unsupported audio file. Use MP3, WAV, OGG, M4A, AAC, or FLAC." });
-          persistentAudioUrl = await saveUploadedFile(parsedAudio.base64Data, parsedAudio.mimeType, sessionUserId, "audio");
+          persistentAudioUrl = await saveUploadedFile(parsedAudio.base64Data, parsedAudio.mimeType, sessionUserId, "audio", getRequestCorrelationId(req));
         } else {
           if (!isStoredMediaUrl(cleanAudio)) return res.status(400).json({ error: "Audio URL must use HTTP(S) or an uploaded file." });
           persistentAudioUrl = cleanAudio;
@@ -2714,7 +3061,7 @@ async function startServer() {
       await Promise.all(
         [track.audioUrl, track.coverUrl]
           .filter((mediaUrl): mediaUrl is string => Boolean(mediaUrl && !referencedMedia.has(mediaUrl)))
-          .map((mediaUrl) => deleteManagedFile(mediaUrl))
+          .map((mediaUrl) => deleteManagedFile(mediaUrl, getRequestCorrelationId(req)))
       );
       return res.json({ success: true, deletedTrackId: id });
     } catch (error: any) {
@@ -2751,7 +3098,7 @@ async function startServer() {
           if (mediaUrl && !referencedMedia.has(mediaUrl)) mediaToDelete.add(mediaUrl);
         }
       }
-      await Promise.all([...mediaToDelete].map((mediaUrl) => deleteManagedFile(mediaUrl)));
+      await Promise.all([...mediaToDelete].map((mediaUrl) => deleteManagedFile(mediaUrl, getRequestCorrelationId(req))));
 
       return res.json({ success: true, wipedCount: ownedIds.size, deletedTrackIds: [...ownedIds] });
     } catch (error: any) {
@@ -2857,7 +3204,7 @@ async function startServer() {
           const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
           const base64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
           if (!mimeMatch || !base64) return res.status(400).json({ error: "Invalid playlist cover image." });
-          persistentCoverUrl = await saveUploadedFile(base64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "playlist");
+          persistentCoverUrl = await saveUploadedFile(base64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "playlist", getRequestCorrelationId(req));
         } else {
           if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Playlist cover URL must use HTTP(S) or an uploaded file." });
           persistentCoverUrl = cleanCover;
@@ -2915,7 +3262,7 @@ async function startServer() {
           const mimeMatch = cleanCover.match(/^data:(image\/[^;]+);base64,/);
           const base64 = cleanCover.includes(",") ? cleanCover.split(",")[1] : "";
           if (!mimeMatch || !base64) return res.status(400).json({ error: "Invalid playlist cover image." });
-          persistentCoverUrl = await saveUploadedFile(base64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "playlist");
+          persistentCoverUrl = await saveUploadedFile(base64, mimeMatch?.[1] || "image/jpeg", sessionUserId, "playlist", getRequestCorrelationId(req));
         } else if (cleanCover) {
           if (!isStoredMediaUrl(cleanCover)) return res.status(400).json({ error: "Playlist cover URL must use HTTP(S) or an uploaded file." });
           persistentCoverUrl = cleanCover;
@@ -3006,7 +3353,6 @@ async function startServer() {
 
 type ProviderErrorInfo = {
   message: string;
-  providerMessage: string;
   rateLimited: boolean;
   quotaExhausted: boolean;
   retryAfterSeconds: number;
@@ -3023,7 +3369,6 @@ function parseCleanErrorMessage(err: any): ProviderErrorInfo {
   if (!err) {
     return {
       message: AI_HIGH_DEMAND_MESSAGE,
-      providerMessage: "Unknown provider error",
       rateLimited: false,
       quotaExhausted: false,
       retryAfterSeconds: 0,
@@ -3070,7 +3415,6 @@ function parseCleanErrorMessage(err: any): ProviderErrorInfo {
 
   return {
     message: AI_HIGH_DEMAND_MESSAGE,
-    providerMessage,
     rateLimited,
     quotaExhausted,
     retryAfterSeconds,
@@ -3196,6 +3540,7 @@ function buildNvidiaMessages(
 
   // NVIDIA NIM AI Chat Endpoint
   app.post("/api/chat", chatLimiter, async (req, res) => {
+    const correlationId = getRequestCorrelationId(req);
     const clientAbortController = new AbortController();
     let streamingResponse = false;
     const startActivityStream = () => {
@@ -3221,7 +3566,6 @@ function buildNvidiaMessages(
     });
     const requestDiagnostics = {
       model: process.env.NVIDIA_CHAT_MODEL?.trim() || "openai/gpt-oss-120b",
-      keyFingerprint: "not-loaded",
       historyMessages: 0,
       historyCharacters: 0,
       webSearchRequested: false,
@@ -3259,8 +3603,7 @@ function buildNvidiaMessages(
       const cooldownSeconds = Math.ceil((nvidiaChatCooldownUntil - Date.now()) / 1_000);
       if (cooldownSeconds > 0) {
         res.setHeader("Retry-After", String(cooldownSeconds));
-        return res.status(429).json({
-          error: AI_HIGH_DEMAND_MESSAGE,
+        return sendPublicError(req, res, 429, "AI_RATE_LIMITED", AI_HIGH_DEMAND_MESSAGE, {
           rateLimited: true,
           quotaExhausted: nvidiaChatCooldownWasQuotaExhausted,
           retryAfterSeconds: cooldownSeconds,
@@ -3269,18 +3612,13 @@ function buildNvidiaMessages(
 
       const apiKey = process.env.NVIDIA_API_KEY?.trim();
       if (!apiKey) {
-        return res.status(500).json({
-          error: "The AI service is not configured. Please configure the server API key.",
+        logRequestError("AI chat configuration unavailable", correlationId, new Error("NVIDIA provider key is not configured"), {
+          stage: requestDiagnostics.stage,
+        });
+        return sendPublicError(req, res, 500, "AI_CONFIGURATION_ERROR", "The AI service is temporarily unavailable.", {
           configurationError: true,
         });
       }
-      // Diagnostics only need enough to tell which configured key was used,
-      // never a derivative of the secret itself. A single fast hash round
-      // over a low-entropy-ish credential is brute-forceable, so mask the
-      // key instead of hashing it.
-      requestDiagnostics.keyFingerprint = apiKey.length > 8
-        ? `${apiKey.slice(0, 4)}…${apiKey.slice(-4)}`
-        : "****";
 
       const ownerDB = await readDBAsync(req.method !== "GET");
       if (!ownerDB.users.some((user) => user.id === sessionUserId)) return res.status(404).json({ error: "User not found." });
@@ -3659,22 +3997,42 @@ function buildNvidiaMessages(
         return;
       }
       if (error?.configurationError) {
-        console.error("AI Chat Configuration Error:", error.message);
+        logRequestError("AI chat configuration failed", correlationId, error, requestDiagnostics);
+        const publicError = buildPublicError(
+          "AI_CONFIGURATION_ERROR",
+          "The AI service is temporarily unavailable.",
+          correlationId,
+          { configurationError: true },
+        );
         if (streamingResponse) {
-          sendStreamEvent({ type: "error", error: error.message, configurationError: true });
+          sendStreamEvent({ type: "error", ...publicError });
           return res.end();
         }
-        return res.status(500).json({ error: error.message, configurationError: true });
+        return sendPublicError(req, res, 500, "AI_CONFIGURATION_ERROR", "The AI service is temporarily unavailable.", {
+          configurationError: true,
+        });
       }
-      const { message: cleanMsg, providerMessage, rateLimited, quotaExhausted, retryAfterSeconds } = parseCleanErrorMessage(error);
-      console.error("AI Chat Provider Error:", {
+      const { message: cleanMsg, rateLimited, quotaExhausted, retryAfterSeconds } = parseCleanErrorMessage(error);
+      logRequestError("AI chat provider failed", correlationId, error, {
         ...requestDiagnostics,
         rateLimited,
         quotaExhausted,
-        message: providerMessage,
       });
       const webSearchFailed = requestDiagnostics.stage === "web-search-tool";
       const clientRateLimited = rateLimited && !webSearchFailed;
+      const publicCode: PublicErrorCode = webSearchFailed
+        ? "WEB_SEARCH_FAILED"
+        : clientRateLimited
+          ? "AI_RATE_LIMITED"
+          : "AI_PROVIDER_ERROR";
+      const publicMessage = webSearchFailed
+        ? "Web search is temporarily unavailable. Please try again."
+        : cleanMsg;
+      const publicDetails = {
+        rateLimited: clientRateLimited,
+        quotaExhausted: clientRateLimited && quotaExhausted,
+        retryAfterSeconds: clientRateLimited ? retryAfterSeconds : 0,
+      };
       if (clientRateLimited) {
         nvidiaChatCooldownUntil = Date.now() + retryAfterSeconds * 1_000;
         nvidiaChatCooldownWasQuotaExhausted = quotaExhausted;
@@ -3683,27 +4041,18 @@ function buildNvidiaMessages(
       if (streamingResponse) {
         sendStreamEvent({
           type: "error",
-          error: requestDiagnostics.stage === "web-search-tool"
-            ? "Web search is temporarily unavailable. Please try again."
-            : cleanMsg,
-          rateLimited: clientRateLimited,
-          quotaExhausted: clientRateLimited && quotaExhausted,
-          retryAfterSeconds: clientRateLimited ? retryAfterSeconds : 0,
+          ...buildPublicError(publicCode, publicMessage, correlationId, publicDetails),
         });
         return res.end();
       }
-      return res.status(clientRateLimited ? 429 : webSearchFailed ? 502 : 500).json({
-        error: webSearchFailed ? "Web search is temporarily unavailable. Please try again." : cleanMsg,
-        rateLimited: clientRateLimited,
-        quotaExhausted: clientRateLimited && quotaExhausted,
-        retryAfterSeconds: clientRateLimited ? retryAfterSeconds : 0,
-        diagnostics: clientRateLimited ? {
-          model: requestDiagnostics.model,
-          historyMessages: requestDiagnostics.historyMessages,
-          historyCharacters: requestDiagnostics.historyCharacters,
-          webSearchRequested: requestDiagnostics.webSearchRequested,
-        } : undefined,
-      });
+      return sendPublicError(
+        req,
+        res,
+        clientRateLimited ? 429 : webSearchFailed ? 502 : 500,
+        publicCode,
+        publicMessage,
+        publicDetails,
+      );
     }
   });
 
@@ -3755,9 +4104,25 @@ function buildNvidiaMessages(
     }
   }
 
+  // Last-resort Express failures are logged with the same request correlation
+  // context even when a route forgot its own try/catch.
+  app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const correlationId = getRequestCorrelationId(req);
+    logRequestError("Unhandled Express error", correlationId, error, {
+      method: req.method,
+      path: req.path,
+      status: 500,
+    });
+    if (res.headersSent) return res.destroy();
+    return sendPublicError(req, res, 500, "INTERNAL_SERVER_ERROR", "An unexpected error occurred.");
+  });
+
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
-startServer();
+startServer().catch((error) => {
+  console.error("Server startup failed:", error);
+  process.exitCode = 1;
+});
