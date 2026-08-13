@@ -6,6 +6,7 @@ import { Redis } from '@upstash/redis';
 const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
 const UPSTASH_DB_KEY = 'app:spotify:db_v1';
 const UPSTASH_DB_BACKUP_KEY = 'app:spotify:db_v1:previous';
+export const ADMIN_USER_ID = 'usr_1785645840720_7coat';
 
 export interface UserRecord {
   id: string;
@@ -205,7 +206,10 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
         ? Array.from(new Set(rawUser.favoriteGenres.filter((genre): genre is string => typeof genre === 'string' && Boolean(genre.trim())).map((genre) => genre.trim()).filter((genre) => genre.length <= 80))).slice(0, 20)
         : [],
       createdAt: normalizedIsoDate(rawUser.createdAt),
-      isAdmin: rawUser.isAdmin === true,
+      // The requested account is the single reserved admin identity. This
+      // keeps the allowlist effective when the canonical record is hydrated
+      // from an older Upstash snapshot that predates the local flag update.
+      isAdmin: rawUser.isAdmin === true || id === ADMIN_USER_ID,
       isArtist: rawUser.isArtist === true,
       artistName: typeof rawUser.artistName === 'string' && rawUser.artistName.trim() ? rawUser.artistName.trim().slice(0, 80) : undefined,
       artistBio: typeof rawUser.artistBio === 'string' ? rawUser.artistBio.trim().slice(0, 2_000) : undefined,

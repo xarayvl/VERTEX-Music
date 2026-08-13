@@ -12,6 +12,7 @@ import {
   SlidersHorizontal,
   Check,
   Bot,
+  ShieldCheck,
 } from 'lucide-react';
 import { TabType, Track, Playlist, Artist } from '../../types';
 import VertexLogo from '../Brand/VertexLogo';
@@ -34,6 +35,7 @@ interface SpotifySidebarProps {
   onSelectArtist?: (artist: Artist | string) => void;
   isCompact?: boolean;
   onOpenLikedSongs: () => void;
+  showAdminPanel?: boolean;
 }
 
 export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
@@ -53,6 +55,7 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
   onSelectArtist,
   isCompact = false,
   onOpenLikedSongs,
+  showAdminPanel = false,
 }) => {
   const { t } = useI18n();
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'liked' | 'playlists' | 'artists'>('all');
@@ -163,6 +166,21 @@ export const SpotifySidebar: React.FC<SpotifySidebarProps> = ({
             <User className="h-6 w-6 shrink-0 text-zinc-400 transition-transform group-hover:scale-110 group-hover:text-white" />
             <span className={isCompact ? 'hidden' : 'min-w-0 truncate whitespace-nowrap'}>{t('Profile & Account')}</span>
           </button>
+
+          {showAdminPanel && (
+            <button
+              onClick={() => onSelectTab('admin')}
+              title="Admin command center"
+              className={`group flex min-w-0 items-center overflow-hidden rounded-lg text-sm font-bold transition-all duration-200 ${isCompact ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'} ${
+                activeTab === 'admin'
+                  ? 'bg-[#D946EF]/15 text-[#F0ABFC]'
+                  : 'text-zinc-400 hover:bg-[#D946EF]/10 hover:text-[#F0ABFC]'
+              }`}
+            >
+              <ShieldCheck className="h-6 w-6 shrink-0 transition-transform group-hover:scale-110" />
+              <span className={isCompact ? 'hidden' : 'min-w-0 truncate whitespace-nowrap'}>Admin command center</span>
+            </button>
+          )}
         </nav>
       </div>
 

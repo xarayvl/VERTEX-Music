@@ -17,6 +17,7 @@ import { PlaylistView } from './components/Views/PlaylistView';
 import { ProfileView } from './components/Views/ProfileView';
 import { ArtistView } from './components/Views/ArtistView';
 import { AlbumView } from './components/Views/AlbumView';
+import { AdminDashboard } from './components/Views/AdminDashboard';
 
 import { AudioEQModal } from './components/Modals/AudioEQModal';
 import { NewPlaylistModal, NewPlaylistDraft } from './components/Modals/NewPlaylistModal';
@@ -34,6 +35,7 @@ import { NowPlayingSidebar } from './components/Player/NowPlayingSidebar';
 import { DEFAULT_AVATAR_URL } from './utils/profilePlaceholders';
 import { getReleaseTracksInPlaybackOrder } from './utils/artistUtils';
 import { useI18n } from './i18n/I18nContext';
+import { canAccessAdminPanel } from './utils/admin';
 
 const LEFT_SIDEBAR_MIN_WIDTH = 96;
 const LEFT_SIDEBAR_MAX_WIDTH = 520;
@@ -645,6 +647,8 @@ export default function App() {
     setRecentlyPlayed([]);
     setTracks((prev) => prev.map((t) => ({ ...t, isLiked: false })));
     setChatMessages([]);
+    setNavHistory(['home']);
+    setHistoryIndex(0);
     try {
       localStorage.removeItem('vertex_session_token');
       localStorage.removeItem('vertex_music_chat_history');
@@ -739,6 +743,8 @@ export default function App() {
     chatHydratedUserIdRef.current = null;
     lastSavedChatHistoryRef.current = '';
     setUserProfile(user);
+    setNavHistory(['home']);
+    setHistoryIndex(0);
     if (token) {
       localStorage.setItem('vertex_session_token', token);
     }
@@ -808,6 +814,7 @@ export default function App() {
 
   // Handle Navigation Tab Switch
   const handleSelectTab = (tab: TabType) => {
+    if (tab === 'admin' && !canAccessAdminPanel(userProfile)) return;
     setIsSongScreenOpen(false);
     if (tab === activeTab) return;
     const newHistory = navHistory.slice(0, historyIndex + 1);
@@ -2026,6 +2033,7 @@ export default function App() {
             onSelectArtist={handleSelectArtist}
             isCompact={sidebarWidth <= LEFT_SIDEBAR_COMPACT_THRESHOLD}
             onOpenLikedSongs={() => handleOpenLibrary('liked')}
+            showAdminPanel={canAccessAdminPanel(userProfile)}
           />
         </div>
 
@@ -2118,6 +2126,7 @@ export default function App() {
             onOpenAddTrackModal={() => openWorkspacePanel('upload')}
             onLogout={handleLogout}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            showAdminPanel={canAccessAdminPanel(userProfile)}
           />
 
           {/* Scrollable View Content */}
@@ -2159,6 +2168,8 @@ export default function App() {
                   handlePlayTrack(newTrack);
                 }}
               />
+            ) : activeTab === 'admin' && canAccessAdminPanel(userProfile) ? (
+              <AdminDashboard />
             ) : isSongScreenOpen ? (
               <SongScreenModal
                 isOpen={isSongScreenOpen}

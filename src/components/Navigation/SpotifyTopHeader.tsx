@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Search, Crown, User, ExternalLink, LogOut, Check, ChevronDown, Sparkles, Upload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Crown, User, ExternalLink, LogOut, Check, ChevronDown, Sparkles, Upload, ShieldCheck } from 'lucide-react';
 import { TabType, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../utils/profilePlaceholders';
 import VertexLogo from '../Brand/VertexLogo';
@@ -23,6 +23,7 @@ interface SpotifyTopHeaderProps {
   onOpenAddTrackModal?: () => void;
   onLogout?: () => void;
   onOpenAuthModal?: () => void;
+  showAdminPanel?: boolean;
 }
 
 export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
@@ -43,6 +44,7 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
   onOpenAddTrackModal,
   onLogout,
   onOpenAuthModal,
+  showAdminPanel = false,
 }) => {
   const { t } = useI18n();
   const categories = ['All', 'Music', 'Podcasts', 'Chill', 'Synthwave'];
@@ -203,6 +205,21 @@ export const SpotifyTopHeader: React.FC<SpotifyTopHeaderProps> = ({
                     <span>{t('Profile Overview')}</span>
                   </div>
                 </button>
+
+                {showAdminPanel && (
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onSelectTab('admin');
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-[#F0ABFC] hover:bg-[#D946EF]/10 rounded-md transition-colors"
+                  >
+                    <div className="flex items-center space-x-2.5">
+                      <ShieldCheck className="w-4 h-4 text-[#D946EF]" />
+                      <span>Admin command center</span>
+                    </div>
+                  </button>
+                )}
 
                 <div className="my-1 border-t border-white/10" />
 

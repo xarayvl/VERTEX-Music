@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createServer as createViteServer } from "vite";
 import { OAuth2Client } from "google-auth-library";
-import { readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
+import { readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, ADMIN_USER_ID, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
 import { getPublicOrigin, injectTrackSocialMeta } from "./server/socialMeta.js";
 import { searchLiveWeb, type WebSearchSource } from "./server/liveWebSearch.js";
 
@@ -19,6 +19,12 @@ const GOOGLE_CLIENT_ID =
   process.env.GOOGLE_CLIENT_ID ||
   "944259967990-m3iuuoqnkp1jr16drpau1f0kdn27ppcp.apps.googleusercontent.com";
 const googleOAuthClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+
+// This account is the only account allowed to use the admin monitoring
+// surface. The database flag remains enabled as a second, server-owned check.
+function canAccessAdminPanel(user: UserRecord | undefined, sessionUserId: string | null): boolean {
+  return Boolean(user && sessionUserId === ADMIN_USER_ID && user.id === ADMIN_USER_ID && user.isAdmin === true);
+}
 
 const DEFAULT_AVATAR_URL =
   "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22512%22%20height%3D%22512%22%20viewBox%3D%220%200%20512%20512%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23312e81%22%2F%3E%3Cstop%20offset%3D%220.55%22%20stop-color%3D%22%237e22ce%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23db2777%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%22512%22%20height%3D%22512%22%20rx%3D%2296%22%20fill%3D%22url(%23g)%22%2F%3E%3Ccircle%20cx%3D%22256%22%20cy%3D%22204%22%20r%3D%2278%22%20fill%3D%22%23fff%22%20fill-opacity%3D%220.9%22%2F%3E%3Cpath%20d%3D%22M118%20430c17-88%2069-132%20138-132s121%2044%20138%20132%22%20fill%3D%22%23fff%22%20fill-opacity%3D%220.9%22%2F%3E%3C%2Fsvg%3E";
@@ -584,7 +590,7 @@ async function startServer() {
     if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
     const db = await readDBAsync(req.method !== "GET");
     const requestingUser = db.users.find((user) => user.id === sessionUserId);
-    if (!requestingUser?.isAdmin) return res.status(403).json({ error: "Forbidden: Admin access required." });
+    if (!canAccessAdminPanel(requestingUser, sessionUserId)) return res.status(403).json({ error: "Forbidden: Admin access required." });
 
     return res.json({
       status: "ok",
@@ -601,6 +607,163 @@ async function startServer() {
         playlistsCount: db.playlists.length,
       },
     });
+  });
+
+  // Read-only operational snapshot for the single allowlisted admin account.
+  // Passwords and session tokens are intentionally excluded from the payload.
+  app.get("/api/admin/overview", async (req, res) => {
+    try {
+      const sessionUserId = getUserIdFromToken(req);
+      if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
+
+      const db = await readDBAsync(false);
+      const requestingUser = db.users.find((user) => user.id === sessionUserId);
+      if (!canAccessAdminPanel(requestingUser, sessionUserId)) {
+        return res.status(403).json({ error: "Forbidden: Admin access required." });
+      }
+
+      const publicUsers = db.users.map(({ password: _password, ...user }) => user);
+      const userById = new Map(publicUsers.map((user) => [user.id, user]));
+      const tracksByUser = new Map<string, TrackRecord[]>();
+      for (const track of db.tracks) {
+        const owned = tracksByUser.get(track.userId) || [];
+        owned.push(track);
+        tracksByUser.set(track.userId, owned);
+      }
+      const playlistsByUser = new Map<string, PlaylistRecord[]>();
+      for (const playlist of db.playlists) {
+        const owned = playlistsByUser.get(playlist.userId) || [];
+        owned.push(playlist);
+        playlistsByUser.set(playlist.userId, owned);
+      }
+
+      const userSummaries = publicUsers.map((user) => {
+        const state = db.userStates[user.id] || { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
+        return {
+          ...user,
+          trackCount: tracksByUser.get(user.id)?.length || 0,
+          playlistCount: playlistsByUser.get(user.id)?.length || 0,
+          likedTrackCount: state.likedTrackIds.length,
+          recentTrackCount: state.recentTrackIds.length,
+          followedArtistCount: state.followedArtistIds.length,
+          chatMessageCount: (db.chatHistories[user.id] || []).length,
+        };
+      });
+
+      const trackSummaries = db.tracks.map((track) => ({
+        ...track,
+        playCount: Number.parseInt(track.plays || "0", 10) || 0,
+        owner: userById.get(track.userId)
+          ? {
+              id: userById.get(track.userId)!.id,
+              username: userById.get(track.userId)!.username,
+              displayName: userById.get(track.userId)!.displayName,
+            }
+          : null,
+      }));
+
+      const playlistSummaries = db.playlists.map((playlist) => ({
+        ...playlist,
+        owner: userById.get(playlist.userId)
+          ? {
+              id: userById.get(playlist.userId)!.id,
+              username: userById.get(playlist.userId)!.username,
+              displayName: userById.get(playlist.userId)!.displayName,
+            }
+          : null,
+      }));
+
+      const genreCounts = new Map<string, number>();
+      for (const track of db.tracks) {
+        const genre = track.genre?.trim() || "Unspecified";
+        genreCounts.set(genre, (genreCounts.get(genre) || 0) + (Number.parseInt(track.plays || "0", 10) || 0));
+      }
+
+      const activity = [
+        ...db.users.map((user) => ({
+          id: `user-${user.id}`,
+          type: "account",
+          timestamp: user.createdAt,
+          userId: user.id,
+          title: "Account created",
+          detail: `@${user.username} joined VERTEX Music`,
+        })),
+        ...db.tracks.map((track) => ({
+          id: `track-${track.id}`,
+          type: "upload",
+          timestamp: track.createdAt || new Date(0).toISOString(),
+          userId: track.userId,
+          title: "Track uploaded",
+          detail: `${track.title} · ${track.artist}`,
+        })),
+        ...db.playlists.map((playlist) => ({
+          id: `playlist-${playlist.id}`,
+          type: "playlist",
+          timestamp: playlist.createdAt,
+          userId: playlist.userId,
+          title: "Playlist created",
+          detail: playlist.title,
+        })),
+        ...Object.entries(db.chatHistories).flatMap(([userId, messages]) =>
+          messages.map((message) => ({
+            id: `chat-${userId}-${message.id}`,
+            type: "chat",
+            timestamp: message.timestamp,
+            userId,
+            title: message.sender === "user" ? "AI DJ prompt" : "AI DJ response",
+            detail: message.text.slice(0, 220),
+          }))
+        ),
+      ]
+        .filter((entry) => !Number.isNaN(Date.parse(entry.timestamp)))
+        .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp))
+        .slice(0, 100);
+
+      const totalPlays = trackSummaries.reduce((sum, track) => sum + track.playCount, 0);
+      const totalListeningSeconds = publicUsers.reduce((sum, user) => sum + (Number(user.stats?.secondsListened) || 0), 0);
+      const chatMessageCount = Object.values(db.chatHistories).reduce((sum, messages) => sum + messages.length, 0);
+      const targetState = db.userStates[ADMIN_USER_ID] || { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
+
+      return res.json({
+        generatedAt: new Date().toISOString(),
+        adminUserId: ADMIN_USER_ID,
+        summary: {
+          users: db.users.length,
+          artists: db.users.filter((user) => user.isArtist || tracksByUser.has(user.id)).length,
+          tracks: db.tracks.length,
+          playlists: db.playlists.length,
+          totalPlays,
+          totalListeningSeconds,
+          chatMessageCount,
+          activeSessions: activeSessions.size,
+        },
+        system: {
+          uptimeSeconds: Math.round(process.uptime()),
+          nodeEnvironment: process.env.NODE_ENV || "development",
+          upstashRedisConfigured: isUpstashConfigured(),
+          cloudflareR2Configured: Boolean(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME),
+          storageMode: getR2Client() ? "Cloudflare R2 + local fallback" : "Local disk",
+        },
+        target: {
+          user: publicUsers.find((user) => user.id === ADMIN_USER_ID) || null,
+          state: targetState,
+          tracks: trackSummaries.filter((track) => track.userId === ADMIN_USER_ID),
+          playlists: playlistSummaries.filter((playlist) => playlist.userId === ADMIN_USER_ID),
+          chatHistory: db.chatHistories[ADMIN_USER_ID] || [],
+        },
+        users: userSummaries,
+        tracks: trackSummaries,
+        playlists: playlistSummaries,
+        activity,
+        topGenres: [...genreCounts.entries()]
+          .map(([genre, plays]) => ({ genre, plays }))
+          .sort((left, right) => right.plays - left.plays)
+          .slice(0, 8),
+      });
+    } catch (error: any) {
+      console.error("Admin Overview Error:", error);
+      return res.status(500).json({ error: "Failed to load admin overview." });
+    }
   });
 
   // ==========================================
@@ -1978,7 +2141,7 @@ async function startServer() {
       }
       const db = await readDBAsync(req.method !== "GET");
       const requestingUser = db.users.find((u) => u.id === sessionUserId);
-      if (!requestingUser?.isAdmin) {
+      if (!canAccessAdminPanel(requestingUser, sessionUserId)) {
         return res.status(403).json({ success: false, error: "Forbidden: Admin access required." });
       }
       const redis = getUpstashClient();

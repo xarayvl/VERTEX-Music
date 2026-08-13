@@ -43,7 +43,7 @@
         "Pop"
       ],
       "createdAt": "2026-08-02T04:44:00.720Z",
-      "isAdmin": false,
+      "isAdmin": true,
       "isArtist": true,
       "artistName": "ooove",
       "artistBio": "Music listener on VERTEX Music.",

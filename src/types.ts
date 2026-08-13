@@ -1,4 +1,4 @@
-export type TabType = 'home' | 'browse' | 'search' | 'library' | 'chat' | 'playlist' | 'profile' | 'artist' | 'album';
+export type TabType = 'home' | 'browse' | 'search' | 'library' | 'chat' | 'playlist' | 'profile' | 'artist' | 'album' | 'admin';
 
 export interface UserStats {
   hoursListened: number;
@@ -18,6 +18,7 @@ export interface UserProfile {
   avatarUrl: string;
   bio: string;
   createdAt?: string;
+  isAdmin?: boolean;
   favoriteGenres: string[];
   isArtist?: boolean;
   artistName?: string;
