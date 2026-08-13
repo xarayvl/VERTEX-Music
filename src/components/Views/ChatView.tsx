@@ -492,11 +492,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
           {messages.length === 0 && !isLoading && (
             <div className="flex min-h-full items-center justify-center py-5 sm:py-8">
               <div className="max-w-lg text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#D946EF]/30 bg-[#D946EF]/10 text-[#F0ABFC] shadow-[0_18px_50px_rgba(217,70,239,0.12)] sm:h-16 sm:w-16 sm:rounded-3xl">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#D946EF]/30 bg-[#D946EF]/10 text-[#F0ABFC] sm:h-16 sm:w-16 sm:rounded-3xl">
                   <Bot className="h-7 w-7 sm:h-8 sm:w-8" />
                 </div>
-                <p className="mt-4 text-[9px] font-black uppercase tracking-[0.18em] text-[#D8B4FE] sm:mt-5 sm:text-[10px] sm:tracking-[0.22em]">{t('VERTEX Music intelligence')}</p>
-                <h2 className="mt-2 text-xl font-black tracking-tight sm:text-2xl">{t('What should we listen to?')}</h2>
+                <h2 className="mt-3 text-xl font-black tracking-tight sm:mt-4 sm:text-2xl">{t('What should we listen to?')}</h2>
                 <p className="mx-auto mt-2 max-w-md px-3 text-xs leading-relaxed text-zinc-500 sm:px-0 sm:text-sm">
                   {t('Ask about artists and genres, discover music, or build a listening plan.')}
                 </p>
