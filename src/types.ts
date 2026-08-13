@@ -18,6 +18,12 @@ export interface UserProfile {
   avatarUrl: string;
   bio: string;
   createdAt?: string;
+  bannedAt?: string | null;
+  banReason?: string | null;
+  bannedBy?: string | null;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string | null;
   isAdmin?: boolean;
   favoriteGenres: string[];
   isArtist?: boolean;
@@ -58,6 +64,9 @@ export interface Track {
   copyright?: string;
   releaseYear?: number;
   trackNumber?: number;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string | null;
 }
 
 export interface Album {
@@ -78,6 +87,9 @@ export interface Playlist {
   coverUrl: string;
   trackCount: number;
   trackIds: string[];
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string | null;
 }
 
 export interface Artist {

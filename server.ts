@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createServer as createViteServer } from "vite";
 import { OAuth2Client } from "google-auth-library";
-import { readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, ADMIN_USER_ID, UserRecord, PlaylistRecord, TrackRecord } from "./server/db.js";
+import { readDB, readDBAsync, writeDBAsync, initUpstashDB, isUpstashConfigured, getUpstashClient, syncUpstashIndices, loadSessionsFromRedis, persistSessionToRedis, deleteSessionFromRedis, deleteSessionsForUserFromRedis, ADMIN_USER_ID, UserRecord, PlaylistRecord, TrackRecord, DBData, AdminAuditLogRecord } from "./server/db.js";
 import { getPublicOrigin, injectTrackSocialMeta } from "./server/socialMeta.js";
 import { searchLiveWeb, type WebSearchSource } from "./server/liveWebSearch.js";
 
@@ -179,10 +179,43 @@ function toPublicArtistCard(u: UserRecord, tracks: TrackRecord[] = []) {
     instagramUrl: u.instagramUrl,
     twitterUrl: u.twitterUrl,
     websiteUrl: u.websiteUrl,
-    artistPickTrackId: u.artistPickTrackId,
-    artistPickComment: u.artistPickComment,
+    artistPickTrackId: u.artistPickTrackId && artistTracks.some((track) => track.id === u.artistPickTrackId)
+      ? u.artistPickTrackId
+      : undefined,
+    artistPickComment: u.artistPickTrackId && artistTracks.some((track) => track.id === u.artistPickTrackId)
+      ? u.artistPickComment
+      : undefined,
     isUser: true,
   };
+}
+
+function isPublicUser(user: UserRecord | undefined): user is UserRecord {
+  return Boolean(user && !user.archivedAt);
+}
+
+function isPublicTrack(db: DBData, track: TrackRecord): boolean {
+  return !track.archivedAt && isPublicUser(db.users.find((user) => user.id === track.userId));
+}
+
+function isPublicPlaylist(db: DBData, playlist: PlaylistRecord): boolean {
+  return !playlist.archivedAt && isPublicUser(db.users.find((user) => user.id === playlist.userId));
+}
+
+function publicPlaylistProjection(playlist: PlaylistRecord, activeTrackIds: Set<string>): PlaylistRecord {
+  const trackIds = playlist.trackIds.filter((trackId) => activeTrackIds.has(trackId));
+  return { ...playlist, trackIds, trackCount: trackIds.length };
+}
+
+function publicChatHistoryProjection(history: any[], activeTrackIds: Set<string>): any[] {
+  return history.map((message) => ({
+    ...message,
+    matchedTracks: Array.isArray(message.matchedTracks)
+      ? message.matchedTracks.filter((track: unknown) => {
+          const trackId = typeof track === "string" ? track : (track as { id?: unknown } | null)?.id;
+          return typeof trackId === "string" && activeTrackIds.has(trackId);
+        })
+      : message.matchedTracks,
+  }));
 }
 
 function sanitizeUserId(userId: string): string {
@@ -413,18 +446,28 @@ async function saveUploadedFile(base64Data: string, mimeType: string, folderUser
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const configuredPort = Number(process.env.PORT);
+  const PORT = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65_535 ? configuredPort : 3000;
   app.set('trust proxy', 1);
 
   // Initialize Upstash Redis database sync (if UPSTASH_REDIS_REST_URL is present)
-  await initUpstashDB();
+  const initialDB = await initUpstashDB();
 
   // Hydrate active login sessions from Upstash Redis (if configured) so that
   // logged-in users stay authenticated across server restarts/redeploys and
   // across multiple server instances, instead of losing their session every
   // time the process restarts.
   const persistedSessions = await loadSessionsFromRedis();
-  const persistedSessionCount = Object.keys(persistedSessions).length;
+  const restorableSessions = Object.fromEntries(
+    Object.entries(persistedSessions).filter(([, userId]) => {
+      const user = initialDB.users.find((candidate) => candidate.id === userId);
+      return Boolean(user && !user.bannedAt && !user.archivedAt);
+    })
+  );
+  for (const token of Object.keys(persistedSessions)) {
+    if (!Object.prototype.hasOwnProperty.call(restorableSessions, token)) deleteSessionFromRedis(token);
+  }
+  const persistedSessionCount = Object.keys(restorableSessions).length;
   if (persistedSessionCount > 0) {
     console.log(`⚡ Restored ${persistedSessionCount} active session(s) from Upstash Redis.`);
   }
@@ -609,8 +652,8 @@ async function startServer() {
     });
   });
 
-  // Read-only operational snapshot for the single allowlisted admin account.
-  // Passwords and session tokens are intentionally excluded from the payload.
+  // Operational snapshot for the single allowlisted admin account. Passwords,
+  // Google subjects, and session tokens are intentionally excluded.
   app.get("/api/admin/overview", async (req, res) => {
     try {
       const sessionUserId = getUserIdFromToken(req);
@@ -622,8 +665,11 @@ async function startServer() {
         return res.status(403).json({ error: "Forbidden: Admin access required." });
       }
 
-      const publicUsers = db.users.map(({ password: _password, ...user }) => user);
-      const userById = new Map(publicUsers.map((user) => [user.id, user]));
+      const adminUsers = db.users.map(({ password: _password, googleId: _googleId, ...user }) => ({
+        ...user,
+        status: user.archivedAt ? "archived" as const : user.bannedAt ? "banned" as const : "active" as const,
+      }));
+      const userById = new Map(adminUsers.map((user) => [user.id, user]));
       const tracksByUser = new Map<string, TrackRecord[]>();
       for (const track of db.tracks) {
         const owned = tracksByUser.get(track.userId) || [];
@@ -637,12 +683,20 @@ async function startServer() {
         playlistsByUser.set(playlist.userId, owned);
       }
 
-      const userSummaries = publicUsers.map((user) => {
+      const userSummaries = adminUsers.map((user) => {
         const state = db.userStates[user.id] || { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
+        const ownedTracks = tracksByUser.get(user.id) || [];
+        const ownedPlaylists = playlistsByUser.get(user.id) || [];
+        const activeTrackCount = user.archivedAt ? 0 : ownedTracks.filter((track) => !track.archivedAt).length;
+        const activePlaylistCount = user.archivedAt ? 0 : ownedPlaylists.filter((playlist) => !playlist.archivedAt).length;
         return {
           ...user,
-          trackCount: tracksByUser.get(user.id)?.length || 0,
-          playlistCount: playlistsByUser.get(user.id)?.length || 0,
+          trackCount: ownedTracks.length,
+          activeTrackCount,
+          archivedTrackCount: ownedTracks.length - activeTrackCount,
+          playlistCount: ownedPlaylists.length,
+          activePlaylistCount,
+          archivedPlaylistCount: ownedPlaylists.length - activePlaylistCount,
           likedTrackCount: state.likedTrackIds.length,
           recentTrackCount: state.recentTrackIds.length,
           followedArtistCount: state.followedArtistIds.length,
@@ -652,6 +706,7 @@ async function startServer() {
 
       const trackSummaries = db.tracks.map((track) => ({
         ...track,
+        status: track.archivedAt || userById.get(track.userId)?.archivedAt ? "archived" as const : "active" as const,
         playCount: Number.parseInt(track.plays || "0", 10) || 0,
         owner: userById.get(track.userId)
           ? {
@@ -664,6 +719,7 @@ async function startServer() {
 
       const playlistSummaries = db.playlists.map((playlist) => ({
         ...playlist,
+        status: playlist.archivedAt || userById.get(playlist.userId)?.archivedAt ? "archived" as const : "active" as const,
         owner: userById.get(playlist.userId)
           ? {
               id: userById.get(playlist.userId)!.id,
@@ -673,8 +729,10 @@ async function startServer() {
           : null,
       }));
 
+      const activeTracks = db.tracks.filter((track) => isPublicTrack(db, track));
+      const activePlaylists = db.playlists.filter((playlist) => isPublicPlaylist(db, playlist));
       const genreCounts = new Map<string, number>();
-      for (const track of db.tracks) {
+      for (const track of activeTracks) {
         const genre = track.genre?.trim() || "Unspecified";
         genreCounts.set(genre, (genreCounts.get(genre) || 0) + (Number.parseInt(track.plays || "0", 10) || 0));
       }
@@ -714,24 +772,54 @@ async function startServer() {
             detail: message.text.slice(0, 220),
           }))
         ),
+        ...db.adminAuditLog.map((entry) => ({
+          id: `audit-${entry.id}`,
+          type: "audit",
+          timestamp: entry.timestamp,
+          userId: entry.actorId,
+          title: entry.action,
+          detail: `${entry.targetType}:${entry.targetId} · ${entry.reason}`,
+        })),
       ]
         .filter((entry) => !Number.isNaN(Date.parse(entry.timestamp)))
         .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp))
         .slice(0, 100);
 
-      const totalPlays = trackSummaries.reduce((sum, track) => sum + track.playCount, 0);
-      const totalListeningSeconds = publicUsers.reduce((sum, user) => sum + (Number(user.stats?.secondsListened) || 0), 0);
+      const activeTrackIds = new Set(activeTracks.map((track) => track.id));
+      const totalPlays = trackSummaries.filter((track) => track.status === "active").reduce((sum, track) => sum + track.playCount, 0);
+      const totalListeningSeconds = adminUsers.reduce((sum, user) => sum + (Number(user.stats?.secondsListened) || 0), 0);
       const chatMessageCount = Object.values(db.chatHistories).reduce((sum, messages) => sum + messages.length, 0);
-      const targetState = db.userStates[ADMIN_USER_ID] || { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
+      const requestedUserId = typeof req.query.userId === "string" ? req.query.userId.trim() : "";
+      const selectedUserId = adminUsers.some((user) => user.id === requestedUserId) ? requestedUserId : ADMIN_USER_ID;
+      const selectedState = db.userStates[selectedUserId] || { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
+      const selectedDetails = {
+        user: userSummaries.find((user) => user.id === selectedUserId) || null,
+        state: selectedState,
+        tracks: trackSummaries.filter((track) => track.userId === selectedUserId),
+        playlists: playlistSummaries.filter((playlist) => playlist.userId === selectedUserId),
+        chatHistory: db.chatHistories[selectedUserId] || [],
+        auditHistory: db.adminAuditLog
+          .filter((entry) => entry.targetId === selectedUserId || entry.actorId === selectedUserId)
+          .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp)),
+      };
+      const orderedAuditLog = [...db.adminAuditLog]
+        .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp));
 
       return res.json({
         generatedAt: new Date().toISOString(),
         adminUserId: ADMIN_USER_ID,
         summary: {
           users: db.users.length,
-          artists: db.users.filter((user) => user.isArtist || tracksByUser.has(user.id)).length,
+          activeUsers: db.users.filter((user) => !user.archivedAt && !user.bannedAt).length,
+          bannedUsers: db.users.filter((user) => !user.archivedAt && Boolean(user.bannedAt)).length,
+          archivedUsers: db.users.filter((user) => Boolean(user.archivedAt)).length,
+          artists: db.users.filter((user) => !user.archivedAt && (user.isArtist || activeTracks.some((track) => track.userId === user.id))).length,
           tracks: db.tracks.length,
+          activeTracks: activeTracks.length,
+          archivedTracks: db.tracks.length - activeTracks.length,
           playlists: db.playlists.length,
+          activePlaylists: activePlaylists.length,
+          archivedPlaylists: db.playlists.length - activePlaylists.length,
           totalPlays,
           totalListeningSeconds,
           chatMessageCount,
@@ -744,17 +832,16 @@ async function startServer() {
           cloudflareR2Configured: Boolean(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME),
           storageMode: getR2Client() ? "Cloudflare R2 + local fallback" : "Local disk",
         },
-        target: {
-          user: publicUsers.find((user) => user.id === ADMIN_USER_ID) || null,
-          state: targetState,
-          tracks: trackSummaries.filter((track) => track.userId === ADMIN_USER_ID),
-          playlists: playlistSummaries.filter((playlist) => playlist.userId === ADMIN_USER_ID),
-          chatHistory: db.chatHistories[ADMIN_USER_ID] || [],
-        },
+        selected: selectedDetails,
+        // Backward-compatible alias retained for older dashboard clients.
+        target: selectedDetails,
         users: userSummaries,
         tracks: trackSummaries,
-        playlists: playlistSummaries,
+        playlists: playlistSummaries.map((playlist) => playlist.status === "active"
+          ? { ...playlist, ...publicPlaylistProjection(playlist, activeTrackIds) }
+          : playlist),
         activity,
+        auditLog: orderedAuditLog,
         topGenres: [...genreCounts.entries()]
           .map(([genre, plays]) => ({ genre, plays }))
           .sort((left, right) => right.plays - left.plays)
@@ -773,11 +860,12 @@ async function startServer() {
   // above), and mirrored back to Redis on every new token issuance so sessions
   // survive restarts and are shared across instances. Falls back to
   // in-memory-only behavior automatically if Upstash isn't configured.
-  const activeSessions = new Map<string, string>(Object.entries(persistedSessions));
+  const activeSessions = new Map<string, string>(Object.entries(restorableSessions));
   const recentPlayEvents = new Map<string, number>();
 
   function issueSessionToken(userId: string): string {
-    if (!userId) return "";
+    const user = readDB().users.find((candidate) => candidate.id === userId);
+    if (!userId || !user || user.bannedAt || user.archivedAt) return "";
     const token = `sess_${crypto.randomBytes(32).toString("hex")}`;
     activeSessions.set(token, userId);
     persistSessionToRedis(token, userId); // fire-and-forget, doesn't block the request
@@ -791,7 +879,13 @@ async function startServer() {
     if (!token) return null;
 
     if (activeSessions.has(token)) {
-      return activeSessions.get(token) || null;
+      const userId = activeSessions.get(token) || "";
+      const user = readDB().users.find((candidate) => candidate.id === userId);
+      if (!user || user.bannedAt || user.archivedAt) {
+        revokeSessionToken(token);
+        return null;
+      }
+      return userId;
     }
     return null;
   }
@@ -801,6 +895,501 @@ async function startServer() {
     activeSessions.delete(token);
     deleteSessionFromRedis(token); // fire-and-forget
   }
+
+  async function revokeAllSessionsForUser(userId: string): Promise<number> {
+    let revokedLocally = 0;
+    for (const [token, ownerId] of activeSessions) {
+      if (ownerId !== userId) continue;
+      activeSessions.delete(token);
+      revokedLocally += 1;
+    }
+    await deleteSessionsForUserFromRedis(userId);
+    return revokedLocally;
+  }
+
+  async function requireAdminMutation(
+    req: express.Request,
+    res: express.Response
+  ): Promise<{ actorId: string; db: DBData } | null> {
+    const actorId = getUserIdFromToken(req);
+    if (!actorId) {
+      res.status(401).json({ error: "Unauthorized: Active session required." });
+      return null;
+    }
+    const db = await readDBAsync(true);
+    const actor = db.users.find((user) => user.id === actorId);
+    if (!canAccessAdminPanel(actor, actorId)) {
+      res.status(403).json({ error: "Forbidden: Admin access required." });
+      return null;
+    }
+    return { actorId, db };
+  }
+
+  function mutationReason(value: unknown, fallback: string, required = false): string | null {
+    const reason = typeof value === "string" ? value.trim() : "";
+    if (required && !reason) return null;
+    return (reason || fallback).slice(0, 1_000);
+  }
+
+  function appendAdminAudit(
+    db: DBData,
+    actorId: string,
+    action: string,
+    targetType: "user" | "track" | "playlist",
+    targetId: string,
+    reason: string,
+    before: Record<string, unknown> | null,
+    after: Record<string, unknown> | null
+  ): AdminAuditLogRecord {
+    const entry: AdminAuditLogRecord = {
+      id: createEntityId("audit"),
+      actorId,
+      action,
+      targetType,
+      targetId,
+      timestamp: new Date().toISOString(),
+      reason,
+      before,
+      after,
+    };
+    db.adminAuditLog = [...(db.adminAuditLog || []), entry].slice(-2_000);
+    return entry;
+  }
+
+  function userModerationSummary(user: UserRecord): Record<string, unknown> {
+    return {
+      status: user.archivedAt ? "archived" : user.bannedAt ? "banned" : "active",
+      bannedAt: user.bannedAt,
+      banReason: user.banReason,
+      bannedBy: user.bannedBy,
+      archivedAt: user.archivedAt,
+      archivedBy: user.archivedBy,
+      archiveReason: user.archiveReason,
+    };
+  }
+
+  function userStatsSummary(user: UserRecord): Record<string, unknown> {
+    const stats = { ...emptyStats(), ...(user.stats || {}) };
+    return {
+      secondsListened: stats.secondsListened,
+      hoursListened: stats.hoursListened,
+      tracksPlayed: stats.tracksPlayed,
+      topGenre: stats.topGenre,
+      playlistsCreated: stats.playlistsCreated,
+      followersCount: stats.followersCount,
+      followingCount: stats.followingCount,
+    };
+  }
+
+  function userProfileSummary(user: UserRecord): Record<string, unknown> {
+    return {
+      displayName: user.displayName,
+      username: user.username,
+      email: user.email,
+      bio: user.bio,
+      avatarConfigured: Boolean(user.avatarUrl),
+      bannerConfigured: Boolean(user.bannerUrl),
+      favoriteGenres: user.favoriteGenres,
+      isArtist: user.isArtist === true,
+      artistName: user.artistName,
+      artistBio: user.artistBio,
+      artistVerified: user.artistVerified === true,
+      instagramConfigured: Boolean(user.instagramUrl),
+      twitterConfigured: Boolean(user.twitterUrl),
+      websiteConfigured: Boolean(user.websiteUrl),
+      artistPickTrackId: user.artistPickTrackId,
+      artistPickComment: user.artistPickComment,
+    };
+  }
+
+  function contentArchiveSummary(content: TrackRecord | PlaylistRecord): Record<string, unknown> {
+    return {
+      title: content.title,
+      userId: content.userId,
+      archivedAt: content.archivedAt,
+      archivedBy: content.archivedBy,
+      archiveReason: content.archiveReason,
+    };
+  }
+
+  function safeAdminUser(user: UserRecord) {
+    const { password: _password, googleId: _googleId, ...safe } = user;
+    return {
+      ...safe,
+      status: user.archivedAt ? "archived" : user.bannedAt ? "banned" : "active",
+    };
+  }
+
+  app.patch("/api/admin/users/:userId/moderation", async (req, res) => {
+    try {
+      const context = await requireAdminMutation(req, res);
+      if (!context) return;
+      const { actorId, db } = context;
+      const target = db.users.find((user) => user.id === req.params.userId);
+      if (!target) return res.status(404).json({ error: "User not found." });
+      if (target.id === ADMIN_USER_ID) {
+        return res.status(400).json({ error: "The allowlisted admin account is protected from moderation and archive actions." });
+      }
+
+      const action = req.body?.action;
+      if (action !== "ban" && action !== "unban" && action !== "archive" && action !== "restore") {
+        return res.status(400).json({ error: "action must be ban, unban, archive, or restore." });
+      }
+      const requiresReason = action === "ban" || action === "archive";
+      const reason = mutationReason(req.body?.reason, `Administrative ${action}`, requiresReason);
+      if (!reason) return res.status(400).json({ error: `A reason is required to ${action} a user.` });
+
+      const before = userModerationSummary(target);
+      const now = new Date().toISOString();
+      let cascadedTracks = 0;
+      let cascadedPlaylists = 0;
+      let shouldRevokeSessions = false;
+
+      if (action === "ban") {
+        target.bannedAt = now;
+        target.banReason = reason;
+        target.bannedBy = actorId;
+        shouldRevokeSessions = true;
+      } else if (action === "unban") {
+        target.bannedAt = null;
+        target.banReason = null;
+        target.bannedBy = null;
+      } else if (action === "archive") {
+        target.archivedAt = now;
+        target.archivedBy = actorId;
+        target.archiveReason = reason;
+        shouldRevokeSessions = true;
+        for (const track of db.tracks) {
+          if (track.userId !== target.id || track.archivedAt) continue;
+          track.archivedAt = now;
+          track.archivedBy = actorId;
+          track.archiveReason = reason;
+          cascadedTracks += 1;
+        }
+        for (const playlist of db.playlists) {
+          if (playlist.userId !== target.id || playlist.archivedAt) continue;
+          playlist.archivedAt = now;
+          playlist.archivedBy = actorId;
+          playlist.archiveReason = reason;
+          cascadedPlaylists += 1;
+        }
+      } else {
+        target.archivedAt = null;
+        target.archivedBy = null;
+        target.archiveReason = null;
+        if (req.body?.cascade === true) {
+          for (const track of db.tracks) {
+            if (track.userId !== target.id || !track.archivedAt) continue;
+            track.archivedAt = null;
+            track.archivedBy = null;
+            track.archiveReason = null;
+            cascadedTracks += 1;
+          }
+          for (const playlist of db.playlists) {
+            if (playlist.userId !== target.id || !playlist.archivedAt) continue;
+            playlist.archivedAt = null;
+            playlist.archivedBy = null;
+            playlist.archiveReason = null;
+            cascadedPlaylists += 1;
+          }
+        }
+      }
+
+      const after = {
+        ...userModerationSummary(target),
+        cascade: action === "archive" || req.body?.cascade === true,
+        cascadedTracks,
+        cascadedPlaylists,
+      };
+      const audit = appendAdminAudit(db, actorId, `user.${action}`, "user", target.id, reason, before, after);
+      await writeDBAsync(db);
+      const revokedSessions = shouldRevokeSessions ? await revokeAllSessionsForUser(target.id) : 0;
+      const saved = await readDBAsync(false);
+      const savedTarget = saved.users.find((user) => user.id === target.id)!;
+      return res.json({
+        success: true,
+        user: safeAdminUser(savedTarget),
+        cascade: { tracks: cascadedTracks, playlists: cascadedPlaylists },
+        revokedSessions,
+        auditId: audit.id,
+      });
+    } catch (error) {
+      console.error("Admin User Moderation Error:", error);
+      return res.status(500).json({ error: "Failed to update user moderation state." });
+    }
+  });
+
+  app.patch("/api/admin/users/:userId/stats", async (req, res) => {
+    try {
+      const context = await requireAdminMutation(req, res);
+      if (!context) return;
+      const { actorId, db } = context;
+      const target = db.users.find((user) => user.id === req.params.userId);
+      if (!target) return res.status(404).json({ error: "User not found." });
+
+      const hasSeconds = Object.prototype.hasOwnProperty.call(req.body || {}, "secondsListened");
+      const hasTracks = Object.prototype.hasOwnProperty.call(req.body || {}, "tracksPlayed");
+      const hasGenre = Object.prototype.hasOwnProperty.call(req.body || {}, "topGenre");
+      if (!hasSeconds && !hasTracks && !hasGenre) {
+        return res.status(400).json({ error: "Provide secondsListened, tracksPlayed, or topGenre." });
+      }
+      const currentStats = { ...emptyStats(), ...(target.stats || {}) };
+      const secondsListened = hasSeconds ? req.body.secondsListened : currentStats.secondsListened;
+      const tracksPlayed = hasTracks ? req.body.tracksPlayed : currentStats.tracksPlayed;
+      const topGenre = hasGenre && typeof req.body.topGenre === "string" ? req.body.topGenre.trim() : currentStats.topGenre;
+      if (!Number.isInteger(secondsListened) || secondsListened < 0 || secondsListened > 1_000_000_000_000) {
+        return res.status(400).json({ error: "secondsListened must be an integer between 0 and 1000000000000." });
+      }
+      if (!Number.isInteger(tracksPlayed) || tracksPlayed < 0 || tracksPlayed > 1_000_000_000) {
+        return res.status(400).json({ error: "tracksPlayed must be an integer between 0 and 1000000000." });
+      }
+      if (typeof topGenre !== "string" || !topGenre || topGenre.length > 80) {
+        return res.status(400).json({ error: "topGenre must be between 1 and 80 characters." });
+      }
+
+      const state = db.userStates[target.id] || { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
+      const followingCount = state.followedArtistIds.filter((id) => !db.users.find((user) => user.id === id)?.archivedAt).length;
+      const followersCount = target.archivedAt ? 0 : db.users.filter((user) =>
+        !user.archivedAt && (db.userStates[user.id]?.followedArtistIds || []).includes(target.id)
+      ).length;
+      const before = userStatsSummary(target);
+      target.stats = {
+        hoursListened: secondsListened / 3600,
+        secondsListened,
+        tracksPlayed,
+        topGenre,
+        playlistsCreated: target.archivedAt ? 0 : db.playlists.filter((playlist) => playlist.userId === target.id && !playlist.archivedAt).length,
+        followersCount,
+        followingCount,
+      };
+      const reason = mutationReason(req.body?.reason, "Administrative stats update")!;
+      const audit = appendAdminAudit(db, actorId, "user.stats_updated", "user", target.id, reason, before, userStatsSummary(target));
+      await writeDBAsync(db);
+      const saved = await readDBAsync(false);
+      return res.json({ success: true, stats: saved.users.find((user) => user.id === target.id)?.stats, auditId: audit.id });
+    } catch (error) {
+      console.error("Admin User Stats Error:", error);
+      return res.status(500).json({ error: "Failed to update user stats." });
+    }
+  });
+
+  app.patch("/api/admin/users/:userId/profile", async (req, res) => {
+    try {
+      const context = await requireAdminMutation(req, res);
+      if (!context) return;
+      const { actorId, db } = context;
+      const index = db.users.findIndex((user) => user.id === req.params.userId);
+      if (index === -1) return res.status(404).json({ error: "User not found." });
+      const current = db.users[index];
+      const updates = req.body || {};
+      const allowedFields = ["displayName", "username", "email", "bio", "avatarUrl", "bannerUrl", "favoriteGenres", "isArtist", "artistName", "artistBio", "artistVerified", "instagramUrl", "twitterUrl", "websiteUrl", "artistPickTrackId", "artistPickComment"];
+      if (!allowedFields.some((field) => Object.prototype.hasOwnProperty.call(updates, field))) {
+        return res.status(400).json({ error: "No editable profile fields were provided." });
+      }
+
+      const next = { ...current };
+      if (updates.displayName !== undefined) {
+        if (typeof updates.displayName !== "string" || !updates.displayName.trim() || updates.displayName.trim().length > 80) {
+          return res.status(400).json({ error: "Display name must be between 1 and 80 characters." });
+        }
+        next.displayName = updates.displayName.trim();
+      }
+      if (updates.username !== undefined) {
+        if (typeof updates.username !== "string" || !/^[a-zA-Z0-9_.-]{3,32}$/.test(updates.username.trim())) {
+          return res.status(400).json({ error: "Username must be 3-32 characters and may only contain letters, numbers, dot, underscore, or hyphen." });
+        }
+        const cleanUsername = updates.username.trim();
+        if (db.users.some((user) => user.id !== current.id && user.username.toLowerCase() === cleanUsername.toLowerCase())) {
+          return res.status(409).json({ error: "Username is already in use." });
+        }
+        next.username = cleanUsername;
+      }
+      if (updates.email !== undefined) {
+        const cleanEmail = typeof updates.email === "string" ? updates.email.trim().toLowerCase() : "";
+        if (!/^[^\s@]{1,64}@[^\s@.]{1,253}(?:\.[^\s@.]{1,63})+$/.test(cleanEmail) || cleanEmail.length > 254) {
+          return res.status(400).json({ error: "A valid email address is required." });
+        }
+        if (db.users.some((user) => user.id !== current.id && user.email.toLowerCase() === cleanEmail)) {
+          return res.status(409).json({ error: "Email is already in use." });
+        }
+        next.email = cleanEmail;
+      }
+      if (updates.bio !== undefined) {
+        if (typeof updates.bio !== "string" || updates.bio.length > 500) return res.status(400).json({ error: "Bio cannot exceed 500 characters." });
+        next.bio = updates.bio.trim();
+      }
+      if (updates.artistBio !== undefined) {
+        if (typeof updates.artistBio !== "string" || updates.artistBio.length > 2_000) return res.status(400).json({ error: "Artist bio cannot exceed 2000 characters." });
+        next.artistBio = updates.artistBio.trim() || undefined;
+      }
+      if (updates.artistName !== undefined) {
+        if (typeof updates.artistName !== "string" || updates.artistName.trim().length > 80) return res.status(400).json({ error: "Artist name cannot exceed 80 characters." });
+        next.artistName = updates.artistName.trim() || undefined;
+      }
+      if (updates.isArtist !== undefined) {
+        if (typeof updates.isArtist !== "boolean") return res.status(400).json({ error: "isArtist must be a boolean." });
+        next.isArtist = updates.isArtist;
+      }
+      if (updates.artistVerified !== undefined) {
+        if (typeof updates.artistVerified !== "boolean") return res.status(400).json({ error: "artistVerified must be a boolean." });
+        next.artistVerified = updates.artistVerified;
+      }
+      if (updates.favoriteGenres !== undefined) {
+        if (!Array.isArray(updates.favoriteGenres)) return res.status(400).json({ error: "favoriteGenres must be an array." });
+        const genres = updates.favoriteGenres
+          .filter((genre: unknown): genre is string => typeof genre === "string")
+          .map((genre: string) => genre.trim())
+          .filter(Boolean);
+        if (genres.some((genre: string) => genre.length > 80)) return res.status(400).json({ error: "Genre names cannot exceed 80 characters." });
+        next.favoriteGenres = [...new Set<string>(genres)].slice(0, 20);
+      }
+
+      const updateMedia = async (field: "avatarUrl" | "bannerUrl", prefix: "avatar" | "banner") => {
+        if (updates[field] === undefined) return null;
+        if (typeof updates[field] !== "string") throw new Error("INVALID_MEDIA");
+        const clean = updates[field].trim();
+        if (!clean) return field === "avatarUrl" ? DEFAULT_AVATAR_URL : undefined;
+        if (clean.startsWith("data:")) {
+          const mimeMatch = clean.match(/^data:(image\/[^;]+);base64,/);
+          const base64 = clean.includes(",") ? clean.split(",")[1] : "";
+          if (!mimeMatch || !base64) throw new Error("INVALID_MEDIA");
+          return saveUploadedFile(base64, mimeMatch[1], current.id, prefix);
+        }
+        if (!isStoredMediaUrl(clean)) throw new Error("INVALID_MEDIA");
+        return clean;
+      };
+      try {
+        if (updates.avatarUrl !== undefined) next.avatarUrl = (await updateMedia("avatarUrl", "avatar")) || DEFAULT_AVATAR_URL;
+        if (updates.bannerUrl !== undefined) next.bannerUrl = (await updateMedia("bannerUrl", "banner")) || undefined;
+      } catch {
+        return res.status(400).json({ error: "Profile media must be a valid HTTP(S) URL or uploaded image." });
+      }
+
+      const cleanSocial = (value: unknown): string | undefined => {
+        if (typeof value !== "string") throw new Error("INVALID_SOCIAL");
+        const clean = value.trim();
+        if (!clean) return undefined;
+        if (!isHttpUrl(clean)) throw new Error("INVALID_SOCIAL");
+        return clean.slice(0, 2_000);
+      };
+      try {
+        if (updates.instagramUrl !== undefined) next.instagramUrl = cleanSocial(updates.instagramUrl);
+        if (updates.twitterUrl !== undefined) next.twitterUrl = cleanSocial(updates.twitterUrl);
+        if (updates.websiteUrl !== undefined) next.websiteUrl = cleanSocial(updates.websiteUrl);
+      } catch {
+        return res.status(400).json({ error: "Social links must be valid HTTP(S) URLs." });
+      }
+
+      if (updates.artistPickTrackId !== undefined) {
+        const pickId = typeof updates.artistPickTrackId === "string" ? updates.artistPickTrackId.trim() : "";
+        if (pickId && !db.tracks.some((track) => track.id === pickId && track.userId === current.id && !track.archivedAt)) {
+          return res.status(404).json({ error: "Artist pick track not found." });
+        }
+        next.artistPickTrackId = pickId || undefined;
+      }
+      if (updates.artistPickComment !== undefined) {
+        if (typeof updates.artistPickComment !== "string" || updates.artistPickComment.length > 500) return res.status(400).json({ error: "Artist pick comment cannot exceed 500 characters." });
+        next.artistPickComment = next.artistPickTrackId ? updates.artistPickComment.trim() || undefined : undefined;
+      }
+      if (!next.artistPickTrackId) next.artistPickComment = undefined;
+      next.isAdmin = current.id === ADMIN_USER_ID;
+
+      const before = userProfileSummary(current);
+      db.users[index] = next;
+      const canonicalArtistName = (next.artistName || next.displayName || next.username).trim();
+      db.tracks = db.tracks.map((track) => track.userId === next.id ? { ...track, artist: canonicalArtistName } : track);
+      const reason = mutationReason(updates.reason, "Administrative profile update")!;
+      const audit = appendAdminAudit(db, actorId, "user.profile_updated", "user", next.id, reason, before, userProfileSummary(next));
+      await writeDBAsync(db);
+
+      const saved = await readDBAsync(false);
+      const savedUser = saved.users.find((user) => user.id === next.id)!;
+      const referencedMedia = collectReferencedMediaUrls(saved);
+      await Promise.all([current.avatarUrl, current.bannerUrl]
+        .filter((mediaUrl): mediaUrl is string => Boolean(mediaUrl && mediaUrl !== savedUser.avatarUrl && mediaUrl !== savedUser.bannerUrl && !referencedMedia.has(mediaUrl)))
+        .map((mediaUrl) => deleteManagedFile(mediaUrl)));
+      return res.json({ success: true, user: safeAdminUser(savedUser), auditId: audit.id });
+    } catch (error) {
+      console.error("Admin User Profile Error:", error);
+      return res.status(500).json({ error: "Failed to update user profile." });
+    }
+  });
+
+  app.post("/api/admin/users/:userId/password-reset", async (req, res) => {
+    try {
+      const context = await requireAdminMutation(req, res);
+      if (!context) return;
+      const { actorId, db } = context;
+      const target = db.users.find((user) => user.id === req.params.userId);
+      if (!target) return res.status(404).json({ error: "User not found." });
+      const { newPassword, confirmPassword, confirmed } = req.body || {};
+      if (confirmed !== true) return res.status(400).json({ error: "Explicit password-reset confirmation is required." });
+      if (typeof newPassword !== "string" || newPassword.length < 8 || newPassword.length > 128) {
+        return res.status(400).json({ error: "New password must be between 8 and 128 characters." });
+      }
+      if (typeof confirmPassword !== "string" || confirmPassword !== newPassword) {
+        return res.status(400).json({ error: "Password confirmation does not match." });
+      }
+      target.password = await bcrypt.hash(newPassword, 10);
+      const reason = mutationReason(req.body?.reason, "Administrative authentication reset")!;
+      const audit = appendAdminAudit(
+        db,
+        actorId,
+        "user.password_reset",
+        "user",
+        target.id,
+        reason,
+        { resetCompleted: false },
+        { resetCompleted: true }
+      );
+      await writeDBAsync(db);
+      return res.json({ success: true, auditId: audit.id });
+    } catch (error) {
+      console.error("Admin Password Reset Error:", error);
+      return res.status(500).json({ error: "Failed to reset password." });
+    }
+  });
+
+  const handleAdminContentArchive = async (
+    req: express.Request,
+    res: express.Response,
+    targetType: "track" | "playlist"
+  ) => {
+    try {
+      const context = await requireAdminMutation(req, res);
+      if (!context) return;
+      const { actorId, db } = context;
+      const collection = targetType === "track" ? db.tracks : db.playlists;
+      const target = collection.find((item) => item.id === (targetType === "track" ? req.params.trackId : req.params.playlistId));
+      if (!target) return res.status(404).json({ error: `${targetType === "track" ? "Track" : "Playlist"} not found.` });
+      const action = req.body?.action;
+      if (action !== "archive" && action !== "restore") return res.status(400).json({ error: "action must be archive or restore." });
+      const reason = mutationReason(req.body?.reason, `Administrative ${targetType} ${action}`, action === "archive");
+      if (!reason) return res.status(400).json({ error: `A reason is required to archive a ${targetType}.` });
+
+      const before = contentArchiveSummary(target);
+      if (action === "archive") {
+        target.archivedAt = new Date().toISOString();
+        target.archivedBy = actorId;
+        target.archiveReason = reason;
+      } else {
+        target.archivedAt = null;
+        target.archivedBy = null;
+        target.archiveReason = null;
+      }
+      const audit = appendAdminAudit(db, actorId, `${targetType}.${action}`, targetType, target.id, reason, before, contentArchiveSummary(target));
+      await writeDBAsync(db);
+      const saved = await readDBAsync(false);
+      const savedTarget = (targetType === "track" ? saved.tracks : saved.playlists).find((item) => item.id === target.id);
+      return res.json({ success: true, [targetType]: savedTarget, auditId: audit.id });
+    } catch (error) {
+      console.error(`Admin ${targetType} Archive Error:`, error);
+      return res.status(500).json({ error: `Failed to update ${targetType} archive state.` });
+    }
+  };
+
+  app.patch("/api/admin/tracks/:trackId/archive", (req, res) => handleAdminContentArchive(req, res, "track"));
+  app.patch("/api/admin/playlists/:playlistId/archive", (req, res) => handleAdminContentArchive(req, res, "playlist"));
 
   // Lightweight preflight for the registration form. Registration still
   // performs the authoritative uniqueness check below to avoid race conditions.
@@ -882,6 +1471,12 @@ async function startServer() {
         bio: "",
         favoriteGenres: [],
         createdAt: new Date().toISOString(),
+        bannedAt: null,
+        banReason: null,
+        bannedBy: null,
+        archivedAt: null,
+        archivedBy: null,
+        archiveReason: null,
         stats: {
           hoursListened: 0,
           secondsListened: 0,
@@ -947,6 +1542,13 @@ async function startServer() {
         return res.status(401).json({ error: "Invalid username/email or password." });
       }
 
+      if (user.bannedAt) {
+        return res.status(403).json({ error: "This account is banned.", banned: true });
+      }
+      if (user.archivedAt) {
+        return res.status(403).json({ error: "This account is archived.", archived: true });
+      }
+
       const token = issueSessionToken(user.id);
       const { password: _, ...userWithoutPassword } = user;
       return res.json({ success: true, user: userWithoutPassword, token });
@@ -1002,6 +1604,12 @@ async function startServer() {
       }
 
       if (user) {
+        if (user.bannedAt) {
+          return res.status(403).json({ error: "This account is banned.", banned: true });
+        }
+        if (user.archivedAt) {
+          return res.status(403).json({ error: "This account is archived.", archived: true });
+        }
         if (!user.googleId) {
           user.googleId = googleId;
           await writeDBAsync(db);
@@ -1034,6 +1642,12 @@ async function startServer() {
           bio: "",
           favoriteGenres: [],
           createdAt: new Date().toISOString(),
+          bannedAt: null,
+          banReason: null,
+          bannedBy: null,
+          archivedAt: null,
+          archivedBy: null,
+          archiveReason: null,
           stats: emptyStats(),
         };
 
@@ -1064,6 +1678,13 @@ async function startServer() {
   app.get("/api/data", async (req, res) => {
     try {
       const db = await readDBAsync(req.method !== "GET");
+      const activeTracks = db.tracks.filter((track) => isPublicTrack(db, track));
+      const activeTrackIds = new Set(activeTracks.map((track) => track.id));
+      const activeUsers = db.users.filter((user) => !user.archivedAt);
+      const activeUserIds = new Set(activeUsers.map((user) => user.id));
+      const activePlaylists = db.playlists
+        .filter((playlist) => isPublicPlaylist(db, playlist))
+        .map((playlist) => publicPlaylistProjection(playlist, activeTrackIds));
       const sharedOnly = req.query.scope === 'shared';
       const authUserId = sharedOnly ? null : getUserIdFromToken(req);
 
@@ -1076,25 +1697,25 @@ async function startServer() {
       if (authUserId) {
         const found = db.users.find((u) => u.id === authUserId);
         if (found) {
-          const { password: _, ...uNoPass } = found;
-          const ownTotalStreams = db.tracks
+          const { password: _, googleId: _googleId, ...uNoPass } = found;
+          const ownTotalStreams = activeTracks
             .filter((track) => track.userId === found.id)
             .reduce((sum, track) => sum + (Number.parseInt(track.plays || '0', 10) || 0), 0);
           currentUser = { ...uNoPass, totalStreamsLabel: `${ownTotalStreams.toLocaleString()} total streams` };
-          likedTrackIds = db.userStates[authUserId] ? db.userStates[authUserId].likedTrackIds : [];
-          userChatHistory = db.chatHistories[authUserId] ? db.chatHistories[authUserId] : [];
-          followedArtistIds = db.userStates[authUserId]?.followedArtistIds || [];
-          recentTrackIds = db.userStates[authUserId]?.recentTrackIds || [];
+          likedTrackIds = (db.userStates[authUserId]?.likedTrackIds || []).filter((trackId) => activeTrackIds.has(trackId));
+          userChatHistory = publicChatHistoryProjection(db.chatHistories[authUserId] || [], activeTrackIds);
+          followedArtistIds = (db.userStates[authUserId]?.followedArtistIds || []).filter((userId) => activeUserIds.has(userId));
+          recentTrackIds = (db.userStates[authUserId]?.recentTrackIds || []).filter((trackId) => activeTrackIds.has(trackId));
         }
       }
 
-      const trackOwnerIds = new Set(db.tracks.map((track) => track.userId));
+      const trackOwnerIds = new Set(activeTracks.map((track) => track.userId));
       const sharedData = {
-        tracks: db.tracks,
-        artists: db.users
+        tracks: activeTracks,
+        artists: activeUsers
           .filter((user) => user.isArtist || trackOwnerIds.has(user.id))
-          .map((user) => toPublicArtistCard(user, db.tracks)),
-        playlists: db.playlists,
+          .map((user) => toPublicArtistCard(user, activeTracks)),
+        playlists: activePlaylists,
       };
       if (sharedOnly) return res.json(sharedData);
 
@@ -1127,7 +1748,8 @@ async function startServer() {
       if (!db.users.some((user) => user.id === userId)) {
         return res.status(404).json({ error: "User not found." });
       }
-      const history = db.chatHistories[userId] || [];
+      const activeTrackIds = new Set(db.tracks.filter((track) => isPublicTrack(db, track)).map((track) => track.id));
+      const history = publicChatHistoryProjection(db.chatHistories[userId] || [], activeTrackIds);
       return res.json({ success: true, chatHistory: history });
     } catch (error: any) {
       console.error("Fetch Chat History Error:", error);
@@ -1152,7 +1774,8 @@ async function startServer() {
         return res.status(404).json({ error: "User not found." });
       }
 
-      const sanitizedHistory = sanitizeChatHistory(chatHistory, db.tracks);
+      const activeTracks = db.tracks.filter((track) => isPublicTrack(db, track));
+      const sanitizedHistory = sanitizeChatHistory(chatHistory, activeTracks);
       if (JSON.stringify(db.chatHistories[userId] || []) === JSON.stringify(sanitizedHistory)) {
         return res.json({ success: true, chatHistory: sanitizedHistory, unchanged: true });
       }
@@ -1171,22 +1794,28 @@ async function startServer() {
     try {
       const query = (req.query.q as string || "").trim().toLowerCase();
       const db = await readDBAsync(req.method !== "GET");
+      const activeTracks = db.tracks.filter((track) => isPublicTrack(db, track));
+      const activeTrackIds = new Set(activeTracks.map((track) => track.id));
+      const activeUsers = db.users.filter((user) => !user.archivedAt);
+      const activePlaylists = db.playlists
+        .filter((playlist) => isPublicPlaylist(db, playlist))
+        .map((playlist) => publicPlaylistProjection(playlist, activeTrackIds));
 
       if (!query) {
         return res.json({
           query: "",
-          tracks: db.tracks.slice(0, 10),
-          artists: db.users
-            .filter((user) => user.isArtist || db.tracks.some((track) => track.userId === user.id))
+          tracks: activeTracks.slice(0, 10),
+          artists: activeUsers
+            .filter((user) => user.isArtist || activeTracks.some((track) => track.userId === user.id))
             .slice(0, 10)
-            .map((user) => toPublicArtistCard(user, db.tracks)),
-          playlists: db.playlists.slice(0, 10),
+            .map((user) => toPublicArtistCard(user, activeTracks)),
+          playlists: activePlaylists.slice(0, 10),
           topResult: null,
         });
       }
 
       // 1. Match Tracks
-      const matchedTracks = db.tracks.filter(
+      const matchedTracks = activeTracks.filter(
         (t) =>
           t.title.toLowerCase().includes(query) ||
           t.artist.toLowerCase().includes(query) ||
@@ -1195,8 +1824,8 @@ async function startServer() {
       );
 
       // 2. Match Users & Artists
-      const matchedUsers = db.users
-        .filter((user) => user.isArtist || db.tracks.some((track) => track.userId === user.id))
+      const matchedUsers = activeUsers
+        .filter((user) => user.isArtist || activeTracks.some((track) => track.userId === user.id))
         .filter(
           (user) =>
             user.username.toLowerCase().includes(query) ||
@@ -1204,23 +1833,23 @@ async function startServer() {
             (user.artistName && user.artistName.toLowerCase().includes(query)) ||
             (user.bio && user.bio.toLowerCase().includes(query))
         )
-        .map((user) => toPublicArtistCard(user, db.tracks));
+        .map((user) => toPublicArtistCard(user, activeTracks));
 
       // Track metadata never creates an artist identity. Every matching track
       // resolves through its immutable owner userId, so duplicate display
       // names cannot redirect to the wrong account and orphaned identities
       // cannot appear in search.
       const matchedTrackOwnerIds = new Set(matchedTracks.map((track) => track.userId).filter(Boolean));
-      const matchedTrackArtists = db.users
+      const matchedTrackArtists = activeUsers
         .filter((user) => matchedTrackOwnerIds.has(user.id))
-        .map((user) => toPublicArtistCard(user, db.tracks));
+        .map((user) => toPublicArtistCard(user, activeTracks));
 
       const combinedArtists = Array.from(
         new Map([...matchedUsers, ...matchedTrackArtists].map((artist) => [artist.id, artist])).values()
       );
 
       // 3. Match Playlists
-      const matchedPlaylists = db.playlists.filter(
+      const matchedPlaylists = activePlaylists.filter(
         (p) =>
           p.title.toLowerCase().includes(query) ||
           (p.description && p.description.toLowerCase().includes(query))
@@ -1299,11 +1928,12 @@ async function startServer() {
       const { userId } = req.params;
       const db = await readDBAsync(req.method !== "GET");
       const found = db.users.find((user) => user.id === userId);
-      const isRealArtist = Boolean(found && (found.isArtist || db.tracks.some((track) => track.userId === found.id)));
+      const activeTracks = db.tracks.filter((track) => isPublicTrack(db, track));
+      const isRealArtist = Boolean(found && !found.archivedAt && (found.isArtist || activeTracks.some((track) => track.userId === found.id)));
       if (!found || !isRealArtist) {
         return res.status(404).json({ error: "Artist not found." });
       }
-      return res.json({ success: true, user: toPublicArtistCard(found, db.tracks) });
+      return res.json({ success: true, user: toPublicArtistCard(found, activeTracks) });
     } catch (error: any) {
       console.error("Fetch User Error:", error);
       return res.status(500).json({ error: "Failed to fetch user profile." });
@@ -1336,7 +1966,7 @@ async function startServer() {
       if (requesterIndex === -1) {
         return res.status(404).json({ error: "Signed-in user not found." });
       }
-      if (targetIndex === -1 || !(db.users[targetIndex].isArtist || db.tracks.some((track) => track.userId === targetUserId))) {
+      if (targetIndex === -1 || db.users[targetIndex].archivedAt || !(db.users[targetIndex].isArtist || db.tracks.some((track) => track.userId === targetUserId && isPublicTrack(db, track)))) {
         return res.status(404).json({ error: "Artist not found." });
       }
 
@@ -1653,7 +2283,7 @@ async function startServer() {
   app.get("/api/tracks/:id", async (req, res) => {
     try {
       const db = await readDBAsync(req.method !== "GET");
-      const track = db.tracks.find((item) => item.id === req.params.id);
+      const track = db.tracks.find((item) => item.id === req.params.id && isPublicTrack(db, item));
       if (!track) return res.status(404).json({ error: "Track not found." });
       return res.json({ success: true, track });
     } catch (error) {
@@ -1761,6 +2391,9 @@ async function startServer() {
         copyright: cleanCopyright,
         releaseYear: cleanReleaseYear,
         trackNumber: cleanTrackNumber,
+        archivedAt: null,
+        archivedBy: null,
+        archiveReason: null,
         coverUrl: persistentCoverUrl,
         audioUrl: persistentAudioUrl,
         duration: Number(duration),
@@ -1794,12 +2427,12 @@ async function startServer() {
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
 
       const db = await readDBAsync(req.method !== "GET");
-      const seedTrack = db.tracks.find((item) => item.id === req.params.trackId);
+      const seedTrack = db.tracks.find((item) => item.id === req.params.trackId && isPublicTrack(db, item));
       if (!seedTrack) return res.status(404).json({ error: "Release not found." });
       if (seedTrack.userId !== sessionUserId) return res.status(403).json({ error: "Forbidden: You can only edit releases you uploaded." });
 
       const releaseTracks = db.tracks.filter((item) => {
-        if (item.userId !== sessionUserId) return false;
+        if (item.userId !== sessionUserId || !isPublicTrack(db, item)) return false;
         if (seedTrack.releaseId) return item.releaseId === seedTrack.releaseId;
         return seedTrack.album !== "Single" && item.album === seedTrack.album;
       });
@@ -1894,7 +2527,7 @@ async function startServer() {
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
 
       const db = await readDBAsync(req.method !== "GET");
-      const trackIndex = db.tracks.findIndex((track) => track.id === id);
+      const trackIndex = db.tracks.findIndex((track) => track.id === id && isPublicTrack(db, track));
       if (trackIndex === -1) return res.status(404).json({ error: "Track not found." });
       const existingTrack = db.tracks[trackIndex];
       if (existingTrack.userId !== sessionUserId) {
@@ -1994,7 +2627,7 @@ async function startServer() {
     try {
       const { id } = req.params;
       const db = await readDBAsync(req.method !== "GET");
-      const trackIndex = db.tracks.findIndex((track) => track.id === id);
+      const trackIndex = db.tracks.findIndex((track) => track.id === id && isPublicTrack(db, track));
       if (trackIndex === -1) return res.status(404).json({ error: "Track not found." });
 
       const sessionUserId = getUserIdFromToken(req);
@@ -2024,7 +2657,7 @@ async function startServer() {
           db.userStates[sessionUserId] = state;
 
           const recentTracks = state.recentTrackIds
-            .map((trackId) => db.tracks.find((track) => track.id === trackId))
+            .map((trackId) => db.tracks.find((track) => track.id === trackId && isPublicTrack(db, track)))
             .filter((track): track is TrackRecord => Boolean(track));
           const genreCounts = new Map<string, number>();
           for (const track of recentTracks) {
@@ -2061,7 +2694,7 @@ async function startServer() {
 
       const { id } = req.params;
       const db = await readDBAsync(req.method !== "GET");
-      const track = db.tracks.find((item) => item.id === id);
+      const track = db.tracks.find((item) => item.id === id && isPublicTrack(db, item));
       if (!track) return res.status(404).json({ error: "Track not found." });
       if (track.userId !== sessionUserId) {
         return res.status(403).json({ error: "Forbidden: You can only delete tracks you uploaded." });
@@ -2097,7 +2730,7 @@ async function startServer() {
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
 
       const db = await readDBAsync(req.method !== "GET");
-      const ownedTracks = db.tracks.filter((track) => track.userId === sessionUserId);
+      const ownedTracks = db.tracks.filter((track) => track.userId === sessionUserId && isPublicTrack(db, track));
       const ownedIds = new Set(ownedTracks.map((track) => track.id));
       if (ownedIds.size === 0) return res.status(404).json({ error: "No uploaded tracks found for this account." });
 
@@ -2182,9 +2815,10 @@ async function startServer() {
   app.get("/api/playlists/:id", async (req, res) => {
     try {
       const db = await readDBAsync(req.method !== "GET");
-      const playlist = db.playlists.find((item) => item.id === req.params.id);
+      const playlist = db.playlists.find((item) => item.id === req.params.id && isPublicPlaylist(db, item));
       if (!playlist) return res.status(404).json({ error: "Playlist not found." });
-      return res.json({ success: true, playlist });
+      const activeTrackIds = new Set(db.tracks.filter((track) => isPublicTrack(db, track)).map((track) => track.id));
+      return res.json({ success: true, playlist: publicPlaylistProjection(playlist, activeTrackIds) });
     } catch (error: any) {
       console.error("Get Playlist Error:", error);
       return res.status(500).json({ error: "Failed to fetch playlist." });
@@ -2211,7 +2845,7 @@ async function startServer() {
       if (!owner) return res.status(404).json({ error: "Playlist owner not found." });
 
       const requestedTrackIds: string[] = Array.isArray(req.body.trackIds) ? req.body.trackIds.filter((id: unknown): id is string => typeof id === "string") : [];
-      const validTrackIds = new Set(db.tracks.map((track) => track.id));
+      const validTrackIds = new Set(db.tracks.filter((track) => isPublicTrack(db, track)).map((track) => track.id));
       if (requestedTrackIds.some((trackId: unknown) => typeof trackId !== "string" || !validTrackIds.has(trackId))) {
         return res.status(404).json({ error: "One or more playlist tracks were not found." });
       }
@@ -2239,11 +2873,14 @@ async function startServer() {
         trackIds: [...new Set(requestedTrackIds)],
         trackCount: new Set(requestedTrackIds).size,
         createdAt: new Date().toISOString(),
+        archivedAt: null,
+        archivedBy: null,
+        archiveReason: null,
       };
       db.playlists.unshift(newPlaylist);
       const ownerIndex = db.users.findIndex((user) => user.id === sessionUserId);
       const stats = db.users[ownerIndex].stats || emptyStats();
-      db.users[ownerIndex].stats = { ...emptyStats(), ...stats, playlistsCreated: db.playlists.filter((p) => p.userId === sessionUserId).length };
+      db.users[ownerIndex].stats = { ...emptyStats(), ...stats, playlistsCreated: db.playlists.filter((p) => p.userId === sessionUserId && !p.archivedAt).length };
       await writeDBAsync(db);
       return res.status(201).json({ success: true, playlist: newPlaylist });
     } catch (error: any) {
@@ -2257,7 +2894,7 @@ async function startServer() {
       const sessionUserId = getUserIdFromToken(req);
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
       const db = await readDBAsync(req.method !== "GET");
-      const index = db.playlists.findIndex((playlist) => playlist.id === req.params.id);
+      const index = db.playlists.findIndex((playlist) => playlist.id === req.params.id && isPublicPlaylist(db, playlist));
       if (index === -1) return res.status(404).json({ error: "Playlist not found." });
       const existing = db.playlists[index];
       if (existing.userId !== sessionUserId) {
@@ -2266,7 +2903,7 @@ async function startServer() {
 
       const nextTrackIds = req.body.trackIds === undefined ? existing.trackIds : req.body.trackIds;
       if (!Array.isArray(nextTrackIds)) return res.status(400).json({ error: "trackIds must be an array." });
-      const validTrackIds = new Set(db.tracks.map((track) => track.id));
+      const validTrackIds = new Set(db.tracks.filter((track) => isPublicTrack(db, track)).map((track) => track.id));
       if (nextTrackIds.some((trackId: unknown) => typeof trackId !== "string" || !validTrackIds.has(trackId))) {
         return res.status(404).json({ error: "One or more playlist tracks were not found." });
       }
@@ -2311,7 +2948,7 @@ async function startServer() {
       const sessionUserId = getUserIdFromToken(req);
       if (!sessionUserId) return res.status(401).json({ error: "Unauthorized: Active session required." });
       const db = await readDBAsync(req.method !== "GET");
-      const target = db.playlists.find((playlist) => playlist.id === req.params.id);
+      const target = db.playlists.find((playlist) => playlist.id === req.params.id && isPublicPlaylist(db, playlist));
       if (!target) return res.status(404).json({ error: "Playlist not found." });
       if (target.userId !== sessionUserId) {
         return res.status(403).json({ error: "Forbidden: You can only delete playlists you created." });
@@ -2320,7 +2957,7 @@ async function startServer() {
       const ownerIndex = db.users.findIndex((user) => user.id === sessionUserId);
       if (ownerIndex !== -1) {
         const stats = db.users[ownerIndex].stats || emptyStats();
-        db.users[ownerIndex].stats = { ...emptyStats(), ...stats, playlistsCreated: db.playlists.filter((p) => p.userId === sessionUserId).length };
+        db.users[ownerIndex].stats = { ...emptyStats(), ...stats, playlistsCreated: db.playlists.filter((p) => p.userId === sessionUserId && !p.archivedAt).length };
       }
       await writeDBAsync(db);
       return res.json({ success: true, deletedPlaylistId: target.id });
@@ -2349,7 +2986,7 @@ async function startServer() {
       if (!Array.isArray(likedTrackIds)) {
         return res.status(400).json({ error: "likedTrackIds must be an array." });
       }
-      const validTrackIds = new Set(db.tracks.map((track) => track.id));
+      const validTrackIds = new Set(db.tracks.filter((track) => isPublicTrack(db, track)).map((track) => track.id));
       if (likedTrackIds.some((trackId: unknown) => typeof trackId !== "string" || !validTrackIds.has(trackId))) {
         return res.status(404).json({ error: "One or more liked tracks were not found." });
       }
@@ -3074,7 +3711,7 @@ function buildNvidiaMessages(
     async (req: express.Request, res: express.Response) => {
       try {
         const db = await readDBAsync(req.method !== "GET");
-        const track = db.tracks.find((item) => item.id === req.params.trackId);
+        const track = db.tracks.find((item) => item.id === req.params.trackId && isPublicTrack(db, item));
         if (!track) {
           return res.status(404).type("html").send("<!doctype html><title>Track not found | VERTEX Music</title><h1>404 — Track not found</h1>");
         }
@@ -3089,31 +3726,33 @@ function buildNvidiaMessages(
       }
     };
 
-  // A shared /track/:id URL needs server-rendered Open Graph metadata because
-  // Instagram, Discord and similar crawlers do not execute the React app.
-  // Browsers receive the same Vite document plus those tags, so the existing
-  // client-side deep-link behavior remains unchanged.
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.get("/track/:trackId", pageLimiter, sendTrackPage(async (requestUrl) => {
-      const template = await fs.promises.readFile(path.join(process.cwd(), "index.html"), "utf8");
-      return vite.transformIndexHtml(requestUrl, template);
-    }));
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("/track/:trackId", pageLimiter, sendTrackPage(async () =>
-      fs.promises.readFile(path.join(distPath, "index.html"), "utf8")
-    ));
-    // Unrated wildcard fallbacks are an easy DoS target (every unmatched GET
-    // triggers a disk read), so this needs the same guard as the API routes.
-    app.get("*", pageLimiter, (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+  if (process.env.VERTEX_API_ONLY !== "1") {
+    // A shared /track/:id URL needs server-rendered Open Graph metadata because
+    // Instagram, Discord and similar crawlers do not execute the React app.
+    // Browsers receive the same Vite document plus those tags, so the existing
+    // client-side deep-link behavior remains unchanged.
+    if (process.env.NODE_ENV !== "production") {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.get("/track/:trackId", pageLimiter, sendTrackPage(async (requestUrl) => {
+        const template = await fs.promises.readFile(path.join(process.cwd(), "index.html"), "utf8");
+        return vite.transformIndexHtml(requestUrl, template);
+      }));
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), "dist");
+      app.use(express.static(distPath));
+      app.get("/track/:trackId", pageLimiter, sendTrackPage(async () =>
+        fs.promises.readFile(path.join(distPath, "index.html"), "utf8")
+      ));
+      // Unrated wildcard fallbacks are an easy DoS target (every unmatched GET
+      // triggers a disk read), so this needs the same guard as the API routes.
+      app.get("*", pageLimiter, (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
   }
 
   app.listen(PORT, "0.0.0.0", () => {

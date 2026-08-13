@@ -3,7 +3,9 @@ import path from 'path';
 import crypto from 'crypto';
 import { Redis } from '@upstash/redis';
 
-const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
+const DB_FILE = process.env.VERTEX_DB_FILE
+  ? path.resolve(process.env.VERTEX_DB_FILE)
+  : path.join(process.cwd(), 'data', 'db.json');
 const UPSTASH_DB_KEY = 'app:spotify:db_v1';
 const UPSTASH_DB_BACKUP_KEY = 'app:spotify:db_v1:previous';
 export const ADMIN_USER_ID = 'usr_1785645840720_7coat';
@@ -19,6 +21,12 @@ export interface UserRecord {
   bio: string;
   favoriteGenres: string[];
   createdAt: string;
+  bannedAt: string | null;
+  banReason: string | null;
+  bannedBy: string | null;
+  archivedAt: string | null;
+  archivedBy: string | null;
+  archiveReason: string | null;
   isAdmin?: boolean; // Must be set manually; never settable via public API endpoint.
   isArtist?: boolean;
   artistName?: string;
@@ -50,6 +58,9 @@ export interface PlaylistRecord {
   trackIds: string[];
   trackCount: number;
   createdAt: string;
+  archivedAt: string | null;
+  archivedBy: string | null;
+  archiveReason: string | null;
 }
 
 export interface TrackRecord {
@@ -74,6 +85,21 @@ export interface TrackRecord {
   copyright?: string;
   releaseYear?: number;
   trackNumber?: number;
+  archivedAt: string | null;
+  archivedBy: string | null;
+  archiveReason: string | null;
+}
+
+export interface AdminAuditLogRecord {
+  id: string;
+  actorId: string;
+  action: string;
+  targetType: 'user' | 'track' | 'playlist';
+  targetId: string;
+  timestamp: string;
+  reason: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
 }
 
 export interface UserStateRecord {
@@ -109,6 +135,7 @@ export interface DBData {
   tracks: TrackRecord[];
   userStates: Record<string, UserStateRecord>;
   chatHistories: Record<string, ChatMessageRecord[]>;
+  adminAuditLog: AdminAuditLogRecord[];
 }
 
 function emptyUserState(): UserStateRecord {
@@ -135,6 +162,49 @@ function normalizedIsoDate(value: unknown): string {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value))
     ? new Date(value).toISOString()
     : new Date(0).toISOString();
+}
+
+function normalizedOptionalIsoDate(value: unknown): string | null {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value))
+    ? new Date(value).toISOString()
+    : null;
+}
+
+function normalizedOptionalText(value: unknown, maxLength = 500): string | null {
+  return typeof value === 'string' && value.trim()
+    ? value.trim().slice(0, maxLength)
+    : null;
+}
+
+const SENSITIVE_AUDIT_KEY = /password|passwd|hash|token|credential|secret|authorization|cookie/i;
+
+function sanitizeAuditValue(value: unknown, depth = 0): unknown {
+  if (depth > 4 || value === undefined) return undefined;
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string') return value.slice(0, 2_000);
+  if (Array.isArray(value)) {
+    return value.slice(0, 100).flatMap((item) => {
+      const clean = sanitizeAuditValue(item, depth + 1);
+      return clean === undefined ? [] : [clean];
+    });
+  }
+  if (typeof value !== 'object') return undefined;
+
+  const clean: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>).slice(0, 50)) {
+    if (SENSITIVE_AUDIT_KEY.test(key)) continue;
+    const sanitized = sanitizeAuditValue(nested, depth + 1);
+    if (sanitized !== undefined) clean[key.slice(0, 120)] = sanitized;
+  }
+  return clean;
+}
+
+function sanitizeAuditSummary(value: unknown): Record<string, unknown> | null {
+  const sanitized = sanitizeAuditValue(value);
+  return sanitized && typeof sanitized === 'object' && !Array.isArray(sanitized)
+    ? sanitized as Record<string, unknown>
+    : null;
 }
 
 function normalizeCopyright(value: unknown, fallback: string): string {
@@ -206,10 +276,16 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
         ? Array.from(new Set(rawUser.favoriteGenres.filter((genre): genre is string => typeof genre === 'string' && Boolean(genre.trim())).map((genre) => genre.trim()).filter((genre) => genre.length <= 80))).slice(0, 20)
         : [],
       createdAt: normalizedIsoDate(rawUser.createdAt),
+      bannedAt: id === ADMIN_USER_ID ? null : normalizedOptionalIsoDate(rawUser.bannedAt),
+      banReason: id === ADMIN_USER_ID ? null : normalizedOptionalText(rawUser.banReason),
+      bannedBy: id === ADMIN_USER_ID ? null : normalizedOptionalText(rawUser.bannedBy, 200),
+      archivedAt: id === ADMIN_USER_ID ? null : normalizedOptionalIsoDate(rawUser.archivedAt),
+      archivedBy: id === ADMIN_USER_ID ? null : normalizedOptionalText(rawUser.archivedBy, 200),
+      archiveReason: id === ADMIN_USER_ID ? null : normalizedOptionalText(rawUser.archiveReason),
       // The requested account is the single reserved admin identity. This
       // keeps the allowlist effective when the canonical record is hydrated
       // from an older Upstash snapshot that predates the local flag update.
-      isAdmin: rawUser.isAdmin === true || id === ADMIN_USER_ID,
+      isAdmin: id === ADMIN_USER_ID,
       isArtist: rawUser.isArtist === true,
       artistName: typeof rawUser.artistName === 'string' && rawUser.artistName.trim() ? rawUser.artistName.trim().slice(0, 80) : undefined,
       artistBio: typeof rawUser.artistBio === 'string' ? rawUser.artistBio.trim().slice(0, 2_000) : undefined,
@@ -293,6 +369,9 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
       copyright: normalizeCopyright(rawTrack.copyright, `${cleanReleaseYear || createdYear} ${canonicalArtistName}`),
       releaseYear: cleanReleaseYear,
       trackNumber: Number.isInteger(trackNumber) && trackNumber >= 1 && trackNumber <= 999 ? trackNumber : undefined,
+      archivedAt: normalizedOptionalIsoDate(rawTrack.archivedAt),
+      archivedBy: normalizedOptionalText(rawTrack.archivedBy, 200),
+      archiveReason: normalizedOptionalText(rawTrack.archiveReason),
     });
   }
 
@@ -325,6 +404,9 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
         trackIds: validPlaylistTrackIds,
         trackCount: validPlaylistTrackIds.length,
         createdAt: normalizedIsoDate(playlist.createdAt),
+        archivedAt: normalizedOptionalIsoDate(playlist.archivedAt),
+        archivedBy: normalizedOptionalText(playlist.archivedBy, 200),
+        archiveReason: normalizedOptionalText(playlist.archiveReason),
       };
     });
 
@@ -357,7 +439,7 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
   for (const user of users) {
     const followedArtistIds = userStates[user.id]?.followedArtistIds || [];
     const followersCount = users.reduce(
-      (count, candidate) => count + (userStates[candidate.id]?.followedArtistIds.includes(user.id) ? 1 : 0),
+      (count, candidate) => count + (!candidate.archivedAt && userStates[candidate.id]?.followedArtistIds.includes(user.id) ? 1 : 0),
       0
     );
     const ownedTracks = tracks.filter((track) => track.userId === user.id);
@@ -374,15 +456,19 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
       const genre = recentTrack?.genre?.trim();
       if (genre) recentGenreCounts.set(genre, (recentGenreCounts.get(genre) || 0) + 1);
     }
-    const topGenre = [...recentGenreCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+    const derivedTopGenre = [...recentGenreCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+    const persistedTopGenre = typeof user.stats?.topGenre === 'string' && user.stats.topGenre.trim()
+      ? user.stats.topGenre.trim().slice(0, 80)
+      : derivedTopGenre;
+    const activeFollowedArtistIds = followedArtistIds.filter((artistId) => !userById.get(artistId)?.archivedAt);
     user.stats = {
       hoursListened: secondsListened / 3600,
       secondsListened,
       tracksPlayed: Math.max(0, Math.floor(Number(user.stats?.tracksPlayed) || 0)),
-      topGenre,
-      playlistsCreated: playlists.filter((playlist) => playlist.userId === user.id).length,
-      followersCount,
-      followingCount: followedArtistIds.length,
+      topGenre: persistedTopGenre,
+      playlistsCreated: user.archivedAt ? 0 : playlists.filter((playlist) => playlist.userId === user.id && !playlist.archivedAt).length,
+      followersCount: user.archivedAt ? 0 : followersCount,
+      followingCount: activeFollowedArtistIds.length,
     };
   }
 
@@ -450,7 +536,35 @@ export function sanitizeDBData(input: Partial<DBData> | null | undefined): DBDat
     }));
   }
 
-  return { users, playlists, tracks, userStates, chatHistories };
+  const rawAuditLog = Array.isArray(input?.adminAuditLog) ? input!.adminAuditLog : [];
+  const seenAuditIds = new Set<string>();
+  const adminAuditLog: AdminAuditLogRecord[] = rawAuditLog
+    .slice(-2_000)
+    .flatMap((entry): AdminAuditLogRecord[] => {
+      if (!entry || typeof entry !== 'object') return [];
+      const id = typeof entry.id === 'string' ? entry.id.trim().slice(0, 200) : '';
+      const actorId = typeof entry.actorId === 'string' ? entry.actorId.trim().slice(0, 200) : '';
+      const action = typeof entry.action === 'string' ? entry.action.trim().slice(0, 160) : '';
+      const targetType = entry.targetType === 'user' || entry.targetType === 'track' || entry.targetType === 'playlist'
+        ? entry.targetType
+        : null;
+      const targetId = typeof entry.targetId === 'string' ? entry.targetId.trim().slice(0, 200) : '';
+      if (!id || seenAuditIds.has(id) || !actorId || !action || !targetType || !targetId) return [];
+      seenAuditIds.add(id);
+      return [{
+        id,
+        actorId,
+        action,
+        targetType,
+        targetId,
+        timestamp: normalizedIsoDate(entry.timestamp),
+        reason: normalizedOptionalText(entry.reason, 1_000) || 'No reason recorded',
+        before: sanitizeAuditSummary(entry.before),
+        after: sanitizeAuditSummary(entry.after),
+      }];
+    });
+
+  return { users, playlists, tracks, userStates, chatHistories, adminAuditLog };
 }
 
 let cachedDB: DBData | null = null;
@@ -635,6 +749,7 @@ function readFromLocalDisk(): DBData {
         tracks: [],
         userStates: {},
         chatHistories: {},
+        adminAuditLog: [],
       };
       saveToLocalDisk(defaultData);
       return defaultData;
@@ -647,6 +762,7 @@ function readFromLocalDisk(): DBData {
         tracks: [],
         userStates: {},
         chatHistories: {},
+        adminAuditLog: [],
       };
       saveToLocalDisk(defaultData);
       return defaultData;
@@ -655,7 +771,7 @@ function readFromLocalDisk(): DBData {
     return sanitizeDBData(parsed);
   } catch (err) {
     console.error('Error reading db.json:', err);
-    return { users: [], playlists: [], tracks: [], userStates: {}, chatHistories: {} };
+    return { users: [], playlists: [], tracks: [], userStates: {}, chatHistories: {}, adminAuditLog: [] };
   }
 }
 
@@ -780,4 +896,21 @@ export function deleteSessionFromRedis(token: string): void {
   redis.hdel(SESSIONS_HASH_KEY, token).catch((err) => {
     console.error('Failed to delete session from Upstash Redis:', err);
   });
+}
+
+/** Remove every persisted session belonging to a user (used by moderation). */
+export async function deleteSessionsForUserFromRedis(userId: string): Promise<number> {
+  const redis = getUpstashClient();
+  if (!redis || !userId) return 0;
+  try {
+    const sessions = await redis.hgetall<Record<string, string>>(SESSIONS_HASH_KEY);
+    const tokens = Object.entries(sessions || {})
+      .filter(([, ownerId]) => ownerId === userId)
+      .map(([token]) => token);
+    if (tokens.length > 0) await redis.hdel(SESSIONS_HASH_KEY, ...tokens);
+    return tokens.length;
+  } catch (err) {
+    console.error('Failed to revoke user sessions from Upstash Redis:', err);
+    return 0;
+  }
 }
