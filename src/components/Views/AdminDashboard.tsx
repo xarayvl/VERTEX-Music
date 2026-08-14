@@ -5,8 +5,10 @@ import {
   Ban,
   BarChart3,
   Bug,
+  Check,
   CheckCircle2,
   Clock3,
+  Copy,
   FileAudio,
   History,
   KeyRound,
@@ -223,6 +225,7 @@ export const AdminDashboard: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutationMessage, setMutationMessage] = useState<string | null>(null);
+  const [copiedErrorId, setCopiedErrorId] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [moderationReason, setModerationReason] = useState('');
   const [cascadeRestore, setCascadeRestore] = useState(true);
@@ -333,9 +336,45 @@ export const AdminDashboard: React.FC = () => {
       entry.path,
       entry.userId,
       entry.instanceId,
+      entry.details ? JSON.stringify(entry.details) : null,
       entry.status === null ? null : String(entry.status),
     ].some((value) => value?.toLowerCase().includes(normalized)));
   }, [query, snapshot]);
+
+  const copyError = useCallback(async (entry: AdminError) => {
+    const text = JSON.stringify(entry, null, 2);
+    try {
+      let copied = false;
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        } catch {
+          // Some browsers expose Clipboard API but deny it outside a focused
+          // secure context. Fall back to a temporary selected textarea.
+        }
+      }
+      if (!copied) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        copied = document.execCommand('copy');
+        textarea.remove();
+        if (!copied) throw new Error('Clipboard copy was rejected.');
+      }
+      setCopiedErrorId(entry.id);
+      window.setTimeout(() => {
+        setCopiedErrorId((current) => current === entry.id ? null : current);
+      }, 2_000);
+    } catch {
+      setMutationError('Unable to copy this error to the clipboard.');
+    }
+  }, []);
 
   const submitStats = async (event: FormEvent) => {
     event.preventDefault();
@@ -474,16 +513,27 @@ export const AdminDashboard: React.FC = () => {
         <div className="divide-y divide-white/[0.06]">
           {filteredErrors.map((entry) => <article key={entry.id} className="p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-black text-white">{entry.source}</span>
                   <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${entry.origin === 'server' ? 'bg-red-400/10 text-red-300' : 'bg-sky-400/10 text-sky-300'}`}>{entry.origin}</span>
                   {entry.code && <span className="rounded-full bg-white/[0.06] px-2 py-1 font-mono text-[10px] text-zinc-400">{entry.code}</span>}
                   {entry.status !== null && <span className="rounded-full bg-amber-400/10 px-2 py-1 font-mono text-[10px] text-amber-300">HTTP {entry.status}</span>}
                 </div>
-                <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5 text-zinc-300">{entry.message}</p>
+                <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-xs leading-5 text-zinc-300">{entry.message}</pre>
               </div>
-              <span className="shrink-0 text-[10px] text-zinc-600">{formatDate(entry.timestamp)}</span>
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                <span className="text-[10px] text-zinc-600">{formatDate(entry.timestamp)}</span>
+                <button
+                  type="button"
+                  onClick={() => void copyError(entry)}
+                  className={`${buttonClass} border border-white/10 bg-white/[0.05] py-2 text-zinc-300 hover:bg-white/10 hover:text-white`}
+                  aria-label={`Copy error ${entry.correlationId}`}
+                >
+                  {copiedErrorId === entry.id ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copiedErrorId === entry.id ? 'Copied' : 'Copy error'}
+                </button>
+              </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] text-zinc-600">
               <span className="break-all">CID {entry.correlationId}</span>
@@ -491,7 +541,7 @@ export const AdminDashboard: React.FC = () => {
               {entry.userId && <span className="break-all">user {entry.userId}</span>}
               <span className="break-all">instance {entry.instanceId}</span>
             </div>
-            {entry.details && <details className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3"><summary className="cursor-pointer text-[10px] font-black uppercase text-zinc-500">Redacted error details</summary><pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-zinc-400">{JSON.stringify(entry.details, null, 2)}</pre></details>}
+            {entry.details && <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3"><p className="text-[10px] font-black uppercase text-zinc-500">Safe error details</p><pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-zinc-400">{JSON.stringify(entry.details, null, 2)}</pre></div>}
           </article>)}
           {!filteredErrors.length && <p className="p-8 text-center text-xs text-zinc-500">No error entries match this search.</p>}
         </div>

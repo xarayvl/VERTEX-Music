@@ -796,6 +796,16 @@ async function startServer() {
       : null;
     const line = Number.isInteger(req.body?.line) && req.body.line >= 0 ? Math.min(req.body.line, 10_000_000) : null;
     const column = Number.isInteger(req.body?.column) && req.body.column >= 0 ? Math.min(req.body.column, 10_000_000) : null;
+    const rawClientDetails = req.body?.details;
+    const clientDetails: Record<string, unknown> = {};
+    if (rawClientDetails && typeof rawClientDetails === "object" && !Array.isArray(rawClientDetails)) {
+      for (const [key, value] of Object.entries(rawClientDetails).slice(0, 20)) {
+        if (!key || key.length > 100 || key === "__proto__" || key === "prototype" || key === "constructor") continue;
+        clientDetails[key] = value;
+      }
+    }
+    if (line !== null) clientDetails.line = line;
+    if (column !== null) clientDetails.column = column;
 
     recordAdminError({
       origin: "client",
@@ -807,7 +817,7 @@ async function startServer() {
       method: req.method,
       path: pathname || req.path,
       userId: sessionUserId || null,
-      details: line === null && column === null ? null : { line, column },
+      details: Object.keys(clientDetails).length ? clientDetails : null,
     });
     return res.status(204).end();
   });
