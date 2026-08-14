@@ -1,21 +1,19 @@
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
 import { configureErrorLogSecrets, readAdminErrorLog, recordAdminError } from "./errorLog.js";
 
-test("admin error log persists bounded, redacted operational records", async (t) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vertex-error-log-test-"));
-  const previousFile = process.env.VERTEX_ERROR_LOG_FILE;
-  const logFile = path.join(tempDir, "errors.jsonl");
-  process.env.VERTEX_ERROR_LOG_FILE = logFile;
+test("admin error log keeps bounded, redacted operational records without a filesystem sink", async (t) => {
+  const previousRedisUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const previousRedisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  process.env.UPSTASH_REDIS_REST_URL = "";
+  process.env.UPSTASH_REDIS_REST_TOKEN = "";
   configureErrorLogSecrets(() => ["configured-test-secret"]);
-  t.after(async () => {
-    if (previousFile === undefined) delete process.env.VERTEX_ERROR_LOG_FILE;
-    else process.env.VERTEX_ERROR_LOG_FILE = previousFile;
+  t.after(() => {
+    if (previousRedisUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL;
+    else process.env.UPSTASH_REDIS_REST_URL = previousRedisUrl;
+    if (previousRedisToken === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    else process.env.UPSTASH_REDIS_REST_TOKEN = previousRedisToken;
     configureErrorLogSecrets(() => []);
-    await fs.rm(tempDir, { recursive: true, force: true });
   });
 
   const record = recordAdminError({
@@ -41,17 +39,9 @@ test("admin error log persists bounded, redacted operational records", async (t)
     nested: { safe: "visible" },
   });
 
-  const deadline = Date.now() + 2_000;
-  let stored = "";
-  while (Date.now() < deadline) {
-    stored = await fs.readFile(logFile, "utf8").catch(() => "");
-    if (stored.includes(record.id)) break;
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  assert(stored.includes(record.id));
-  assert(!stored.includes("configured-test-secret"));
-  assert(!stored.includes("must-never-appear"));
-
   const listed = await readAdminErrorLog(10);
-  assert(listed.some((entry) => entry.id === record.id && entry.correlationId === "test-correlation-id"));
+  const stored = listed.find((entry) => entry.id === record.id && entry.correlationId === "test-correlation-id");
+  assert(stored);
+  assert(!JSON.stringify(stored).includes("configured-test-secret"));
+  assert(!JSON.stringify(stored).includes("must-never-appear"));
 });

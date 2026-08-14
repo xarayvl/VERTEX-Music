@@ -1,12 +1,7 @@
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
 import { Redis } from '@upstash/redis';
 import { isStoredSessionRecord, remainingSessionTtlMs, type StoredSessionRecord } from './sessionSecurity.js';
 
-const DB_FILE = process.env.VERTEX_DB_FILE
-  ? path.resolve(process.env.VERTEX_DB_FILE)
-  : path.join(process.cwd(), 'data', 'db.json');
 const UPSTASH_DB_KEY = 'app:spotify:db_v1';
 const UPSTASH_DB_BACKUP_KEY = 'app:spotify:db_v1:previous';
 export const ADMIN_USER_ID = 'usr_1785645840720_7coat';
@@ -143,6 +138,28 @@ function emptyUserState(): UserStateRecord {
   return { likedTrackIds: [], recentTrackIds: [], followedArtistIds: [] };
 }
 
+function emptyDBData(): DBData {
+  return {
+    users: [],
+    playlists: [],
+    tracks: [],
+    userStates: {},
+    chatHistories: {},
+    adminAuditLog: [],
+  };
+}
+
+function cloneDBData(data: DBData): DBData {
+  return JSON.parse(JSON.stringify(data)) as DBData;
+}
+
+function hasLegacyLocalMedia(input: Partial<DBData>): boolean {
+  const isLegacy = (value: unknown) => typeof value === 'string' && value.startsWith('/uploads/');
+  return (Array.isArray(input.users) && input.users.some((user) => isLegacy(user?.avatarUrl) || isLegacy(user?.bannerUrl)))
+    || (Array.isArray(input.tracks) && input.tracks.some((track) => isLegacy(track?.audioUrl) || isLegacy(track?.coverUrl)))
+    || (Array.isArray(input.playlists) && input.playlists.some((playlist) => isLegacy(playlist?.coverUrl)));
+}
+
 function isHttpUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
@@ -153,7 +170,7 @@ function isHttpUrl(value: string): boolean {
 }
 
 function isPersistedMediaUrl(value: string, expected: 'audio' | 'image'): boolean {
-  if (value.startsWith('/uploads/') || value.startsWith('/api/r2-file/') || isHttpUrl(value)) return true;
+  if (value.startsWith('/api/r2-file/') || isHttpUrl(value)) return true;
   return expected === 'audio'
     ? /^data:audio\/[^;]+;base64,/i.test(value)
     : /^data:image\/[^;]+;base64,/i.test(value) || /^data:image\/svg\+xml/i.test(value);
@@ -600,9 +617,33 @@ export function isUpstashConfigured(): boolean {
   return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
 }
 
-export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<void> {
+function isTestRuntime(): boolean {
+  return process.env.NODE_ENV === 'test';
+}
+
+function requireTestRuntimeWithoutUpstash(): void {
+  if (!isTestRuntime()) {
+    throw new Error('Upstash Redis is required. Configure UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.');
+  }
+}
+
+function testDatabaseSeed(): DBData {
+  requireTestRuntimeWithoutUpstash();
+  const encoded = process.env.VERTEX_TEST_DB_BASE64?.trim();
+  if (!encoded) return emptyDBData();
   try {
-    data = sanitizeDBData(data);
+    return sanitizeDBData(JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')));
+  } catch (error) {
+    throw new Error('VERTEX_TEST_DB_BASE64 does not contain a valid database fixture.', { cause: error });
+  }
+}
+
+function allowEmptyDatabaseInitialization(): boolean {
+  return process.env.ALLOW_EMPTY_DATABASE_INIT === '1';
+}
+
+export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<void> {
+  data = sanitizeDBData(data);
     const userIds = (data.users || []).map((u) => u.id).filter(Boolean);
     const trackIds = (data.tracks || []).map((t) => t.id).filter(Boolean);
     const playlistIds = (data.playlists || []).map((p) => p.id).filter(Boolean);
@@ -689,114 +730,53 @@ export async function syncUpstashIndices(redis: Redis, data: DBData): Promise<vo
       ...previousTrackIds.filter((id) => !nextTrackIdSet.has(id)).flatMap((id) => [`app:song:${id}`, `app:track:${id}`]),
       ...previousPlaylistIds.filter((id) => !nextPlaylistIdSet.has(id)).map((id) => `app:playlist:${id}`),
     ];
-    if (staleEntityKeys.length > 0) {
-      await redis.del(...staleEntityKeys);
-    }
-  } catch (err) {
-    console.error('Failed syncing indices to Upstash Redis:', err);
+  if (staleEntityKeys.length > 0) {
+    await redis.del(...staleEntityKeys);
   }
 }
 
 /**
- * Initializes DB by pulling initial dataset from Upstash Redis if available.
+ * Initializes the canonical database from Upstash Redis. Tests use an
+ * explicitly injected in-memory fixture so production never falls back to a
+ * filesystem database.
  */
 export async function initUpstashDB(): Promise<DBData> {
   const redis = getUpstashClient();
-  if (redis) {
-    try {
-      console.log('⚡ Upstash Redis detected! Syncing database from Upstash...');
-      const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
-      if (remoteData && typeof remoteData === 'object') {
-        const validated = sanitizeDBData(remoteData);
-        cachedDB = validated;
-        cachedDBFetchedAt = Date.now();
-        lastPersistedJson = JSON.stringify(validated);
-        // Also mirror to local disk as secondary fallback
-        saveToLocalDisk(validated);
-        await syncUpstashIndices(redis, validated);
-        console.log(`✅ Loaded ${validated.users.length} users, ${validated.tracks.length} tracks from Upstash Redis.`);
-        return validated;
-      } else {
-        console.log('ℹ️ Upstash Redis key empty. Initializing from the canonical local database...');
-        const localData = readFromLocalDisk();
-        cachedDB = localData;
-        cachedDBFetchedAt = Date.now();
-        lastPersistedJson = JSON.stringify(localData);
-        await syncUpstashIndices(redis, localData);
-        return localData;
-      }
-    } catch (err) {
-      console.error('Failed to communicate with Upstash Redis, falling back to local disk:', err);
-    }
+  if (!redis) {
+    requireTestRuntimeWithoutUpstash();
+    const seeded = testDatabaseSeed();
+    cachedDB = seeded;
+    cachedDBFetchedAt = Date.now();
+    lastPersistedJson = JSON.stringify(seeded);
+    return seeded;
   }
 
-  const diskData = readFromLocalDisk();
-  cachedDB = diskData;
-  cachedDBFetchedAt = Date.now();
-  lastPersistedJson = JSON.stringify(diskData);
-  return diskData;
-}
-
-function readFromLocalDisk(): DBData {
   try {
-    const dir = path.dirname(DB_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    console.log('⚡ Upstash Redis detected! Loading the canonical database...');
+    const remoteData = await redis.get<DBData>(UPSTASH_DB_KEY);
+    if ((!remoteData || typeof remoteData !== 'object') && !allowEmptyDatabaseInitialization()) {
+      throw new Error(
+        `Upstash key ${UPSTASH_DB_KEY} is empty. Set ALLOW_EMPTY_DATABASE_INIT=1 only for an intentional first-time initialization.`,
+      );
     }
-    if (!fs.existsSync(DB_FILE)) {
-      const defaultData: DBData = {
-        users: [],
-        playlists: [],
-        tracks: [],
-        userStates: {},
-        chatHistories: {},
-        adminAuditLog: [],
-      };
-      saveToLocalDisk(defaultData);
-      return defaultData;
+    if (remoteData && typeof remoteData === 'object' && hasLegacyLocalMedia(remoteData)) {
+      throw new Error('The Upstash database still references legacy /uploads media. Migrate those objects to R2 before startup.');
     }
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    if (!raw || !raw.trim()) {
-      const defaultData: DBData = {
-        users: [],
-        playlists: [],
-        tracks: [],
-        userStates: {},
-        chatHistories: {},
-        adminAuditLog: [],
-      };
-      saveToLocalDisk(defaultData);
-      return defaultData;
-    }
-    const parsed = JSON.parse(raw);
-    return sanitizeDBData(parsed);
-  } catch (err) {
-    console.error('Error reading db.json:', err);
-    return { users: [], playlists: [], tracks: [], userStates: {}, chatHistories: {}, adminAuditLog: [] };
-  }
-}
-
-function saveToLocalDisk(data: DBData): void {
-  try {
-    const dir = path.dirname(DB_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    const tempFile = `${DB_FILE}.tmp.${crypto.randomUUID()}`;
-    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tempFile, DB_FILE);
-  } catch (err) {
-    console.error('Error writing db.json:', err);
+    const validated = remoteData && typeof remoteData === 'object' ? sanitizeDBData(remoteData) : emptyDBData();
+    cachedDB = validated;
+    cachedDBFetchedAt = Date.now();
+    lastPersistedJson = JSON.stringify(validated);
+    await syncUpstashIndices(redis, validated);
+    console.log(`✅ Loaded ${validated.users.length} users, ${validated.tracks.length} tracks from Upstash Redis.`);
+    return validated;
+  } catch (error) {
+    throw new Error('The canonical Upstash database could not be initialized.', { cause: error });
   }
 }
 
 export function readDB(): DBData {
-  if (cachedDB) {
-    return cachedDB;
-  }
-  const data = readFromLocalDisk();
-  cachedDB = data;
-  return data;
+  if (!cachedDB) throw new Error('The database has not been initialized from Upstash Redis.');
+  return cloneDBData(cachedDB);
 }
 
 export async function readDBAsync(forceRemote = false): Promise<DBData> {
@@ -810,11 +790,12 @@ export async function readDBAsync(forceRemote = false): Promise<DBData> {
         cachedDB = validated;
         cachedDBFetchedAt = Date.now();
         lastPersistedJson = JSON.stringify(validated);
-        saveToLocalDisk(validated);
-        return validated;
+        return cloneDBData(validated);
       }
+      if (forceRemote) throw new Error(`Upstash key ${UPSTASH_DB_KEY} is missing.`);
     } catch (err) {
       console.error('Async Upstash read error:', err);
+      if (forceRemote) throw new Error('The latest Upstash database snapshot could not be read.', { cause: err });
     }
   }
   return readDB();
@@ -824,14 +805,14 @@ function enqueueDatabaseWrite(input: DBData): Promise<void> {
   const data = sanitizeDBData(input);
   const serialized = JSON.stringify(data);
   if (serialized === lastPersistedJson) return writeChain;
-  cachedDB = data;
-  cachedDBFetchedAt = Date.now();
   writeChain = writeChain
     .catch(() => undefined)
     .then(async () => {
-      saveToLocalDisk(data);
       const redis = getUpstashClient();
       if (redis) await syncUpstashIndices(redis, data);
+      else requireTestRuntimeWithoutUpstash();
+      cachedDB = data;
+      cachedDBFetchedAt = Date.now();
       lastPersistedJson = serialized;
     })
     .catch((error) => {
@@ -850,10 +831,10 @@ export async function writeDBAsync(data: DBData): Promise<void> {
 }
 
 // ==========================================
-// SESSION PERSISTENCE (digest-keyed Redis records, in-memory fallback)
+// SESSION PERSISTENCE (digest-keyed Redis records, test-only memory adapter)
 // ==========================================
 // The raw bearer secret exists only in the browser's HttpOnly cookie and
-// transient request memory. Redis and this fallback map are keyed exclusively
+// transient request memory. Redis and the test adapter are keyed exclusively
 // by SHA-256 digests, with one TTL-bearing Redis key per session.
 const LEGACY_SESSIONS_HASH_KEY = 'app:sessions';
 const SESSION_KEY_PREFIX = 'app:session:';
@@ -886,7 +867,10 @@ function ttlSeconds(record: StoredSessionRecord): number {
 
 export async function deleteLegacySessionsFromRedis(): Promise<number> {
   const redis = getUpstashClient();
-  if (!redis) return 0;
+  if (!redis) {
+    requireTestRuntimeWithoutUpstash();
+    return 0;
+  }
   return redis.del(LEGACY_SESSIONS_HASH_KEY);
 }
 
@@ -897,6 +881,7 @@ export async function createSessionInStore(digest: string, record: StoredSession
 
   const redis = getUpstashClient();
   if (!redis) {
+    requireTestRuntimeWithoutUpstash();
     inMemorySessions.set(digest, { ...record });
     return;
   }
@@ -923,6 +908,7 @@ export async function readSessionFromStore(digest: string): Promise<StoredSessio
     return isStoredSessionRecord(record) ? record : null;
   }
 
+  requireTestRuntimeWithoutUpstash();
   const record = inMemorySessions.get(digest);
   if (!record) return null;
   if (!isStoredSessionRecord(record) || remainingSessionTtlMs(record) <= 0) {
@@ -939,6 +925,7 @@ export async function readUserSessionVersionFromStore(userId: string): Promise<n
     const version = await redis.get<number>(userSessionVersionKey(userId));
     return Number.isInteger(version) && Number(version) >= 0 ? Number(version) : 0;
   }
+  requireTestRuntimeWithoutUpstash();
   return inMemoryUserSessionVersions.get(userId) || 0;
 }
 
@@ -950,6 +937,7 @@ export async function touchSessionInStore(digest: string, record: StoredSessionR
     const result = await redis.set(sessionKey(digest), record, { ex: ttlSeconds(record), xx: true });
     return result !== null;
   }
+  requireTestRuntimeWithoutUpstash();
   if (!inMemorySessions.has(digest)) return false;
   inMemorySessions.set(digest, { ...record });
   return true;
@@ -968,6 +956,7 @@ export async function deleteSessionFromStore(digest: string, userId?: string): P
     if (ownerId) await redis.srem(userSessionsKey(ownerId), digest);
     return deleted;
   }
+  requireTestRuntimeWithoutUpstash();
   return inMemorySessions.delete(digest) ? 1 : 0;
 }
 
@@ -992,6 +981,7 @@ export async function deleteSessionsForUserFromStore(userId: string): Promise<nu
     }
   }
 
+  requireTestRuntimeWithoutUpstash();
   inMemoryUserSessionVersions.set(userId, (inMemoryUserSessionVersions.get(userId) || 0) + 1);
   let deleted = 0;
   for (const [digest, record] of inMemorySessions) {
@@ -1015,6 +1005,7 @@ export async function countSessionsInStore(): Promise<number> {
     return count;
   }
 
+  requireTestRuntimeWithoutUpstash();
   for (const [digest, record] of inMemorySessions) {
     if (remainingSessionTtlMs(record) <= 0) inMemorySessions.delete(digest);
   }

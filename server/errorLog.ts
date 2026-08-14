@@ -1,13 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
 import { getUpstashClient } from "./db.js";
 import { createCorrelationId, redactLogText, safeErrorDetails } from "./errorSecurity.js";
 
 const ERROR_LOG_REDIS_KEY = "app:admin:error-log:v1";
 const MAX_ERROR_RECORDS = 1_000;
-const MAX_LOCAL_LOG_BYTES = 5 * 1024 * 1024;
 const SENSITIVE_KEY_PATTERN = /password|passwd|secret|token|authorization|cookie|credential|api[_-]?key|access[_-]?key/i;
 const INSTANCE_ID = `instance_${crypto.randomUUID()}`;
 
@@ -46,9 +43,7 @@ const requestContext = new AsyncLocalStorage<ErrorRequestContext>();
 const memoryRecords: AdminErrorLogRecord[] = [];
 let secretProvider: () => readonly (string | undefined)[] = () => [];
 let consoleCaptureInstalled = false;
-let fileWriteChain: Promise<void> = Promise.resolve();
 let redisWriteChain: Promise<void> = Promise.resolve();
-let localWriteCount = 0;
 
 function configuredSecrets(): readonly (string | undefined)[] {
   try {
@@ -56,11 +51,6 @@ function configuredSecrets(): readonly (string | undefined)[] {
   } catch {
     return [];
   }
-}
-
-function errorLogFile(): string {
-  const configured = process.env.VERTEX_ERROR_LOG_FILE?.trim();
-  return configured ? path.resolve(configured) : path.join(process.cwd(), "data", "error-log.jsonl");
 }
 
 function boundedText(value: unknown, maxLength: number, fallback = ""): string {
@@ -128,27 +118,7 @@ function parseStoredRecord(value: unknown): AdminErrorLogRecord | null {
   }
 }
 
-async function trimLocalLogIfNeeded(file: string): Promise<void> {
-  localWriteCount += 1;
-  if (localWriteCount % 100 !== 0) return;
-  const stats = await fs.promises.stat(file);
-  if (stats.size <= MAX_LOCAL_LOG_BYTES) return;
-  const content = await fs.promises.readFile(file, "utf8");
-  const retained = content.split("\n").filter(Boolean).slice(-MAX_ERROR_RECORDS);
-  await fs.promises.writeFile(file, retained.length ? `${retained.join("\n")}\n` : "", "utf8");
-}
-
 function persistRecord(record: AdminErrorLogRecord): void {
-  const file = errorLogFile();
-  fileWriteChain = fileWriteChain
-    .catch(() => undefined)
-    .then(async () => {
-      await fs.promises.mkdir(path.dirname(file), { recursive: true });
-      await fs.promises.appendFile(file, `${JSON.stringify(record)}\n`, "utf8");
-      await trimLocalLogIfNeeded(file);
-    })
-    .catch(() => undefined);
-
   redisWriteChain = redisWriteChain
     .catch(() => undefined)
     .then(async () => {
@@ -268,16 +238,6 @@ export function installProcessErrorCapture(): void {
 export async function readAdminErrorLog(limit = 500): Promise<AdminErrorLogRecord[]> {
   const boundedLimit = Math.max(1, Math.min(MAX_ERROR_RECORDS, Math.floor(limit)));
   const collected: AdminErrorLogRecord[] = [...memoryRecords];
-
-  try {
-    const content = await fs.promises.readFile(errorLogFile(), "utf8");
-    for (const line of content.split("\n").filter(Boolean).slice(-MAX_ERROR_RECORDS)) {
-      const record = parseStoredRecord(line);
-      if (record) collected.push(record);
-    }
-  } catch {
-    // The local log is an optional persistence fallback and may not exist yet.
-  }
 
   try {
     const redis = getUpstashClient();

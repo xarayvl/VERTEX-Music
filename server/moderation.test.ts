@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import fs from "node:fs/promises";
 import net from "node:net";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -70,8 +68,6 @@ async function request(
 }
 
 test("admin moderation, account controls, archive recovery, and audit safety", { timeout: 60_000 }, async (t) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vertex-moderation-test-"));
-  const dbFile = path.join(tempDir, "db.json");
   const [adminHash, memberHash] = await Promise.all([
     bcrypt.hash(ADMIN_PASSWORD, 4),
     bcrypt.hash(MEMBER_PASSWORD, 4),
@@ -81,7 +77,7 @@ test("admin moderation, account controls, archive recovery, and audit safety", {
   const trackId = "trk_member_test";
   const playlistId = "pl_member_test";
 
-  await fs.writeFile(dbFile, JSON.stringify({
+  const initialDatabase = {
     users: [
       {
         id: ADMIN_USER_ID,
@@ -140,7 +136,7 @@ test("admin moderation, account controls, archive recovery, and audit safety", {
     },
     chatHistories: { [ADMIN_USER_ID]: [], [memberId]: [] },
     adminAuditLog: [],
-  }, null, 2));
+  };
 
   const port = await availablePort();
   const origin = `http://127.0.0.1:${port}`;
@@ -152,8 +148,7 @@ test("admin moderation, account controls, archive recovery, and audit safety", {
       NODE_ENV: "test",
       PORT: String(port),
       VERTEX_API_ONLY: "1",
-      VERTEX_DB_FILE: dbFile,
-      VERTEX_ERROR_LOG_FILE: path.join(tempDir, "error-log.jsonl"),
+      VERTEX_TEST_DB_BASE64: Buffer.from(JSON.stringify(initialDatabase), "utf8").toString("base64"),
       UPSTASH_REDIS_REST_URL: "",
       UPSTASH_REDIS_REST_TOKEN: "",
       R2_ACCOUNT_ID: "",
@@ -168,7 +163,6 @@ test("admin moderation, account controls, archive recovery, and audit safety", {
       child.kill("SIGTERM");
       await Promise.race([once(child, "exit"), new Promise((resolve) => setTimeout(resolve, 2_000))]);
     }
-    await fs.rm(tempDir, { recursive: true, force: true });
   });
   await waitForServer(origin, child);
 
@@ -200,6 +194,27 @@ test("admin moderation, account controls, archive recovery, and audit safety", {
   assert.equal(missingMedia.body.correlationId, missingMedia.correlationId);
   assert.match(missingMedia.correlationId || "", /^[0-9a-f-]{36}$/i);
   assert(!JSON.stringify(missingMedia.body).includes("R2"));
+
+  const legacyLocalMedia = await request(origin, "/uploads/usr_member_test/audio.ogg");
+  assert.equal(legacyLocalMedia.status, 410);
+  assert.equal(legacyLocalMedia.body.code, "MEDIA_NOT_FOUND");
+
+  const uploadWithoutR2 = await request(origin, "/api/tracks", {
+    method: "POST",
+    cookie: memberCookie,
+    body: {
+      title: "Must Not Persist Locally",
+      album: "Single",
+      audioUrl: "data:audio/ogg;base64,T2dnUw==",
+      audioFileName: "no-local-fallback.ogg",
+      duration: 1,
+      genre: "Test",
+    },
+  });
+  assert.equal(uploadWithoutR2.status, 500);
+  assert.equal(uploadWithoutR2.body.code, "STORAGE_UPLOAD_FAILED");
+  const afterRejectedUpload = await request(origin, "/api/data?scope=shared");
+  assert(!afterRejectedUpload.body.tracks.some((track: { title: string }) => track.title === "Must Not Persist Locally"));
 
   const aiConfigurationError = await request(origin, "/api/chat", {
     method: "POST",

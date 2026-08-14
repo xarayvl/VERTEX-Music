@@ -163,7 +163,7 @@ function isHttpUrl(value: string): boolean {
 }
 
 function isStoredMediaUrl(value: string): boolean {
-  return value.startsWith("/uploads/") || value.startsWith("/api/r2-file/") || isHttpUrl(value);
+  return value.startsWith("/api/r2-file/") ? getManagedStorageKey(value) !== null : isHttpUrl(value);
 }
 
 function normalizeCopyright(value: unknown, fallback: string): string {
@@ -362,25 +362,10 @@ function getR2Client(): S3Client | null {
   return null;
 }
 
-function saveBufferToLocalDisk(buffer: Buffer, safeUserId: string, filename: string): string {
-  const uploadsRootDir = path.resolve(process.cwd(), "data", "uploads");
-  const userUploadDir = path.resolve(uploadsRootDir, safeUserId);
-  const localFilePath = path.resolve(userUploadDir, filename);
-
-  if (!userUploadDir.startsWith(`${uploadsRootDir}${path.sep}`) || !localFilePath.startsWith(`${userUploadDir}${path.sep}`)) {
-    throw new Error("Invalid target directory path");
-  }
-
-  fs.mkdirSync(userUploadDir, { recursive: true });
-  fs.writeFileSync(localFilePath, buffer);
-  return `/uploads/${safeUserId}/${filename}`;
-}
-
-function getManagedStorageKey(mediaUrl: string): string | null {
+function getManagedStorageKey(mediaUrl: string, expectedOwnerId?: string): string | null {
   try {
     let key = '';
-    if (mediaUrl.startsWith('/uploads/')) key = mediaUrl.slice('/uploads/'.length);
-    else if (mediaUrl.startsWith('/api/r2-file/')) key = mediaUrl.slice('/api/r2-file/'.length);
+    if (mediaUrl.startsWith('/api/r2-file/')) key = mediaUrl.slice('/api/r2-file/'.length);
     else if (isHttpUrl(mediaUrl) && process.env.R2_PUBLIC_DOMAIN) {
       const media = new URL(mediaUrl);
       const configured = new URL(
@@ -393,25 +378,16 @@ function getManagedStorageKey(mediaUrl: string): string | null {
     }
     key = decodeURIComponent(key).replace(/\\/g, '/');
     if (!key || key.startsWith('/') || key.split('/').some((segment) => !segment || segment === '.' || segment === '..')) return null;
+    if (expectedOwnerId && key.split('/', 1)[0] !== sanitizeUserId(expectedOwnerId)) return null;
     return key;
   } catch {
     return null;
   }
 }
 
-async function deleteManagedFile(mediaUrl: string, correlationId = createCorrelationId()): Promise<void> {
-  const key = getManagedStorageKey(mediaUrl);
+async function deleteManagedFile(mediaUrl: string, ownerUserId: string, correlationId = createCorrelationId()): Promise<void> {
+  const key = getManagedStorageKey(mediaUrl, ownerUserId);
   if (!key) return;
-
-  const uploadsRoot = path.resolve(process.cwd(), 'data', 'uploads');
-  const target = path.resolve(uploadsRoot, key);
-  if (target.startsWith(`${uploadsRoot}${path.sep}`)) {
-    try {
-      if (fs.existsSync(target) && fs.statSync(target).isFile()) fs.rmSync(target, { force: true });
-    } catch (error) {
-      logRequestError("Local media deletion failed", correlationId, error, { operation: "delete-local-media" });
-    }
-  }
 
   const r2 = getR2Client();
   const bucketName = process.env.R2_BUCKET_NAME;
@@ -424,18 +400,28 @@ async function deleteManagedFile(mediaUrl: string, correlationId = createCorrela
   }
 }
 
-function collectReferencedMediaUrls(db: { users: UserRecord[]; tracks: TrackRecord[]; playlists: PlaylistRecord[] }): Set<string> {
+function collectReferencedMediaKeys(db: { users: UserRecord[]; tracks: TrackRecord[]; playlists: PlaylistRecord[] }): Set<string> {
   const refs = new Set<string>();
+  const add = (mediaUrl: string | undefined) => {
+    if (!mediaUrl) return;
+    const key = getManagedStorageKey(mediaUrl);
+    if (key) refs.add(key);
+  };
   for (const user of db.users) {
-    if (user.avatarUrl) refs.add(user.avatarUrl);
-    if (user.bannerUrl) refs.add(user.bannerUrl);
+    add(user.avatarUrl);
+    add(user.bannerUrl);
   }
   for (const track of db.tracks) {
-    if (track.audioUrl) refs.add(track.audioUrl);
-    if (track.coverUrl) refs.add(track.coverUrl);
+    add(track.audioUrl);
+    add(track.coverUrl);
   }
-  for (const playlist of db.playlists) if (playlist.coverUrl) refs.add(playlist.coverUrl);
+  for (const playlist of db.playlists) add(playlist.coverUrl);
   return refs;
+}
+
+function isManagedMediaReferenced(referencedKeys: Set<string>, mediaUrl: string): boolean {
+  const key = getManagedStorageKey(mediaUrl);
+  return key ? referencedKeys.has(key) : true;
 }
 
 type RateLimitOptions = {
@@ -526,39 +512,34 @@ async function saveUploadedFile(
     else cleanMime = filePrefix.includes('audio') ? 'audio/mpeg' : 'image/jpeg';
   }
 
-  // Persist the exact same object key locally. The previous implementation
-  // generated a second random filename and returned a path that did not exist.
-  const localUrl = saveBufferToLocalDisk(buffer, safeUserId, filename);
-
   const r2 = getR2Client();
   const bucketName = process.env.R2_BUCKET_NAME;
-
-  if (r2 && bucketName) {
-    try {
-      await r2.send(
-        new PutObjectCommand({
-          Bucket: bucketName,
-          Key: key,
-          Body: buffer,
-          ContentType: cleanMime,
-        })
-      );
-
-      const publicDomain = process.env.R2_PUBLIC_DOMAIN;
-      if (publicDomain && publicDomain.trim() && !publicDomain.includes('.r2.dev')) {
-        const cleanDomain = publicDomain.trim().replace(/\/+$/, "");
-        return `${cleanDomain}/${key}`;
-      } else {
-        return `/api/r2-file/${key}`;
-      }
-    } catch (r2Error) {
-      logRequestError("Cloudflare R2 upload failed; using local fallback", correlationId, r2Error, {
-        operation: "upload-r2-media",
-      });
-    }
+  if (!r2 || !bucketName) {
+    throw new Error('Cloudflare R2 is required for media uploads.');
   }
 
-  return localUrl;
+  try {
+    await r2.send(
+      new PutObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+        Body: buffer,
+        ContentType: cleanMime,
+      })
+    );
+
+    const publicDomain = process.env.R2_PUBLIC_DOMAIN?.trim();
+    if (publicDomain && !publicDomain.includes('.r2.dev')) {
+      const normalizedDomain = (isHttpUrl(publicDomain) ? publicDomain : `https://${publicDomain}`).replace(/\/+$/, "");
+      return `${normalizedDomain}/${key}`;
+    }
+    return `/api/r2-file/${key}`;
+  } catch (r2Error) {
+    logRequestError("Cloudflare R2 upload failed", correlationId, r2Error, {
+      operation: "upload-r2-media",
+    });
+    throw new Error('Cloudflare R2 rejected the media upload.', { cause: r2Error });
+  }
 }
 
 
@@ -603,25 +584,6 @@ async function startServer() {
   const removedLegacySessionStore = await deleteLegacySessionsFromRedis();
   if (removedLegacySessionStore > 0) console.log("🔒 Removed legacy plaintext session storage from Redis.");
 
-  // Ensure uploads root directory exists
-  const uploadsRootDir = path.join(process.cwd(), "data", "uploads");
-  if (!fs.existsSync(uploadsRootDir)) {
-    fs.mkdirSync(uploadsRootDir, { recursive: true });
-  }
-
-  // Serve music & cover upload files statically with CORS & Accept-Ranges headers
-  app.use("/uploads", (req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type");
-    res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, Content-Type, X-Correlation-ID");
-    res.setHeader("Accept-Ranges", "bytes");
-    if (req.method === "OPTIONS") {
-      return res.status(200).end();
-    }
-    next();
-  }, express.static(uploadsRootDir));
-
   // Rate limiters are defined here (rather than further down, where the rest
   // of the /api routes are registered) so that every route which is wired up
   // before that point — like the R2 file proxy below — can also be guarded.
@@ -640,12 +602,14 @@ async function startServer() {
   // the app.use('/api', ...) wiring further down either.
   const pageLimiter = createRateLimiter({ windowMs: 60_000, max: 120, name: 'page' });
 
-  // Serve files stored in Cloudflare R2 directly or via proxy endpoint
+  // Never let the SPA fallback turn a removed legacy local-media URL into an
+  // HTML 200 response. Uploaded objects are available only through R2.
+  app.all(['/uploads', '/uploads/*'], generalApiLimiter, (req, res) =>
+    sendPublicError(req, res, 410, "MEDIA_NOT_FOUND", "Legacy local media is no longer available."));
+
+  // Serve files stored in Cloudflare R2 through the proxy endpoint.
   app.all("/api/r2-file/*", generalApiLimiter, async (req, res) => {
-    const key = String(req.params[0] || "").replace(/^\/+/, "");
-    const r2UploadsRoot = path.resolve(process.cwd(), "data", "uploads");
-    const localPathForKey = path.resolve(r2UploadsRoot, key);
-    const keyIsSafe = Boolean(key) && localPathForKey.startsWith(`${r2UploadsRoot}${path.sep}`);
+    const key = getManagedStorageKey(`/api/r2-file/${String(req.params[0] || "")}`);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type");
@@ -660,15 +624,11 @@ async function startServer() {
       const r2 = getR2Client();
       const bucketName = process.env.R2_BUCKET_NAME;
 
-      if (!keyIsSafe) {
+      if (!key) {
         return sendPublicError(req, res, 404, "MEDIA_NOT_FOUND", "File not found.");
       }
 
-      // Check local disk first as fast fallback if R2 is not configured
       if (!r2 || !bucketName) {
-        if (fs.existsSync(localPathForKey) && fs.statSync(localPathForKey).isFile()) {
-          return res.sendFile(localPathForKey);
-        }
         return sendPublicError(req, res, 404, "MEDIA_NOT_FOUND", "File not found.");
       }
 
@@ -730,12 +690,6 @@ async function startServer() {
         }
       }
     } catch (err: unknown) {
-      // Local disk fallback on R2 fetch failure (e.g. NoSuchKey or network error)
-      if (keyIsSafe) {
-        if (fs.existsSync(localPathForKey) && fs.statSync(localPathForKey).isFile()) {
-          return res.sendFile(localPathForKey);
-        }
-      }
       const correlationId = getRequestCorrelationId(req);
       logRequestError("Cloudflare R2 media fetch failed", correlationId, err, { operation: "fetch-r2-media" });
       if (res.headersSent) return res.destroy();
@@ -1034,7 +988,7 @@ async function startServer() {
           nodeEnvironment: process.env.NODE_ENV || "development",
           upstashRedisConfigured: isUpstashConfigured(),
           cloudflareR2Configured: Boolean(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME),
-          storageMode: getR2Client() ? "Cloudflare R2 + local fallback" : "Local disk",
+          storageMode: getR2Client() && process.env.R2_BUCKET_NAME ? "Cloudflare R2" : "Unavailable",
         },
         selected: selectedDetails,
         // Backward-compatible alias retained for older dashboard clients.
@@ -1571,10 +1525,10 @@ async function startServer() {
 
       const saved = await readDBAsync(false);
       const savedUser = saved.users.find((user) => user.id === next.id)!;
-      const referencedMedia = collectReferencedMediaUrls(saved);
+      const referencedMedia = collectReferencedMediaKeys(saved);
       await Promise.all([current.avatarUrl, current.bannerUrl]
-        .filter((mediaUrl): mediaUrl is string => Boolean(mediaUrl && mediaUrl !== savedUser.avatarUrl && mediaUrl !== savedUser.bannerUrl && !referencedMedia.has(mediaUrl)))
-        .map((mediaUrl) => deleteManagedFile(mediaUrl, getRequestCorrelationId(req))));
+        .filter((mediaUrl): mediaUrl is string => Boolean(mediaUrl && mediaUrl !== savedUser.avatarUrl && mediaUrl !== savedUser.bannerUrl && !isManagedMediaReferenced(referencedMedia, mediaUrl)))
+        .map((mediaUrl) => deleteManagedFile(mediaUrl, current.id, getRequestCorrelationId(req))));
       return res.json({ success: true, user: safeAdminUser(savedUser), auditId: audit.id });
     } catch (error) {
       console.error("Admin User Profile Error:", error);
@@ -2516,8 +2470,10 @@ async function startServer() {
 
       await writeDBAsync(db);
       if (previousAvatarUrl && previousAvatarUrl !== db.users[index].avatarUrl) {
-        const referencedMedia = collectReferencedMediaUrls(db);
-        if (!referencedMedia.has(previousAvatarUrl)) await deleteManagedFile(previousAvatarUrl, getRequestCorrelationId(req));
+        const referencedMedia = collectReferencedMediaKeys(db);
+        if (!isManagedMediaReferenced(referencedMedia, previousAvatarUrl)) {
+          await deleteManagedFile(previousAvatarUrl, userId, getRequestCorrelationId(req));
+        }
       }
       const { password: _, ...updatedUser } = db.users[index];
       return res.json({ success: true, user: updatedUser });
@@ -3067,11 +3023,11 @@ async function startServer() {
         state.recentTrackIds = state.recentTrackIds.filter((trackId) => trackId !== id);
       }
       await writeDBAsync(db);
-      const referencedMedia = collectReferencedMediaUrls(db);
+      const referencedMedia = collectReferencedMediaKeys(db);
       await Promise.all(
         [track.audioUrl, track.coverUrl]
-          .filter((mediaUrl): mediaUrl is string => Boolean(mediaUrl && !referencedMedia.has(mediaUrl)))
-          .map((mediaUrl) => deleteManagedFile(mediaUrl, getRequestCorrelationId(req)))
+          .filter((mediaUrl): mediaUrl is string => Boolean(mediaUrl && !isManagedMediaReferenced(referencedMedia, mediaUrl)))
+          .map((mediaUrl) => deleteManagedFile(mediaUrl, track.userId, getRequestCorrelationId(req)))
       );
       return res.json({ success: true, deletedTrackId: id });
     } catch (error: any) {
@@ -3101,14 +3057,14 @@ async function startServer() {
         state.recentTrackIds = state.recentTrackIds.filter((trackId) => !ownedIds.has(trackId));
       }
       await writeDBAsync(db);
-      const referencedMedia = collectReferencedMediaUrls(db);
+      const referencedMedia = collectReferencedMediaKeys(db);
       const mediaToDelete = new Set<string>();
       for (const track of ownedTracks) {
         for (const mediaUrl of [track.audioUrl, track.coverUrl]) {
-          if (mediaUrl && !referencedMedia.has(mediaUrl)) mediaToDelete.add(mediaUrl);
+          if (mediaUrl && !isManagedMediaReferenced(referencedMedia, mediaUrl)) mediaToDelete.add(mediaUrl);
         }
       }
-      await Promise.all([...mediaToDelete].map((mediaUrl) => deleteManagedFile(mediaUrl, getRequestCorrelationId(req))));
+      await Promise.all([...mediaToDelete].map((mediaUrl) => deleteManagedFile(mediaUrl, sessionUserId, getRequestCorrelationId(req))));
 
       return res.json({ success: true, wipedCount: ownedIds.size, deletedTrackIds: [...ownedIds] });
     } catch (error: any) {

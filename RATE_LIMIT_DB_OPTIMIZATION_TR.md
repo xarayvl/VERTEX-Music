@@ -17,7 +17,7 @@
 - Redis senkronizasyonu diff tabanlı hale getirildi: yalnız değişen entity ve indeksler yazılır.
 - Full DB yedeği her küçük sayaç değişiminde yazılmak yerine yapısal değişiklikte veya en fazla 15 dakikalık aralıkla güncellenir.
 - Wildcard `KEYS` taramaları kaldırıldı; silinen anahtarlar önceki canonical snapshot ile hesaplanır.
-- Aynı DB içeriğini tekrar yazan no-op işlemler disk/Redis yazımı yapmadan sonuçlanır.
+- Aynı DB içeriğini tekrar yazan no-op işlemler gereksiz Redis yazımı yapmadan sonuçlanır.
 - Chat ve dinleme istatistiği endpoint'lerine aynı veri için no-op yanıtı eklendi.
 - Arka plan katalog yenilemesi 60 saniyeye çıkarıldı; eşzamanlı/cooldown içindeki focus istekleri birleştirildi.
 - Arka plan `/api/data?scope=shared` yanıtından kullanıcı ve chat payload'ı çıkarıldı.

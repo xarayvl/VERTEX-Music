@@ -115,19 +115,19 @@ Bu sürümde kalıcı veritabanı boş gelir ve uygulama hiçbir demo kullanıc�
 - Track/playlist ilişkileri ve artist pick referansları gerçek entity listesine göre temizleniyor.
 - Kullanıcı sayaçları gerçek ownership ve relationship verilerinden tekrar türetiliyor.
 - Veritabanı yazımları seri bir kuyruk üzerinden gerçekleştiriliyor; bir yazım bitmeden sonraki okuma eski Redis verisini kullanmıyor.
-- Yerel DB yazımı rastgele temp dosyaya yapılıp atomik rename ile tamamlanıyor.
+- Kalıcı uygulama verisi yalnızca Upstash Redis'e yazılıyor; yerel DB aynası veya fallback bulunmuyor.
 - Upstash ana DB, ID listeleri ve individual entity key’leri aynı kanonik veriden yazılıyor.
 - Silinen veya sanitizasyonla reddedilen eski `app:user:*`, `app:song:*`, `app:track:*`, `app:playlist:*` Redis key’leri fiziksel olarak temizleniyor.
 - Public Upstash ID ve sistem status endpoint’leri admin oturumu gerektiriyor.
 
 ## Medya depolama
 
-- R2 kapalıyken yerel diske kaydedilen dosya ile API’nin döndürdüğü URL aynı gerçek dosya anahtarını kullanıyor.
-- Önceki iki ayrı rastgele dosya adı üretme hatası kaldırıldı.
+- Yüklenen medya yalnızca Cloudflare R2'ye yazılıyor; R2 kapalıyken işlem fail-closed davranıyor.
+- Yerel upload dizini, statik `/uploads` yayını ve disk fallback kaldırıldı.
 - R2 proxy yolunda path traversal/dizin kaçışı engellendi.
 - Audio ve görsel data URL’lerinde MIME türü doğrulanıyor.
 - Profil, banner, playlist cover ve track cover URL’leri yalnızca HTTP(S) veya uygulamanın yönettiği upload yollarını kabul ediyor.
-- Track silme/toplu silme sırasında artık başka entity tarafından kullanılmayan yönetilen audio/cover dosyaları yerel diskten ve R2’den kaldırılıyor.
+- Track silme/toplu silme sırasında artık başka entity tarafından kullanılmayan yönetilen audio/cover dosyaları R2'den kaldırılıyor.
 - Toplu track silme kullanıcının avatar/banner/playlist cover klasörünü körlemesine silmiyor.
 
 ## Arayüz ve yanlış yönlendiren metinler
@@ -151,6 +151,6 @@ Browse kategori isimleri ve AI örnek prompt düğmeleri de kalıcı katalog kay
 ## Doğrulama
 
 - 39 adet TypeScript/TSX dosyası TypeScript transpile/sözdizimi kontrolünden geçti: 0 sözdizimi hatası.
-- JSON dosyaları (`data/db.json`, `package.json`, `package-lock.json`, `metadata.json`) parse kontrolünden geçti.
+- Uygulama yapılandırma JSON dosyaları parse kontrolünden geçti; repository artık kullanıcı verisi içeren DB snapshot'ı taşımıyor.
 - Mock/demo/fake, eski monthly/global etiketler, unsupported release türleri, isim tabanlı artist ownership ve sahte entity ID kalıpları için tekrar tarama yapıldı.
 - Kaynak koddan bağımsız tam `npm build`, çalışma ortamındaki paket registry’sinin bir bağımlılık arşivine 404 vermesi nedeniyle tamamlanamadı. Bağımlılıkların kurulu olmadığı ortamda `tsc --noEmit` yalnızca eksik modül/Node type bildirimleri verdi; proje içi ek TypeScript diagnostik bulunmadı.
