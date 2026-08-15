@@ -64,6 +64,14 @@
   padding: 0;
 }
 
+/* Authentication always uses a dark palette. Do not let light-dark() pick a
+   translucent white surface when the browser's color scheme is light or
+   unspecified. */
+.glass-surface--svg.auth-glass-surface {
+  color-scheme: dark;
+  background: hsl(0 0% 0% / var(--glass-frost, 0));
+}
+
 .glass-surface--disabled.auth-glass-surface {
   border: 1px solid rgb(255 255 255 / 12%);
   background: #121012;

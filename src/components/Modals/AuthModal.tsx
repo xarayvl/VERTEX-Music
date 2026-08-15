@@ -20,6 +20,7 @@ import LogoLoop from '../LogoLoop/LogoLoop';
 import { useI18n } from '../../i18n/I18nContext';
 
 const AUTH_TERMINAL_GRID = [2, 1];
+const AUTH_GLASS_BORDER_WIDTH = 0.07;
 const FaultyTerminal = React.lazy(() => import('../Backgrounds/FaultyTerminal'));
 
 const isMobileAuthViewport = () =>
@@ -442,7 +443,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               width="100%"
               height="100%"
               borderRadius={32}
-              borderWidth={0.32}
+              borderWidth={AUTH_GLASS_BORDER_WIDTH}
               brightness={52}
               opacity={0.9}
               blur={7}
@@ -489,7 +490,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             width="100%"
             height="auto"
             borderRadius={32}
-            borderWidth={0.34}
+            borderWidth={AUTH_GLASS_BORDER_WIDTH}
             brightness={54}
             opacity={0.88}
             blur={8}
