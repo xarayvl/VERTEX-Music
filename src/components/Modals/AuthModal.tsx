@@ -18,9 +18,7 @@ import VertexLogo from '../Brand/VertexLogo';
 import GlassSurface from '../GlassSurface/GlassSurface';
 import LogoLoop from '../LogoLoop/LogoLoop';
 import { useI18n } from '../../i18n/I18nContext';
-
-const AUTH_TERMINAL_GRID = [2, 1];
-const FaultyTerminal = React.lazy(() => import('../Backgrounds/FaultyTerminal'));
+import '../Backgrounds/SakuraSky.css';
 
 const isMobileAuthViewport = () =>
   typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
@@ -387,29 +385,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       {!isMobileViewport && (
         <>
           <div className="pointer-events-none fixed inset-0" aria-hidden="true">
-            <React.Suspense fallback={<div className="h-full w-full bg-[#050307]" />}>
-              <FaultyTerminal
-                scale={1.35}
-                gridMul={AUTH_TERMINAL_GRID}
-                digitSize={1.25}
-                timeScale={0.45}
-                pause={false}
-                scanlineIntensity={0.55}
-                glitchAmount={0.75}
-                flickerAmount={0.65}
-                noiseAmp={0.45}
-                chromaticAberration={0.55}
-                dither={0.25}
-                curvature={0.12}
-                tint="#c084fc"
-                mouseReact={true}
-                mouseStrength={0.3}
-                pageLoadAnimation={true}
-                brightness={1}
-              />
-            </React.Suspense>
+            <div className="gradient-sakurazora h-full w-full" />
           </div>
-          <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.06),transparent_42%),linear-gradient(to_bottom,rgba(0,0,0,0.18),rgba(0,0,0,0.5))]" aria-hidden="true" />
+          <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.08),transparent_42%),linear-gradient(to_bottom,rgba(5,3,9,0.28),rgba(5,3,9,0.56))]" aria-hidden="true" />
         </>
       )}
 
@@ -454,6 +432,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               greenOffset={0}
               blueOffset={0}
               className="auth-glass-surface"
+              style={{ background: 'rgb(9 5 13 / 72%)' }}
             >
               <div className="relative flex h-full w-full flex-col justify-center overflow-hidden p-9">
                 <div className="relative w-full">
@@ -501,6 +480,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             greenOffset={0}
             blueOffset={0}
             className="auth-glass-surface animate-in zoom-in-95 duration-300 max-sm:!rounded-[1.5rem]"
+            style={{ background: 'rgb(9 5 13 / 72%)' }}
           >
           <main className={`relative flex min-h-0 w-full flex-col justify-center overflow-hidden p-4 sm:min-h-[560px] sm:p-8 md:min-h-[640px] ${mode === 'register' ? 'md:p-8' : 'md:p-10'}`}>
             <div className="mx-auto w-full max-w-md">
